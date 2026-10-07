@@ -42,6 +42,8 @@ FeatherKit закрывает ту часть работы, которая по�
 - **Звук и камера.** Разовые звуки по каналам, источник из пула, тряска и зум для Cinemachine.
 - **Рендер.** Тун-шейдер с обводкой и вспышкой, тун-шейдер для вершинной раскраски,
   туман по высоте, подмена рендерера на время сцены.
+- **Случайность.** Взвешенный выбор из вариантов. Поля для инспектора «центр ± разброс»
+  и «от и до» с уклоном к одному из концов: дизайнер крутит цифры, код читает `Value`.
 - **Отладка.** Цветной лог, текстовая консоль команд, панели «свойство — значение».
   Из релиза вырезается целиком.
 - **Инструменты редактора.** Поиск использований ассета, перевод префабов в варианты
@@ -264,7 +266,7 @@ var score = AppContext.Current.GetContext<BattleContext>(this).GetRequired<Score
 </details>
 
 <details>
-<summary><b>Events, Registry, StateMachine, Collections</b> — связки</summary>
+<summary><b>Events, Registry, StateMachine, Collections, Randomness</b> — связки и случайность</summary>
 
 | Класс | Назначение |
 |---|---|
@@ -272,6 +274,8 @@ var score = AppContext.Current.GetContext<BattleContext>(this).GetRequired<Score
 | `TypeRegistry<T>` | Список живых объектов типа, безопасный при удалении во время обхода |
 | `StateMachine`, `IState` | Переключение состояний и их апдейт |
 | `WeightedRandom<T>` | Взвешенный случайный выбор |
+| `RandomSpread` | Поле «центр ± разброс», по желанию с границами «от / до». `Value` — новый бросок, `Min` и `Max` — края для подписей |
+| `RandomRange` | Поле «от … до» с уклоном 0..1: 0 всегда min, 0.5 равномерно, 1 всегда max. Среднее равно уклону |
 
 </details>
 
@@ -373,6 +377,7 @@ var score = AppContext.Current.GetContext<BattleContext>(this).GetRequired<Score
 | Назначение иконок ассетам | `FeatherKit → Asset Icons` |
 | Гизмо в Game View | `FeatherKit → Гизмо в Game View` |
 | Инспекторы тун-шейдеров, база для своих инспекторов | `ToonLitShaderGUI`, `ToonTerrainShaderGUI`, `FeatherEditor` |
+| Отрисовка полей `RandomSpread` и `RandomRange` | Сама, через `RandomSpreadDrawer`, `RandomRangeDrawer` |
 
 </details>
 
