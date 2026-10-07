@@ -1,0 +1,11 @@
+# Текстовые файлы — LF в репозитории, у каждого в рабочей копии как настроено
+* text=auto
+
+# Бинарные ассеты Unity
+*.png binary
+*.jpg binary
+*.fbx binary
+*.wav binary
+*.mp3 binary
+*.ttf binary
+*.otf binary
