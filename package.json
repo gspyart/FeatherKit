@@ -1,0 +1,23 @@
+{
+  "name": "com.gspy.featherkit",
+  "version": "0.1.0",
+  "displayName": "FeatherKit",
+  "description": "Лёгкий каркас для старта Unity-игры: контексты сервисов, пул объектов, время и пауза, загрузка уровней, сохранения, боевой фидбек, иконки над миром, UI-заготовки, тун-шейдер и отладочные инструменты. Про конкретную игру не знает ничего.",
+  "unity": "6000.0",
+  "license": "MIT",
+  "author": {
+    "name": "gspy",
+    "url": "https://github.com/gspyart"
+  },
+  "documentationUrl": "https://github.com/gspyart/FeatherKit#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gspyart/FeatherKit.git"
+  },
+  "keywords": ["unity", "framework", "pooling", "service-locator", "urp", "toon"],
+  "dependencies": {
+    "com.unity.ugui": "2.0.0",
+    "com.unity.cinemachine": "3.1.7",
+    "com.unity.render-pipelines.universal": "17.0.4"
+  }
+}

@@ -1,0 +1,11 @@
+# Заметки для агента — не часть пакета
+AGENT.md
+AGENT.md.meta
+
+# Мусор ОС и редакторов
+.DS_Store
+Thumbs.db
+.idea/
+.vs/
+*.csproj
+*.sln

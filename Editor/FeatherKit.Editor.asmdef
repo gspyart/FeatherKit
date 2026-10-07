@@ -1,0 +1,19 @@
+{
+    "name": "FeatherKit.Editor",
+    "rootNamespace": "FeatherKit.EditorTools",
+    "references": [
+        "FeatherKit",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
