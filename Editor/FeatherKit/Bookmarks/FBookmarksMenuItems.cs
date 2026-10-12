@@ -5,7 +5,7 @@ namespace FeatherKit.EditorTools
 {
     /// <summary>
     /// «Добавить в закладки» по правому клику в Project и Hierarchy.
-    /// Кладёт в активную папку окна закладок — ту, по которой кликнули последней.
+    /// Кладёт в активную папку открытой вкладки — ту, по которой кликнули последней.
     /// </summary>
     public static class FBookmarksMenuItems
     {

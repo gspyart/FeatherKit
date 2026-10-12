@@ -7,47 +7,122 @@ using Object = UnityEngine.Object;
 namespace FeatherKit.EditorTools
 {
     /// <summary>
-    /// Хранилище закладок: личное, в UserSettings проекта — в git не попадает.
-    /// - папки и закладки, их порядок и активная папка
+    /// Хранилище закладок: общее, в ProjectSettings проекта — попадает в git.
+    /// - вкладки, в каждой свои папки и закладки; их порядок и что сейчас активно
     /// - все правки с отменой через Undo и сразу на диск
     /// </summary>
-    [FilePath("UserSettings/FeatherKit/Bookmarks.asset", FilePathAttribute.Location.ProjectFolder)]
+    [FilePath("ProjectSettings/FeatherKit/Bookmarks.asset", FilePathAttribute.Location.ProjectFolder)]
     public class FBookmarksStorage : ScriptableSingleton<FBookmarksStorage>
     {
-        private const string DefaultFolderName = "Общее";
+        private const string DefaultTabName = "Основная";
 
-        [SerializeField] private List<FBookmarkFolder> folders = new List<FBookmarkFolder>();
-        [SerializeField] private int activeFolderIndex;
+        [SerializeField] private List<FBookmarkTab> tabs = new List<FBookmarkTab>();
+        [SerializeField] private int activeTabIndex;
 
 
         /// <summary>Что-то поменялось — окну пора перерисоваться.</summary>
         public event Action Changed;
 
 
-        public IReadOnlyList<FBookmarkFolder> Folders => folders;
+        public IReadOnlyList<FBookmarkTab> Tabs => tabs;
 
-        /// <summary>Куда кладут закладки из контекстного меню. Нет папок — заводится «Общее».</summary>
-        public FBookmarkFolder ActiveFolder
+        /// <summary>Открытая вкладка. Нет вкладок — заводится «Основная».</summary>
+        public FBookmarkTab ActiveTab
         {
             get
             {
-                if (folders.Count == 0)
-                    folders.Add(new FBookmarkFolder(DefaultFolderName));
+                if (tabs.Count == 0)
+                    tabs.Add(new FBookmarkTab(DefaultTabName));
 
-                return folders[Mathf.Clamp(activeFolderIndex, 0, folders.Count - 1)];
+                return tabs[Mathf.Clamp(activeTabIndex, 0, tabs.Count - 1)];
             }
         }
 
+        /// <summary>Куда кладут закладки из контекстного меню: активная папка открытой вкладки.</summary>
+        public FBookmarkFolder ActiveFolder => ActiveTab.ActiveFolder;
 
-        // ── Папки ────────────────────────────────────────────────────────
+
+        // ── Вкладки ──────────────────────────────────────────────────────
+
+        public FBookmarkTab AddTab(string name)
+        {
+            RecordUndo("Новая вкладка закладок");
+
+            var tab = new FBookmarkTab(name);
+            tabs.Add(tab);
+            activeTabIndex = tabs.Count - 1;
+
+            SaveAndNotify();
+
+            return tab;
+        }
+
+
+        public void RenameTab(FBookmarkTab tab, string name)
+        {
+            if (string.IsNullOrWhiteSpace(name) || tab.Name == name)
+                return;
+
+            RecordUndo("Переименовать вкладку закладок");
+            tab.Name = name.Trim();
+            SaveAndNotify();
+        }
+
+
+        // Удалили открытую — откроется соседняя, что встала на её место.
+        public void RemoveTab(FBookmarkTab tab)
+        {
+            var active = ActiveTab;
+
+            RecordUndo("Удалить вкладку закладок");
+            tabs.Remove(tab);
+
+            activeTabIndex = tabs.Contains(active)
+                ? tabs.IndexOf(active)
+                : Mathf.Clamp(activeTabIndex, 0, Mathf.Max(0, tabs.Count - 1));
+
+            SaveAndNotify();
+        }
+
+
+        public void MoveTab(FBookmarkTab tab, int targetIndex)
+        {
+            var from = tabs.IndexOf(tab);
+
+            if (from < 0)
+                return;
+
+            var active = ActiveTab;
+
+            RecordUndo("Переставить вкладку закладок");
+            MoveInList(tabs, from, targetIndex);
+            activeTabIndex = tabs.IndexOf(active);
+            SaveAndNotify();
+        }
+
+
+        // Какая вкладка открыта — вид, а не содержимое: без Undo, как и свёрнутость папок.
+        public void SetActiveTab(FBookmarkTab tab)
+        {
+            var index = tabs.IndexOf(tab);
+
+            if (index < 0 || index == activeTabIndex)
+                return;
+
+            activeTabIndex = index;
+            SaveAndNotify();
+        }
+
+
+        // ── Папки открытой вкладки ───────────────────────────────────────
 
         public FBookmarkFolder AddFolder(string name)
         {
             RecordUndo("Новая папка закладок");
 
             var folder = new FBookmarkFolder(name);
-            folders.Add(folder);
-            activeFolderIndex = folders.Count - 1;
+            ActiveTab.Folders.Add(folder);
+            ActiveTab.SetActiveFolder(folder);
 
             SaveAndNotify();
 
@@ -68,35 +143,37 @@ namespace FeatherKit.EditorTools
 
         public void RemoveFolder(FBookmarkFolder folder)
         {
+            var tab = ActiveTab;
+            var active = tab.ActiveFolder;
+
             RecordUndo("Удалить папку закладок");
-            folders.Remove(folder);
+            tab.Folders.Remove(folder);
+            tab.SetActiveFolder(active);
             SaveAndNotify();
         }
 
 
         public void MoveFolder(FBookmarkFolder folder, int targetIndex)
         {
-            var from = folders.IndexOf(folder);
+            var tab = ActiveTab;
+            var from = tab.Folders.IndexOf(folder);
 
             if (from < 0)
                 return;
 
+            var active = tab.ActiveFolder;
+
             RecordUndo("Переставить папку закладок");
-            folders.RemoveAt(from);
-            folders.Insert(Mathf.Clamp(from < targetIndex ? targetIndex - 1 : targetIndex, 0, folders.Count), folder);
+            MoveInList(tab.Folders, from, targetIndex);
+            tab.SetActiveFolder(active);
             SaveAndNotify();
         }
 
 
         public void SetActiveFolder(FBookmarkFolder folder)
         {
-            var index = folders.IndexOf(folder);
-
-            if (index < 0 || index == activeFolderIndex)
-                return;
-
-            activeFolderIndex = index;
-            SaveAndNotify();
+            if (ActiveTab.SetActiveFolder(folder))
+                SaveAndNotify();
         }
 
 
@@ -168,16 +245,48 @@ namespace FeatherKit.EditorTools
         }
 
 
+        /// <summary>Скопировать в активную папку другой вкладки. Возвращает false, если там уже есть такая.</summary>
+        public bool CopyBookmarkToTab(FBookmark bookmark, FBookmarkTab tab)
+        {
+            var folder = tab.ActiveFolder;
+
+            if (folder.Contains(bookmark.GlobalId))
+                return false;
+
+            RecordUndo("Копировать закладку во вкладку");
+            folder.Bookmarks.Add(bookmark.Copy());
+            folder.IsExpanded = true;
+            SaveAndNotify();
+
+            return true;
+        }
+
+
         /// <summary>Поискать заново ненайденные: открылась сцена, изменилась иерархия или проект.</summary>
         public void RetryNotFound()
         {
-            foreach (var folder in folders)
+            foreach (var tab in tabs)
             {
-                foreach (var bookmark in folder.Bookmarks)
-                    bookmark.RetryIfNotFound();
+                foreach (var folder in tab.Folders)
+                {
+                    foreach (var bookmark in folder.Bookmarks)
+                        bookmark.RetryIfNotFound();
+                }
             }
 
             Changed?.Invoke();
+        }
+
+
+        // ── Общие помощники ──────────────────────────────────────────────
+
+        // Место считается до выемки: бросили ниже себя — после выемки индекс на один меньше.
+        private static void MoveInList<T>(List<T> list, int from, int targetIndex)
+        {
+            var item = list[from];
+
+            list.RemoveAt(from);
+            list.Insert(Mathf.Clamp(from < targetIndex ? targetIndex - 1 : targetIndex, 0, list.Count), item);
         }
 
 

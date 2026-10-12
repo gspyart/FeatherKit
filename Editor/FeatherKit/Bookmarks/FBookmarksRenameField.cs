@@ -1,45 +1,48 @@
+using System;
 using UnityEditor;
 using UnityEngine;
 
 namespace FeatherKit.EditorTools
 {
     /// <summary>
-    /// Поле переименования папки прямо в строке окна закладок — часть окна.
+    /// Поле переименования папки или вкладки прямо в строке окна закладок — часть окна.
+    /// - за раз переименовывают что-то одно
     /// - Enter или уход фокуса — принять, Esc — отменить
     /// </summary>
-    public class FBookmarkFolderRenameField
+    public class FBookmarksRenameField
     {
         private const string ControlName = "FeatherKit.Bookmarks.Rename";
 
         private readonly EditorWindow owner;
-        private readonly FBookmarksStorage storage;
 
-        private FBookmarkFolder folder;
+        private object target;
+        private Action<string> applyName;
         private string text;
         private bool isFocusPending;
         private bool wasFocused;
 
 
-        public FBookmarkFolderRenameField(EditorWindow owner, FBookmarksStorage storage)
+        public FBookmarksRenameField(EditorWindow owner)
         {
             this.owner = owner;
-            this.storage = storage;
         }
 
 
-        public bool IsRenamingAny => folder != null;
+        public bool IsRenamingAny => target != null;
 
 
-        public bool IsRenaming(FBookmarkFolder target)
+        public bool IsRenaming(object candidate)
         {
-            return folder != null && folder == target;
+            return target != null && target == candidate;
         }
 
 
-        public void Start(FBookmarkFolder target)
+        /// <summary>Начать переименование: что переименовываем, его имя сейчас и как записать новое.</summary>
+        public void Start(object renamed, string currentName, Action<string> apply)
         {
-            folder = target;
-            text = target.Name;
+            target = renamed;
+            applyName = apply;
+            text = currentName;
             isFocusPending = true;
             wasFocused = false;
             owner.Repaint();
@@ -73,7 +76,7 @@ namespace FeatherKit.EditorTools
             if (isAccepted)
                 Commit();
             else
-                folder = null;
+                target = null;
 
             GUI.FocusControl(null);
             Event.current.Use();
@@ -83,19 +86,20 @@ namespace FeatherKit.EditorTools
 
         public void Commit()
         {
-            if (folder == null)
+            if (target == null)
                 return;
 
-            var renamed = folder;
-            folder = null;
-            storage.RenameFolder(renamed, text);
+            var apply = applyName;
+            target = null;
+            applyName = null;
+            apply(text);
         }
 
 
         // Ушёл фокус — имя принимаем, как в окне Project. Пока фокус ни разу не пришёл, ждём его.
         public void CommitOnFocusLoss()
         {
-            if (folder == null || isFocusPending || Event.current.type != EventType.Repaint)
+            if (target == null || isFocusPending || Event.current.type != EventType.Repaint)
                 return;
 
             if (GUI.GetNameOfFocusedControl() == ControlName)

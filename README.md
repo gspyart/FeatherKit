@@ -374,7 +374,7 @@ var score = AppContext.Current.GetContext<BattleContext>(this).GetRequired<Score
 | Поиск использований ассета | ПКМ по ассету → `Найти использования` |
 | Перевод префабов в варианты шаблона с починкой ссылок | ПКМ по префабам → `Сделать вариантами шаблона…` |
 | Обзор материалов сцены | `FeatherKit → Материалы сцены` |
-| Закладки на ассеты и объекты сцен, по своим папкам. Личные, в `UserSettings` | `FeatherKit → Закладки`, ПКМ в Project и Hierarchy → `Добавить в закладки` |
+| Закладки на ассеты и объекты сцен: вкладки слева, в каждой свои папки. Общие, в `ProjectSettings/FeatherKit` — попадают в git | `FeatherKit → Закладки`, ПКМ в Project и Hierarchy → `Добавить в закладки` |
 | Назначение иконок ассетам | `FeatherKit → Asset Icons` |
 | Гизмо в Game View | `FeatherKit → Гизмо в Game View` |
 | Инспекторы тун-шейдеров, база для своих инспекторов | `ToonLitShaderGUI`, `ToonTerrainShaderGUI`, `FeatherEditor` |

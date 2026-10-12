@@ -7,22 +7,26 @@ using UnityEngine.SceneManagement;
 namespace FeatherKit.EditorTools
 {
     /// <summary>
-    /// Окно закладок: ассеты проекта и объекты сцен, разложенные по своим папкам.
-    /// - раскладывает папки и закладки, ищет по имени
+    /// Окно закладок: ассеты проекта и объекты сцен, разложенные по вкладкам и папкам.
+    /// - раскладывает папки и закладки открытой вкладки, ищет по имени
     /// - клики, контекстные меню и клавиши
-    /// Хранит FBookmarksStorage; перетаскивание, переименование и вид строки — части окна.
+    /// Хранит FBookmarksStorage; колонка вкладок, перетаскивание, переименование и вид строки — части окна.
     /// </summary>
     public class FBookmarksWindow : EditorWindow
     {
         private const string NewFolderName = "Новая папка";
         private const float FoldoutWidth = 16f;
         private const float MinEmptySpaceHeight = 40f;
+        private const float DefaultTabsColumnWidth = 110f;
 
         private static readonly Color FolderRowColor = new Color(0f, 0f, 0f, 0.12f);
         private static readonly Color ActiveFolderMarkColor = new Color(0.25f, 0.6f, 1f);
 
+        [SerializeField] private float tabsColumnWidth = DefaultTabsColumnWidth;
+
         private FBookmarksDragAndDrop dragAndDrop;
-        private FBookmarkFolderRenameField renameField;
+        private FBookmarksRenameField renameField;
+        private FBookmarkTabsColumn tabsColumn;
         private Vector2 scroll;
         private string search = string.Empty;
         private FBookmark selectedBookmark;
@@ -39,7 +43,7 @@ namespace FeatherKit.EditorTools
         {
             var window = GetWindow<FBookmarksWindow>();
             window.titleContent = new GUIContent("Закладки", EditorGUIUtility.IconContent("Favorite Icon").image);
-            window.minSize = new Vector2(220f, 160f);
+            window.minSize = new Vector2(320f, 160f);
 
             return window;
         }
@@ -54,6 +58,12 @@ namespace FeatherKit.EditorTools
         public static string DescribeRejected(int count)
         {
             return $"Не добавлено: {count}. Объекты из игры и несохранённых сцен закладками не бывают";
+        }
+
+
+        public static string DescribeCopy(bool isCopied, FBookmarkTab tab)
+        {
+            return isCopied ? $"Скопировано во вкладку «{tab.Name}»" : $"Во вкладке «{tab.Name}» такая уже есть";
         }
 
 
@@ -78,21 +88,22 @@ namespace FeatherKit.EditorTools
 
         private void DrawList()
         {
-            scroll = EditorGUILayout.BeginScrollView(scroll);
-            dragAndDrop.BeginFrame();
+            var folders = Storage.ActiveTab.Folders;
 
-            if (Storage.Folders.Count == 0)
+            scroll = EditorGUILayout.BeginScrollView(scroll);
+
+            if (folders.Count == 0)
                 EditorGUILayout.HelpBox("Перетащи сюда ассеты из Project или объекты из Hierarchy.\n" +
                                         "Или ПКМ по ним → «Добавить в закладки».", MessageType.Info);
 
-            for (var i = 0; i < Storage.Folders.Count; i++)
-                DrawFolder(Storage.Folders[i], i);
+            for (var i = 0; i < folders.Count; i++)
+                DrawFolder(folders[i], i);
 
             var emptySpace = GUILayoutUtility.GetRect(0f, MinEmptySpaceHeight, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             HandleEmptySpaceClicks(emptySpace);
             dragAndDrop.HandleEmptySpace(emptySpace);
 
-            dragAndDrop.EndFrame();
+            dragAndDrop.DrawIndicator();
             EditorGUILayout.EndScrollView();
         }
 
@@ -201,7 +212,7 @@ namespace FeatherKit.EditorTools
         {
             var menu = new GenericMenu();
 
-            menu.AddItem(new GUIContent("Переименовать  F2"), false, () => renameField.Start(folder));
+            menu.AddItem(new GUIContent("Переименовать  F2"), false, () => StartRename(folder));
             menu.AddItem(new GUIContent("Добавить выделенное"), false, () => AddSelection(folder));
             menu.AddSeparator(string.Empty);
             menu.AddItem(new GUIContent("Новая папка"), false, AddFolder);
@@ -212,7 +223,13 @@ namespace FeatherKit.EditorTools
 
         private void AddFolder()
         {
-            renameField.Start(Storage.AddFolder(NewFolderName));
+            StartRename(Storage.AddFolder(NewFolderName));
+        }
+
+
+        private void StartRename(FBookmarkFolder folder)
+        {
+            renameField.Start(folder, folder.Name, name => Storage.RenameFolder(folder, name));
         }
 
 
@@ -281,7 +298,7 @@ namespace FeatherKit.EditorTools
             menu.AddItem(new GUIContent("Открыть"), false, () => FBookmarkOpener.Open(bookmark));
             menu.AddSeparator(string.Empty);
 
-            foreach (var other in Storage.Folders)
+            foreach (var other in Storage.ActiveTab.Folders)
             {
                 if (other == folder)
                     continue;
@@ -294,9 +311,28 @@ namespace FeatherKit.EditorTools
                     () => Storage.MoveBookmark(bookmark, folder, target, target.Bookmarks.Count));
             }
 
+            foreach (var tab in Storage.Tabs)
+            {
+                if (tab == Storage.ActiveTab)
+                    continue;
+
+                var target = tab;
+                var label = "Копировать во вкладку/" + tab.Name.Replace('/', '∕');
+
+                menu.AddItem(new GUIContent(label), false, () => CopyToTab(bookmark, target));
+            }
+
             menu.AddSeparator(string.Empty);
             menu.AddItem(new GUIContent("Удалить из закладок  Del"), false, () => Storage.RemoveBookmark(folder, bookmark));
             menu.ShowAsContext();
+        }
+
+
+        private void CopyToTab(FBookmark bookmark, FBookmarkTab tab)
+        {
+            var isCopied = Storage.CopyBookmarkToTab(bookmark, tab);
+
+            ShowNotification(new GUIContent(DescribeCopy(isCopied, tab)));
         }
 
 
@@ -333,9 +369,9 @@ namespace FeatherKit.EditorTools
             if (current.type != EventType.KeyDown || renameField.IsRenamingAny || EditorGUIUtility.editingTextField)
                 return;
 
-            if (current.keyCode == KeyCode.F2 && Storage.Folders.Count > 0)
+            if (current.keyCode == KeyCode.F2 && Storage.ActiveTab.Folders.Count > 0)
             {
-                renameField.Start(Storage.ActiveFolder);
+                StartRename(Storage.ActiveFolder);
                 current.Use();
             }
             else if ((current.keyCode == KeyCode.Delete || current.keyCode == KeyCode.Backspace) && selectedBookmark != null)
@@ -347,7 +383,7 @@ namespace FeatherKit.EditorTools
 
         private void RemoveSelectedBookmark()
         {
-            foreach (var folder in Storage.Folders)
+            foreach (var folder in Storage.ActiveTab.Folders)
             {
                 if (!folder.Bookmarks.Contains(selectedBookmark))
                     continue;
@@ -377,7 +413,8 @@ namespace FeatherKit.EditorTools
         private void OnEnable()
         {
             dragAndDrop = new FBookmarksDragAndDrop(this, Storage);
-            renameField = new FBookmarkFolderRenameField(this, Storage);
+            renameField = new FBookmarksRenameField(this);
+            tabsColumn = new FBookmarkTabsColumn(this, Storage, dragAndDrop, renameField);
 
             Storage.Changed += Repaint;
             EditorApplication.hierarchyChanged += RetryNotFound;
@@ -393,10 +430,24 @@ namespace FeatherKit.EditorTools
             EditorSceneManager.sceneOpened -= RetryNotFound;
         }
 
+        // Вкладка нужна до раскладки: появись она посреди кадра — строк станет больше, чем Unity разложил.
         private void OnGUI()
         {
-            DrawToolbar();
-            DrawList();
+            _ = Storage.ActiveTab;
+            dragAndDrop.BeginFrame();
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                tabsColumnWidth = tabsColumn.Draw(tabsColumnWidth);
+
+                using (new EditorGUILayout.VerticalScope())
+                {
+                    DrawToolbar();
+                    DrawList();
+                }
+            }
+
+            dragAndDrop.EndFrame();
             HandleKeyboard();
             renameField.CommitOnFocusLoss();
         }

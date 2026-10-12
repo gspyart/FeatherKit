@@ -87,6 +87,13 @@ namespace FeatherKit.EditorTools
         }
 
 
+        /// <summary>Независимая копия — для другой вкладки.</summary>
+        public FBookmark Copy()
+        {
+            return (FBookmark)MemberwiseClone();
+        }
+
+
         // ── Поиск объекта ────────────────────────────────────────────────
 
         // Поиск медленный, а окно перерисовывается часто — ищем один раз до сброса.

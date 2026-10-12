@@ -6,29 +6,34 @@ namespace FeatherKit.EditorTools
     /// <summary>
     /// Перетаскивание в окне закладок — часть окна, живёт внутри него.
     /// - принимает ассеты из Project и объекты из Hierarchy
-    /// - переставляет закладки и папки внутри окна
+    /// - переставляет закладки, папки и вкладки внутри окна
+    /// - закладку, брошенную на вкладку, копирует туда
     /// - отдаёт закладку наружу: префаб — на сцену, ассет — в поле инспектора
     /// </summary>
     public class FBookmarksDragAndDrop
     {
         private const string BookmarkDragKey = "FeatherKit.Bookmarks.Bookmark";
         private const string FolderDragKey = "FeatherKit.Bookmarks.Folder";
+        private const string TabDragKey = "FeatherKit.Bookmarks.Tab";
 
         // Столько пикселей мышь должна пройти с зажатой кнопкой, чтобы клик стал перетаскиванием.
         private const float DragStartDistance = 5f;
         private const float IndicatorThickness = 2f;
 
         private static readonly Color IndicatorColor = new Color(0.25f, 0.6f, 1f);
-        private static readonly Color DropFolderHighlight = new Color(0.25f, 0.6f, 1f, 0.25f);
+        private static readonly Color DropTargetHighlight = new Color(0.25f, 0.6f, 1f, 0.25f);
 
         private readonly EditorWindow owner;
         private readonly FBookmarksStorage storage;
 
+        private FBookmarkTab pendingTab;
         private FBookmarkFolder pendingFolder;
         private FBookmark pendingBookmark;
-        private Vector2 pendingStartPosition;
+        private Vector2 pendingStartScreenPosition;
 
-        private Rect indicatorRect;
+        // Указатель в экранных координатах: строки сидят в разных прокрутках, а рисует его каждая своей.
+        private Rect indicatorScreenRect;
+        private bool hasIndicator;
         private bool isIndicatorLine;
 
 
@@ -39,12 +44,14 @@ namespace FeatherKit.EditorTools
         }
 
 
-        private static bool IsExternalDrag => DragBookmark == null && DragFolder == null
+        private static bool IsExternalDrag => DragBookmark == null && DragFolder == null && DragTab == null
                                               && DragAndDrop.objectReferences.Length > 0;
 
         private static FBookmarkDragPayload DragBookmark => DragAndDrop.GetGenericData(BookmarkDragKey) as FBookmarkDragPayload;
 
         private static FBookmarkFolder DragFolder => DragAndDrop.GetGenericData(FolderDragKey) as FBookmarkFolder;
+
+        private static FBookmarkTab DragTab => DragAndDrop.GetGenericData(TabDragKey) as FBookmarkTab;
 
 
         // ── Кадр окна ────────────────────────────────────────────────────
@@ -53,11 +60,11 @@ namespace FeatherKit.EditorTools
         public void BeginFrame()
         {
             if (Event.current.type == EventType.DragUpdated)
-                indicatorRect = Rect.zero;
+                hasIndicator = false;
         }
 
 
-        /// <summary>Зовётся в конце списка, внутри прокрутки: рисует указатель и следит за начатым жестом.</summary>
+        /// <summary>Зовётся в конце OnGUI, вне прокруток: следит за начатым жестом.</summary>
         public void EndFrame()
         {
             var current = Event.current;
@@ -73,44 +80,60 @@ namespace FeatherKit.EditorTools
                     break;
 
                 case EventType.DragExited:
-                    indicatorRect = Rect.zero;
+                    hasIndicator = false;
                     owner.Repaint();
-                    break;
-
-                case EventType.Repaint:
-                    DrawIndicator();
                     break;
             }
         }
 
-        private void DrawIndicator()
+
+        /// <summary>
+        /// Зовётся в конце каждой прокрутки — списка и колонки вкладок.
+        /// Чужой указатель лежит за краем прокрутки, и Unity его просто обрезает.
+        /// </summary>
+        public void DrawIndicator()
         {
-            if (indicatorRect == Rect.zero)
+            if (!hasIndicator || Event.current.type != EventType.Repaint)
                 return;
 
-            EditorGUI.DrawRect(indicatorRect, isIndicatorLine ? IndicatorColor : DropFolderHighlight);
+            EditorGUI.DrawRect(GUIUtility.ScreenToGUIRect(indicatorScreenRect),
+                isIndicatorLine ? IndicatorColor : DropTargetHighlight);
         }
 
 
         // ── Начать перетаскивание ────────────────────────────────────────
 
-        /// <summary>Мышь нажата на строке. Перетаскивание начнётся, только если её потянут.</summary>
+        /// <summary>Мышь нажата на строке папки или закладки. Перетаскивание начнётся, только если её потянут.</summary>
         public void BeginPendingDrag(FBookmarkFolder folder, FBookmark bookmark)
         {
+            ClearPendingDrag();
             pendingFolder = folder;
             pendingBookmark = bookmark;
-            pendingStartPosition = Event.current.mousePosition;
+            pendingStartScreenPosition = GUIUtility.GUIToScreenPoint(Event.current.mousePosition);
+        }
+
+
+        /// <summary>Мышь нажата на вкладке. Перетаскивание начнётся, только если её потянут.</summary>
+        public void BeginPendingDrag(FBookmarkTab tab)
+        {
+            ClearPendingDrag();
+            pendingTab = tab;
+            pendingStartScreenPosition = GUIUtility.GUIToScreenPoint(Event.current.mousePosition);
         }
 
 
         private void TryStartPendingDrag(Event current)
         {
-            if (pendingFolder == null || Vector2.Distance(current.mousePosition, pendingStartPosition) < DragStartDistance)
+            var distance = Vector2.Distance(GUIUtility.GUIToScreenPoint(current.mousePosition), pendingStartScreenPosition);
+
+            if ((pendingFolder == null && pendingTab == null) || distance < DragStartDistance)
                 return;
 
             DragAndDrop.PrepareStartDrag();
 
-            if (pendingBookmark != null)
+            if (pendingTab != null)
+                PrepareTabDrag(pendingTab);
+            else if (pendingBookmark != null)
                 PrepareBookmarkDrag(pendingFolder, pendingBookmark);
             else
                 PrepareFolderDrag(pendingFolder);
@@ -136,11 +159,68 @@ namespace FeatherKit.EditorTools
             DragAndDrop.StartDrag(folder.Name);
         }
 
+        private static void PrepareTabDrag(FBookmarkTab tab)
+        {
+            DragAndDrop.objectReferences = new Object[0];
+            DragAndDrop.SetGenericData(TabDragKey, tab);
+            DragAndDrop.StartDrag(tab.Name);
+        }
+
 
         private void ClearPendingDrag()
         {
+            pendingTab = null;
             pendingFolder = null;
             pendingBookmark = null;
+        }
+
+
+        // ── Бросить на вкладку ───────────────────────────────────────────
+
+        public void HandleTabRow(FBookmarkTab tab, int tabIndex, Rect rect)
+        {
+            if (!IsDropEventInside(rect))
+                return;
+
+            if (DragTab != null)
+            {
+                var dragged = DragTab;
+                var isUpper = IsUpperHalf(rect);
+                var insertIndex = isUpper ? tabIndex : tabIndex + 1;
+                AcceptDrop(DragAndDropVisualMode.Move, LineAt(rect, isUpper), true,
+                    () => storage.MoveTab(dragged, insertIndex));
+                return;
+            }
+
+            if (DragBookmark != null)
+            {
+                var payload = DragBookmark;
+                AcceptDrop(DragAndDropVisualMode.Copy, rect, false,
+                    () => CopyToTab(payload.Bookmark, tab));
+                return;
+            }
+
+            if (IsExternalDrag)
+                AcceptDrop(DragAndDropVisualMode.Link, rect, false,
+                    () => AddDropped(tab.ActiveFolder, -1));
+        }
+
+        private void CopyToTab(FBookmark bookmark, FBookmarkTab tab)
+        {
+            var isCopied = storage.CopyBookmarkToTab(bookmark, tab);
+
+            owner.ShowNotification(new GUIContent(FBookmarksWindow.DescribeCopy(isCopied, tab)));
+        }
+
+
+        public void HandleTabsEmptySpace(Rect rect)
+        {
+            if (!IsDropEventInside(rect) || DragTab == null)
+                return;
+
+            var tab = DragTab;
+            AcceptDrop(DragAndDropVisualMode.Move, Rect.zero, true,
+                () => storage.MoveTab(tab, storage.Tabs.Count));
         }
 
 
@@ -199,7 +279,7 @@ namespace FeatherKit.EditorTools
         }
 
 
-        // ── Бросить на пустое место ──────────────────────────────────────
+        // ── Бросить на пустое место списка ───────────────────────────────
 
         public void HandleEmptySpace(Rect rect)
         {
@@ -210,7 +290,7 @@ namespace FeatherKit.EditorTools
             {
                 var folder = DragFolder;
                 AcceptDrop(DragAndDropVisualMode.Move, Rect.zero, true,
-                    () => storage.MoveFolder(folder, storage.Folders.Count));
+                    () => storage.MoveFolder(folder, storage.ActiveTab.Folders.Count));
                 return;
             }
 
@@ -231,13 +311,15 @@ namespace FeatherKit.EditorTools
         }
 
 
+        // Указатель Rect.zero — бросить можно, но показывать нечего.
         private void AcceptDrop(DragAndDropVisualMode mode, Rect indicator, bool isLine, System.Action drop)
         {
             DragAndDrop.visualMode = mode;
 
             if (Event.current.type != EventType.DragPerform)
             {
-                indicatorRect = indicator;
+                hasIndicator = indicator != Rect.zero;
+                indicatorScreenRect = GUIUtility.GUIToScreenRect(indicator);
                 isIndicatorLine = isLine;
                 Event.current.Use();
                 owner.Repaint();
@@ -246,7 +328,7 @@ namespace FeatherKit.EditorTools
 
             DragAndDrop.AcceptDrag();
             drop();
-            indicatorRect = Rect.zero;
+            hasIndicator = false;
             Event.current.Use();
             owner.Repaint();
             GUIUtility.ExitGUI(); // список уже другой — дорисовывать этот кадр нельзя
