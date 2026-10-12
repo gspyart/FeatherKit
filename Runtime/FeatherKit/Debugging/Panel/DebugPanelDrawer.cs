@@ -12,7 +12,8 @@ namespace FeatherKit.Debugging
     ///
     /// Текст не обрезается никогда. Не влезло значение в строку — оно переезжает под
     /// название и переносится по словам. Обрезанное значение хуже бесполезного: «12.3…»
-    /// читается как настоящее число, и на него ведутся.
+    /// читается как настоящее число, и на него ведутся. Строка-блок (<see cref="DebugPanel.WatchBlock"/>)
+    /// всегда рисуется так, даже если влезла бы в одну строку.
     ///
     /// Как выглядит — целиком в <see cref="DebugPanelStyle"/>. Высоты считаются по шрифту
     /// и по самому тексту, в настройках их нет.
@@ -163,7 +164,8 @@ namespace FeatherKit.Debugging
 
                 var oneLine = Measure(labelStyle, label) + style.ColumnGap + Measure(valueStyle, value);
 
-                if (oneLine <= innerWidth)
+                // Блок — всегда под названием: иначе список прыгал бы между «справа» и «снизу».
+                if (!window.IsBlockAt(i) && oneLine <= innerWidth)
                 {
                     rowHeights.Add(lineHeight);
                     continue;

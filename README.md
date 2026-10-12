@@ -345,7 +345,7 @@ var score = AppContext.Current.GetContext<BattleContext>(this).GetRequired<Score
 |---|---|
 | `FLog`, `FLogColor`, `FLogPart` | Лог из цветных кусков. `Info` и `Warning` вырезаются из релиза |
 | `DebugConsole`, `DebugCommand`, `DebugCommandButton` | Текстовые команды вроде `gold 500`. В релизе не регистрируются |
-| `DebugPanel`, `DebugAnchor`, `DebugPanelStyle` | Панели «свойство — значение» на экране. В релизе вырезаются |
+| `DebugPanel`, `DebugAnchor`, `DebugPanelStyle` | Панели «свойство — значение» на экране; списки и многострочный текст — `WatchBlock`, значение всегда под названием. В релизе вырезаются |
 | `FGizmos` | Гизмо: силуэт префаба, стрелки, дуги |
 
 </details>

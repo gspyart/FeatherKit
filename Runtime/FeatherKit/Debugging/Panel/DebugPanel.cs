@@ -73,12 +73,28 @@ namespace FeatherKit.Debugging
         [Conditional(EditorOnly), Conditional(DevelopmentOnly), Conditional(AnyBuild)]
         public static void Watch(object owner, string window, string label, Func<object> value)
         {
+            Register(owner, window, label, value, isBlock: false);
+        }
+
+        /// <summary>
+        /// Как <see cref="Watch"/>, но значение всегда под названием, во всю ширину окна.
+        /// Для списков и многострочного текста: обычная строка прыгает между «справа» и
+        /// «снизу», когда значение то влезает в строку, то нет.
+        /// </summary>
+        [Conditional(EditorOnly), Conditional(DevelopmentOnly), Conditional(AnyBuild)]
+        public static void WatchBlock(object owner, string window, string label, Func<object> value)
+        {
+            Register(owner, window, label, value, isBlock: true);
+        }
+
+        private static void Register(object owner, string window, string label, Func<object> value, bool isBlock)
+        {
             if (string.IsNullOrWhiteSpace(window) || string.IsNullOrWhiteSpace(label) || value == null)
                 return;
 
             DebugPanelDrawer.EnsureExists();
 
-            GetOrCreate(window.Trim()).Set(owner, label.Trim(), value);
+            GetOrCreate(window.Trim()).Set(owner, label.Trim(), value, isBlock);
         }
 
         /// <summary>

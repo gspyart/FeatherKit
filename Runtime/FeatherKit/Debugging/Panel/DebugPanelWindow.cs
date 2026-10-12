@@ -33,6 +33,9 @@ namespace FeatherKit.Debugging
 
         public string LabelAt(int index) => rows[index].Label;
 
+        /// <summary>Значение строки всегда под названием, даже если влезло бы рядом.</summary>
+        public bool IsBlockAt(int index) => rows[index].IsBlock;
+
         /// <summary>
         /// Значение строки, уже готовое к отрисовке. Падение в функции значения гасим:
         /// объект мог уехать в пул или умереть, а панель из-за этого разваливаться
@@ -53,18 +56,18 @@ namespace FeatherKit.Debugging
 
         // Повторная запись той же пары «окно + свойство» заменяет строку, а не плодит вторую:
         // регистрацию часто зовут из OnEnable, а он случается не один раз за жизнь объекта.
-        internal void Set(object owner, string label, Func<object> value)
+        internal void Set(object owner, string label, Func<object> value, bool isBlock)
         {
             for (var i = 0; i < rows.Count; i++)
             {
                 if (rows[i].Label != label)
                     continue;
 
-                rows[i] = new Row(owner, label, value);
+                rows[i] = new Row(owner, label, value, isBlock);
                 return;
             }
 
-            rows.Add(new Row(owner, label, value));
+            rows.Add(new Row(owner, label, value, isBlock));
         }
 
         internal void Forget(object owner)
@@ -98,13 +101,15 @@ namespace FeatherKit.Debugging
             public readonly object Owner;
             public readonly string Label;
             public readonly Func<object> Value;
+            public readonly bool IsBlock;
 
 
-            public Row(object owner, string label, Func<object> value)
+            public Row(object owner, string label, Func<object> value, bool isBlock)
             {
                 Owner = owner;
                 Label = label;
                 Value = value;
+                IsBlock = isBlock;
             }
         }
     }
