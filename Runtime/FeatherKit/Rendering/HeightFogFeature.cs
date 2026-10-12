@@ -26,7 +26,8 @@ namespace FeatherKit.Rendering
     /// Рисует туман по высоте, настройки которого пришли из Volume. Отвечает за то, КОГДА,
     /// НАДО ЛИ и НАСКОЛЬКО подробно его рисовать: спрашивает стек Volume текущей камеры
     /// и, если тумана там нет, прохода не ставит вовсе. Сами числа тумана живут
-    /// в <see cref="HeightFogVolume"/>, отрисовка — в <see cref="HeightFogPass"/>.
+    /// в <see cref="HeightFogVolume"/>, высота пола под камеру — в <see cref="HeightFogFloorTracker"/>,
+    /// отрисовка — в <see cref="HeightFogPass"/>.
     ///
     /// Добавляется в ассет рендерера один раз на проект: участки карты со своим туманом
     /// делаются локальными Volume, а не отдельными фичами.
@@ -34,10 +35,17 @@ namespace FeatherKit.Rendering
     [DisallowMultipleRendererFeature("Height Fog")]
     public class HeightFogFeature : ScriptableRendererFeature
     {
-        private const string VolumetricSpotsKeyword = "_HEIGHT_FOG_VOLUMETRIC_SPOTS";
-        private const string NoiseTextureKeyword = "_HEIGHT_FOG_NOISE_TEXTURE";
+        /// <summary>
+        /// Сколько клубов укладывается в текстуру клубов по каждой стороне. Общее число
+        /// для того, кто текстуру запекает, и для прохода, который переводит размер клуба
+        /// в метрах в масштаб текстуры.
+        /// </summary>
+        public const int NoiseVolumeSpotsPerTile = 4;
 
-        private static readonly int NoiseTextureId = Shader.PropertyToID("_HeightFogNoiseTexture");
+        private const string NoiseVolumeKeyword = "_HEIGHT_FOG_NOISE_VOLUME";
+
+        private static readonly int NoiseVolumeId = Shader.PropertyToID("_HeightFogNoiseVolume");
+        private static readonly int StepCountId = Shader.PropertyToID("_HeightFogStepCount");
 
         [Tooltip("Шейдер тумана — featherHeightFog из этого же пакета. Пустое поле значит, " +
                  "что рисовать нечем: фича ругнётся в консоль один раз и промолчит дальше")]
@@ -52,24 +60,23 @@ namespace FeatherKit.Rendering
         [SerializeField] private RenderPassEvent injectionPoint = RenderPassEvent.BeforeRenderingTransparents;
 
         [Tooltip("Во сколько раз уменьшить разрешение, в котором считается туман. Главный " +
-                 "рычаг цены: пятна считаются на каждый пиксель, и x2 снимает три четверти " +
+                 "рычаг цены: шаги по туману идут на каждый пиксель, и x2 снимает три четверти " +
                  "работы. На стилизованной картинке разница видна только по краям силуэтов " +
                  "вблизи")]
         [SerializeField] private HeightFogDownscale downscale = HeightFogDownscale.X2;
 
-        [Tooltip("Чем рисовать пятна. Пусто — они считаются формулой: ассет не нужен, но это " +
-                 "самая дорогая часть прохода. Текстура — одна выборка вместо всей " +
-                 "арифметики, и рисунок пятен виден заранее. Нужна тайловая (Wrap Mode = " +
-                 "Repeat), читается красный канал")]
-        [SerializeField] private Texture2D noiseTexture;
+        [Tooltip("3D-текстура клубов тумана. Готовая — featherHeightFogNoise в пакете, своя " +
+                 "печётся кнопкой FeatherKit → Запечь клубы тумана. Пусто — туман ровный, " +
+                 "без клубов")]
+        [SerializeField] private Texture3D noiseVolume;
 
-        [Tooltip("Второй слой пятен у верхней кромки тумана. Без него пятна лежат одной " +
-                 "плоскостью и пелена читается ковром по земле; с ним слои расходятся " +
-                 "по высоте и туман выглядит объёмным. Удваивает стоимость пятен — снимать " +
-                 "первым делом, если кадр не укладывается в бюджет")]
-        [SerializeField] private bool volumetricSpots = true;
+        [Tooltip("Сколько шагов делает взгляд сквозь туман. Больше — клубы чётче и без " +
+                 "зерна, но каждый шаг стоит выборку текстуры на каждый пиксель тумана. " +
+                 "Первое, что снижать, если кадр не укладывается в бюджет")]
+        [SerializeField, Range(4, 32)] private int stepCount = 12;
 
         private HeightFogPass pass;
+        private readonly HeightFogFloorTracker floorTracker = new HeightFogFloorTracker();
         private Material material;
         private bool missingShaderReported;
 
@@ -112,7 +119,10 @@ namespace FeatherKit.Rendering
             // Глубина сцены — единственное, что тумана требует от URP. Просим её здесь,
             // до записи графа: иначе в дешёвом кадре её просто не станут готовить.
             pass.ConfigureInput(ScriptableRenderPassInput.Depth);
-            pass.Setup(material, settings, (int)downscale);
+
+            var floorHeight = floorTracker.GetFloorHeight(renderingData.cameraData.camera, settings);
+
+            pass.Setup(material, settings, floorHeight, (int)downscale);
 
             renderer.EnqueuePass(pass);
         }
@@ -155,11 +165,11 @@ namespace FeatherKit.Rendering
             // Ключевые слова и текстура держатся здесь, а не в проходе: они живут
             // в материале, а материал один на все камеры — раскладывать их по блоку свойств
             // на каждый проход незачем.
-            CoreUtils.SetKeyword(material, VolumetricSpotsKeyword, volumetricSpots);
-            CoreUtils.SetKeyword(material, NoiseTextureKeyword, noiseTexture != null);
+            CoreUtils.SetKeyword(material, NoiseVolumeKeyword, noiseVolume != null);
+            material.SetFloat(StepCountId, stepCount);
 
-            if (noiseTexture != null)
-                material.SetTexture(NoiseTextureId, noiseTexture);
+            if (noiseVolume != null)
+                material.SetTexture(NoiseVolumeId, noiseVolume);
 
             return true;
         }

@@ -28,6 +28,8 @@ namespace FeatherKit.Rendering
         private static readonly int NoiseId = Shader.PropertyToID("_HeightFogNoise");
         private static readonly int WindId = Shader.PropertyToID("_HeightFogWind");
         private static readonly int DepthTapId = Shader.PropertyToID("_HeightFogDepthTap");
+        private static readonly int StartDistanceId = Shader.PropertyToID("_HeightFogStartDistance");
+        private static readonly int TexelSizeId = Shader.PropertyToID("_HeightFogTexelSize");
         private static readonly int SourceId = Shader.PropertyToID("_BlitTexture");
 
         // Полноэкранный треугольник из Blit.hlsl растягивается по этим числам. Своей копии
@@ -45,6 +47,7 @@ namespace FeatherKit.Rendering
         private Vector4 noise;
         private Vector4 wind;
         private Vector4 depthTap;
+        private float startDistance;
 
 
         public HeightFogPass()
@@ -58,7 +61,8 @@ namespace FeatherKit.Rendering
         // Снимок настроек берём здесь, а не в момент отрисовки: стек Volume к этому времени
         // уже посчитан под нужную камеру, а сам граф исполняется позже и про камеру,
         // для которой его записали, уже не спрашивает.
-        public void Setup(Material fogMaterial, HeightFogVolume settings, int divider)
+        // Высота пола приходит отдельно: она зависит от камеры, а не только от Volume.
+        public void Setup(Material fogMaterial, HeightFogVolume settings, float floorHeight, int divider)
         {
             material = fogMaterial;
             resolutionDivider = Mathf.Max(divider, 1);
@@ -69,16 +73,21 @@ namespace FeatherKit.Rendering
             var thickness = Mathf.Max(settings.layerThickness.value, 0.1f);
 
             layer = new Vector4(ToDensity(settings.coverage.value, thickness),
-                                settings.floorHeight.value,
+                                floorHeight,
                                 1f / thickness,
                                 reach);
 
-            noise = new Vector4(1f / Mathf.Max(settings.spotSize.value, 0.5f),
+            // Текстура клубов повторяется через несколько клубов, а не через один: масштаб
+            // делим на их число, чтобы размер клуба в метрах остался тем, что в инспекторе.
+            var spotSize = Mathf.Max(settings.spotSize.value, 0.5f);
+
+            noise = new Vector4(1f / (spotSize * HeightFogFeature.NoiseVolumeSpotsPerTile),
                                 settings.noiseStrength.value,
                                 settings.fogSky.value ? 1f : 0f,
                                 settings.noiseBrightness.value);
 
             wind = settings.wind.value;
+            startDistance = Mathf.Max(settings.startDistance.value, 0f);
         }
 
         // Доля закрытия — в плотность на метр. Обратная сторона того, как туман копится:
@@ -128,7 +137,7 @@ namespace FeatherKit.Rendering
             var fogTexture = CreateFogTexture(renderGraph, resources, cameraData);
 
             RecordOffscreenPass(renderGraph, resources, fogTexture);
-            RecordCompositePass(renderGraph, resources, fogTexture);
+            RecordCompositePass(renderGraph, resources, fogTexture, CalculateTexelSize(renderGraph, fogTexture));
         }
 
         // Полное разрешение: считаем и подмешиваем за один проход, промежуточной текстуры нет.
@@ -169,18 +178,27 @@ namespace FeatherKit.Rendering
         }
 
         // ...а потом растягиваем её поверх кадра.
-        private void RecordCompositePass(RenderGraph renderGraph, UniversalResourceData resources, TextureHandle fogTexture)
+        private void RecordCompositePass(RenderGraph renderGraph, UniversalResourceData resources, TextureHandle fogTexture, Vector4 texelSize)
         {
             using (var builder = renderGraph.AddRasterRenderPass<HeightFogPassData>(CompositePassName, out var passData, profilingSampler))
             {
                 FillPassData(passData, CompositeShaderPass);
                 passData.source = fogTexture;
+                passData.texelSize = texelSize;
 
                 builder.UseTexture(fogTexture);
                 builder.SetRenderAttachment(resources.activeColorTexture, 0, AccessFlags.ReadWrite);
 
                 builder.SetRenderFunc((HeightFogPassData data, RasterGraphContext context) => Render(context.cmd, data));
             }
+        }
+
+        // Размер текселя своей текстуры в uv — по нему растяжение размывает туман.
+        private static Vector4 CalculateTexelSize(RenderGraph renderGraph, TextureHandle fogTexture)
+        {
+            var description = renderGraph.GetTextureDesc(fogTexture);
+
+            return new Vector4(1f / Mathf.Max(description.width, 1), 1f / Mathf.Max(description.height, 1), 0f, 0f);
         }
 
         // Смещение от середины блока до центра его углового пикселя, в uv кадра. Считаем здесь,
@@ -233,12 +251,14 @@ namespace FeatherKit.Rendering
             // Обнуляем явно: экземпляры данных граф переиспользует между кадрами, и текстура
             // от прошлого прохода осталась бы лежать в поле у того, кто её не просил.
             passData.source = TextureHandle.nullHandle;
+            passData.texelSize = Vector4.zero;
 
             passData.depthTap = depthTap;
             passData.color = color;
             passData.layer = layer;
             passData.noise = noise;
             passData.wind = wind;
+            passData.startDistance = startDistance;
         }
 
         // Блок свойств, а не материал: команда отрисовки исполняется позже записи, и значения,
@@ -252,6 +272,8 @@ namespace FeatherKit.Rendering
             Properties.SetVector(NoiseId, data.noise);
             Properties.SetVector(WindId, data.wind);
             Properties.SetVector(DepthTapId, data.depthTap);
+            Properties.SetFloat(StartDistanceId, data.startDistance);
+            Properties.SetVector(TexelSizeId, data.texelSize);
 
             if (data.source.IsValid())
                 Properties.SetTexture(SourceId, data.source);
@@ -271,6 +293,8 @@ namespace FeatherKit.Rendering
             public Vector4 layer;
             public Vector4 noise;
             public Vector4 wind;
+            public float startDistance;
+            public Vector4 texelSize;
             public TextureHandle source;
         }
     }

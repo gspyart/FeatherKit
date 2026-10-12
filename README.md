@@ -41,7 +41,7 @@ FeatherKit закрывает ту часть работы, которая по�
   безопасная зона, перелёт иконки в цель.
 - **Звук и камера.** Разовые звуки по каналам, источник из пула, тряска и зум для Cinemachine.
 - **Рендер.** Тун-шейдер с обводкой и вспышкой, тун-шейдер для вершинной раскраски,
-  туман по высоте, подмена рендерера на время сцены.
+  объёмный туман по высоте с клубами, подмена рендерера на время сцены.
 - **Случайность.** Взвешенный выбор из вариантов. Поля для инспектора «центр ± разброс»
   и «от и до» с уклоном к одному из концов: дизайнер крутит цифры, код читает `Value`.
 - **Отладка.** Цветной лог, текстовая консоль команд, панели «свойство — значение».
@@ -332,7 +332,7 @@ var score = AppContext.Current.GetContext<BattleContext>(this).GetRequired<Score
 | `PooledAudioSource` | Источник звука из пула: зациклить, оборвать, перемещать |
 | `CameraShake`, `ShakeProfile`, `CameraZoom` | Тряска и зум для Cinemachine |
 | `NavMeshPathfinder`, `ObstacleScanner` | Направление по навмешу без `NavMeshAgent`, обход препятствий лучами |
-| `HeightFogVolume` | Туман по высоте через Volume, нужна `HeightFogFeature` в рендерере |
+| `HeightFogVolume` | Объёмный туман по высоте через Volume, нужна `HeightFogFeature` в рендерере с текстурой клубов `featherHeightFogNoise`. Может следовать за камерой по высоте |
 | `ToonLitSettingsFeature` | Общие настройки тун-шейдера на проект |
 | `CameraRendererOverride`, `RenderPipelineOverride` | Свой рендерер или ассет URP на время сцены |
 
@@ -376,6 +376,7 @@ var score = AppContext.Current.GetContext<BattleContext>(this).GetRequired<Score
 | Обзор материалов сцены | `FeatherKit → Материалы сцены` |
 | Закладки на ассеты и объекты сцен: вкладки слева, в каждой свои папки. Общие, в `ProjectSettings/FeatherKit` — попадают в git | `FeatherKit → Закладки`, ПКМ в Project и Hierarchy → `Добавить в закладки` |
 | Назначение иконок ассетам | `FeatherKit → Asset Icons` |
+| 3D-текстура клубов для тумана по высоте | `FeatherKit → Запечь клубы тумана` |
 | Гизмо в Game View | `FeatherKit → Гизмо в Game View` |
 | Инспекторы тун-шейдеров, база для своих инспекторов | `ToonLitShaderGUI`, `ToonTerrainShaderGUI`, `FeatherEditor` |
 | Отрисовка полей `RandomSpread` и `RandomRange` | Сама, через `RandomSpreadDrawer`, `RandomRangeDrawer` |
@@ -408,8 +409,14 @@ var score = AppContext.Current.GetContext<BattleContext>(this).GetRequired<Score
 |---|---|
 | `FeatherKit/Toon Lit` | Ступенчатый свет, обводка, вспышка удара, растворение. Шаблон материала `featherToonTemplate` |
 | `FeatherKit/Toon Terrain` | То же для мешей с вершинной раскраской, до четырёх слоёв |
-| `FeatherKit/Height Fog` | Туман по высоте, настраивается через `HeightFogVolume` |
+| `FeatherKit/Height Fog` | Объёмный туман по высоте, настраивается через `HeightFogVolume` |
 | `FeatherKit/Masked Swirl` | Декоративный UI-эффект свечения |
+
+### Текстуры
+
+| Текстура | Что это |
+|---|---|
+| `featherHeightFogNoise` | 3D-текстура клубов для тумана по высоте, 128³, повторяется без шва. Кладётся в `HeightFogFeature` |
 
 ---
 
