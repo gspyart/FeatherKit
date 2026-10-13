@@ -1,0 +1,28 @@
+{
+    "name": "FeatherKit.HumanoidAnimation.Editor",
+    "rootNamespace": "FeatherKit.EditorTools.HumanoidAnimation",
+    "references": [
+        "FeatherKit.HumanoidAnimation",
+        "FeatherKit.Editor",
+        "Unity.Animation.Rigging"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "FEATHERKIT_ANIMATION_RIGGING"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.animation.rigging",
+            "expression": "1.0.0",
+            "define": "FEATHERKIT_ANIMATION_RIGGING"
+        }
+    ],
+    "noEngineReferences": false
+}

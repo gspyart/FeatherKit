@@ -1,0 +1,24 @@
+{
+    "name": "FeatherKit.HumanoidAnimation",
+    "rootNamespace": "FeatherKit.HumanoidAnimation",
+    "references": [
+        "Unity.Animation.Rigging"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "FEATHERKIT_ANIMATION_RIGGING"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.animation.rigging",
+            "expression": "1.0.0",
+            "define": "FEATHERKIT_ANIMATION_RIGGING"
+        }
+    ],
+    "noEngineReferences": false
+}
