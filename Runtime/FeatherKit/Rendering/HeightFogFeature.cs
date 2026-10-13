@@ -23,14 +23,15 @@ namespace FeatherKit.Rendering
     }
 
     /// <summary>
-    /// Рисует туман по высоте, настройки которого пришли из Volume. Отвечает за то, КОГДА,
-    /// НАДО ЛИ и НАСКОЛЬКО подробно его рисовать: спрашивает стек Volume текущей камеры
-    /// и, если тумана там нет, прохода не ставит вовсе. Сами числа тумана живут
-    /// в <see cref="HeightFogVolume"/>, высота пола под камеру — в <see cref="HeightFogFloorTracker"/>,
-    /// отрисовка — в <see cref="HeightFogPass"/>.
+    /// Рисует туман: общий, по высоте, из Volume, и области тумана (<see cref="FogArea"/>).
+    /// Отвечает за то, КОГДА, НАДО ЛИ и НАСКОЛЬКО подробно его рисовать: спрашивает стек
+    /// Volume текущей камеры и ищет области в кадре, и если нет ни того, ни другого, прохода
+    /// не ставит вовсе. Сами числа тумана живут в <see cref="HeightFogVolume"/>, высота пола
+    /// под камеру — в <see cref="HeightFogFloorTracker"/>, выбор областей —
+    /// в <see cref="HeightFogAreasCollector"/>, отрисовка — в <see cref="HeightFogPass"/>.
     ///
     /// Добавляется в ассет рендерера один раз на проект: участки карты со своим туманом
-    /// делаются локальными Volume, а не отдельными фичами.
+    /// делаются локальными Volume или областями тумана, а не отдельными фичами.
     /// </summary>
     [DisallowMultipleRendererFeature("Height Fog")]
     public class HeightFogFeature : ScriptableRendererFeature
@@ -42,11 +43,9 @@ namespace FeatherKit.Rendering
         /// </summary>
         public const int NoiseVolumeSpotsPerTile = 4;
 
-        private const string NoiseVolumeKeyword = "_HEIGHT_FOG_NOISE_VOLUME";
-
         private static readonly int NoiseVolumeId = Shader.PropertyToID("_HeightFogNoiseVolume");
-        private static readonly int StepCountId = Shader.PropertyToID("_HeightFogStepCount");
 
+        [Header("Отрисовка")]
         [Tooltip("Шейдер тумана — featherHeightFog из этого же пакета. Пустое поле значит, " +
                  "что рисовать нечем: фича ругнётся в консоль один раз и промолчит дальше")]
         [SerializeField] private Shader shader;
@@ -59,24 +58,55 @@ namespace FeatherKit.Rendering
                  "вовсе: глубина сцены к тому времени ещё не готова")]
         [SerializeField] private RenderPassEvent injectionPoint = RenderPassEvent.BeforeRenderingTransparents;
 
+        [Tooltip("3D-текстура клубов тумана. Готовая — featherHeightFogNoise в пакете, своя " +
+                 "печётся кнопкой FeatherKit → Запечь клубы тумана. Пусто — туман ровный, " +
+                 "без клубов")]
+        [SerializeField] private Texture3D noiseVolume;
+
+        [Header("Качество")]
+        [Tooltip("Насколько подробно считать туман. Low — дёшево: разрешение x4, 8 шагов, " +
+                 "2 лампы по 4 шага, без теней ламп. Medium — x2, 12 шагов, 4 лампы по 6 шагов, " +
+                 "все тени. High — полное разрешение, 16 шагов, 8 ламп по 10 шагов, все тени: " +
+                 "вчетверо дороже Medium. Custom — всё задаётся полями ниже. Выключить туман " +
+                 "совсем — снять галку у самой фичи: тогда он не стоит ничего")]
+        // Custom по умолчанию — чтобы у проектов, где числа уже подобраны руками, ничего не поменялось.
+        [SerializeField] private HeightFogQuality quality = HeightFogQuality.Custom;
+
+        [Header("Своё качество — только для Quality = Custom")]
         [Tooltip("Во сколько раз уменьшить разрешение, в котором считается туман. Главный " +
                  "рычаг цены: шаги по туману идут на каждый пиксель, и x2 снимает три четверти " +
                  "работы. На стилизованной картинке разница видна только по краям силуэтов " +
                  "вблизи")]
         [SerializeField] private HeightFogDownscale downscale = HeightFogDownscale.X2;
 
-        [Tooltip("3D-текстура клубов тумана. Готовая — featherHeightFogNoise в пакете, своя " +
-                 "печётся кнопкой FeatherKit → Запечь клубы тумана. Пусто — туман ровный, " +
-                 "без клубов")]
-        [SerializeField] private Texture3D noiseVolume;
-
         [Tooltip("Сколько шагов делает взгляд сквозь туман. Больше — клубы чётче и без " +
                  "зерна, но каждый шаг стоит выборку текстуры на каждый пиксель тумана. " +
                  "Первое, что снижать, если кадр не укладывается в бюджет")]
         [SerializeField, Range(4, 32)] private int stepCount = 12;
 
+        [Tooltip("Сколько ламп, ближайших к камере, светит в тумане. Каждая лампа стоит " +
+                 "на каждом шаге, но только там, где луч проходит через её свет. Ноль — " +
+                 "лампы туман не освещают")]
+        [SerializeField, Range(0, HeightFogLampsCollector.MaxLamps)] private int maxLamps = HeightFogLampsCollector.MaxLamps;
+
+        [Tooltip("Сколько шагов у света ламп — только там, где луч проходит через их свет. " +
+                 "Шаги гуще у самой лампы, поэтому ореолу хватает немногих. Больше — ровнее " +
+                 "ореолы и лучи, но каждый шаг читает свет и тень всех ламп на луче")]
+        [SerializeField, Range(2, 16)] private int lampStepCount = 8;
+
+        [Tooltip("Тени солнца в освещённом тумане: лучи из окон, тёмный туман там, куда " +
+                 "солнце не попадает. Стоит одну выборку карты теней на каждом шаге. " +
+                 "Без галки туман светится солнцем и в закрытом подвале")]
+        [SerializeField] private bool sunShadows = true;
+
+        [Tooltip("Тени ламп в освещённом тумане: свет лампы в тумане перекрывают балки " +
+                 "и стены. Дороже всего остального — выборка тени на каждую лампу на " +
+                 "каждом шаге. Считается только для ламп, у которых тени включены")]
+        [SerializeField] private bool lampShadows = true;
+
         private HeightFogPass pass;
         private readonly HeightFogFloorTracker floorTracker = new HeightFogFloorTracker();
+        private readonly HeightFogAreasCollector areasCollector = new HeightFogAreasCollector();
         private Material material;
         private bool missingShaderReported;
 
@@ -109,9 +139,19 @@ namespace FeatherKit.Rendering
             if (cameraType == CameraType.Preview || cameraType == CameraType.Reflection)
                 return;
 
-            var settings = GetActiveSettings();
+            var settings = GetSettings();
 
-            if (settings == null || !TryPrepareMaterial())
+            if (settings == null)
+                return;
+
+            var camera = renderingData.cameraData.camera;
+            var areas = areasCollector.CollectVisible(camera);
+
+            // Ни общего тумана, ни областей в кадре — проход не ставим, кадр ничего не стоит.
+            if (!settings.IsActive() && areas.Count == 0)
+                return;
+
+            if (!TryPrepareMaterial())
                 return;
 
             pass.renderPassEvent = injectionPoint;
@@ -120,25 +160,30 @@ namespace FeatherKit.Rendering
             // до записи графа: иначе в дешёвом кадре её просто не станут готовить.
             pass.ConfigureInput(ScriptableRenderPassInput.Depth);
 
-            var floorHeight = floorTracker.GetFloorHeight(renderingData.cameraData.camera, settings);
+            var floorHeight = floorTracker.GetFloorHeight(camera, settings);
 
-            pass.Setup(material, settings, floorHeight, (int)downscale);
+            pass.Setup(material, settings, floorHeight, areas, noiseVolume != null);
+            pass.SetQuality(GetQualitySettings());
 
             renderer.EnqueuePass(pass);
         }
 
         // Стек Volume к этому моменту уже посчитан под текущую камеру — URP обновляет его
         // раньше, чем спрашивает фичи. Поэтому берём готовый ответ, а не ищем Volume сами.
-        private HeightFogVolume GetActiveSettings()
+        // Берём и неактивный: без общего тумана могут быть области.
+        private HeightFogVolume GetSettings()
         {
             var stack = VolumeManager.instance?.stack;
 
-            if (stack == null)
-                return null;
+            return stack?.GetComponent<HeightFogVolume>();
+        }
 
-            var settings = stack.GetComponent<HeightFogVolume>();
+        private HeightFogQualitySettings GetQualitySettings()
+        {
+            if (quality != HeightFogQuality.Custom)
+                return HeightFogQualitySettings.ForPreset(quality);
 
-            return settings != null && settings.IsActive() ? settings : null;
+            return new HeightFogQualitySettings(downscale, stepCount, maxLamps, lampStepCount, sunShadows, lampShadows);
         }
 
         // Ругаемся один раз, а не каждый кадр: фича вызывается на каждую камеру, и консоль
@@ -162,12 +207,8 @@ namespace FeatherKit.Rendering
             if (material == null)
                 return false;
 
-            // Ключевые слова и текстура держатся здесь, а не в проходе: они живут
-            // в материале, а материал один на все камеры — раскладывать их по блоку свойств
-            // на каждый проход незачем.
-            CoreUtils.SetKeyword(material, NoiseVolumeKeyword, noiseVolume != null);
-            material.SetFloat(StepCountId, stepCount);
-
+            // Текстура держится здесь, а не в проходе: она одна на все камеры — раскладывать
+            // её по блоку свойств на каждый проход незачем.
             if (noiseVolume != null)
                 material.SetTexture(NoiseVolumeId, noiseVolume);
 

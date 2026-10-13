@@ -8,14 +8,14 @@ using Object = UnityEngine.Object;
 namespace FeatherKit.EditorTools.HumanoidAnimation
 {
     /// <summary>
-    /// Действия над ригом, общие для инспектора, панели в сцене и меню: предпросмотр,
-    /// сброс ручек, запекание, пересборка. Каждое объясняет человеку, что не так, если
-    /// выполнить его сейчас нельзя.
+    /// Действия над ригом, общие для инспектора, панели в сцене и меню: найти выделенный риг
+    /// и ручки, сбросить ручки, запечь, пересобрать, удалить; выйти из предпросмотра, когда
+    /// действию нужна исходная поза. Каждое объясняет человеку, что не так, если выполнить
+    /// его сейчас нельзя. Окном Animation управляет <see cref="HumanoidAnimationWindowRemote"/>.
     /// </summary>
     internal static class HumanoidAnimationRigActions
     {
         private const string DialogTitle = "Анимация гуманоида";
-        private const string TimelineMenuPath = "Window/Sequencing/Timeline";
 
 
         // ── Найти риг ──────────────────────────────
@@ -28,73 +28,7 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
         }
 
 
-        // ── Окна и предпросмотр ──────────────────────────────
-
-        /// <summary>
-        /// Идёт ли предпросмотр в Animation или Timeline. Только в нём ограничения
-        /// работают в редакторе — без него ручки не двигают тело.
-        /// </summary>
-        public static bool IsPreviewing => AnimationMode.InAnimationMode();
-
-
-        public static void OpenAnimationWindow(HumanoidAnimationRig rig)
-        {
-            SelectInsideRig(rig);
-            EditorWindow.GetWindow<AnimationWindow>();
-        }
-
-
-        public static void OpenTimelineWindow(HumanoidAnimationRig rig)
-        {
-            SelectInsideRig(rig);
-
-            if (!EditorApplication.ExecuteMenuItem(TimelineMenuPath))
-                ShowMessage("Окно Timeline не найдено. Установите пакет Timeline через Package Manager.");
-        }
-
-
-        /// <summary>Включить предпросмотр в окне Animation. Нет клипа — подсказать, как его завести.</summary>
-        public static void StartPreview(HumanoidAnimationRig rig)
-        {
-            HumanoidRigClipLibrary.RestoreController(rig);
-            SelectInsideRig(rig);
-
-            var window = EditorWindow.GetWindow<AnimationWindow>();
-
-            if (window.animationClip == null)
-            {
-                // Только что созданный клип ещё пустой — берём из контроллера, а не по кривым ручек.
-                var controller = rig.Animator.runtimeAnimatorController;
-                var clips = controller != null ? controller.animationClips : new AnimationClip[0];
-
-                if (clips.Length == 0)
-                {
-                    ShowMessage("У рига ещё нет клипа.\n\nВ окне Animation нажмите Create и сохраните клип — потом включайте предпросмотр.");
-                    return;
-                }
-
-                window.animationClip = clips[0];
-            }
-
-            // Окно подхватывает новое выделение на следующем тике — до этого предпросмотр не включится.
-            window.previewing = true;
-            EditorApplication.delayCall += () =>
-            {
-                if (window != null)
-                    window.previewing = true;
-            };
-        }
-
-
-        public static void StopPreview()
-        {
-            foreach (var window in Resources.FindObjectsOfTypeAll<AnimationWindow>())
-            {
-                window.recording = false;
-                window.previewing = false;
-            }
-        }
-
+        // ── Предпросмотр ──────────────────────────────
 
         /// <summary>
         /// Выйти из предпросмотра перед действием, которому нужна исходная поза. Спрашивает
@@ -102,15 +36,15 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
         /// </summary>
         public static bool TryLeavePreview(string actionDescription)
         {
-            if (!IsPreviewing)
+            if (!HumanoidAnimationWindowRemote.IsAnyPreviewRunning)
                 return true;
 
             if (!EditorUtility.DisplayDialog(DialogTitle, $"Сейчас включён предпросмотр анимации, а {actionDescription} нужно в исходной позе.\n\nВыключить предпросмотр и продолжить?", "Выключить и продолжить", "Отмена"))
                 return false;
 
-            StopPreview();
+            HumanoidAnimationWindowRemote.StopAll();
 
-            if (!IsPreviewing)
+            if (!HumanoidAnimationWindowRemote.IsAnyPreviewRunning)
                 return true;
 
             ShowMessage("Предпросмотр всё ещё идёт — скорее всего, в окне Timeline. Выключите его там (кнопка Preview) и повторите.");
@@ -126,15 +60,6 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
 
             ShowMessage("Во время игры риг не меняем и не запекаем: всё сделанное пропадёт при выходе из Play Mode.");
             return false;
-        }
-
-
-        // Окно Animation показывает клипы выделенного аниматора. Выделение уже внутри рига —
-        // не трогаем, чтобы не сбить выбранную ручку.
-        private static void SelectInsideRig(HumanoidAnimationRig rig)
-        {
-            if (!rig.Contains(Selection.activeTransform))
-                Selection.activeGameObject = rig.gameObject;
         }
 
 

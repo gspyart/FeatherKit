@@ -6,7 +6,8 @@ namespace FeatherKit.HumanoidAnimation
     /// <summary>
     /// Рабочая копия гуманоида для анимации в редакторе. Помнит, где лежат ручки, ограничения
     /// Animation Rigging и конечности с режимами IK/FK, помнит свой контроллер с клипами
-    /// (чтобы вернуть его, если Animator его потерял) и хранит настройки запекания в Humanoid-клип.
+    /// (чтобы вернуть его, если Animator его потерял), настройки анимирования — ключ на всю позу,
+    /// пересборку игровых клипов — и точку, откуда смотреть на позу глазами персонажа.
     ///
     /// Сам ничего не делает: создаёт и обслуживает его редакторная тула FeatherKit.
     /// Объект помечен EditorOnly и в билд не попадает.
@@ -19,6 +20,8 @@ namespace FeatherKit.HumanoidAnimation
         public const string ControlsRootName = "Animation Controls";
         public const string ConstraintsRootName = "Animation Rig";
 
+        private const float DefaultEyesViewFieldOfView = 60f;
+
         [SerializeField] private Transform controlsRoot;
         [SerializeField] private Transform constraintsRoot;
         [SerializeField] private List<HumanoidRigControl> controls = new List<HumanoidRigControl>();
@@ -27,6 +30,11 @@ namespace FeatherKit.HumanoidAnimation
         [SerializeField] private bool controlsShown = true;
         [SerializeField] private RuntimeAnimatorController animationController;
         [SerializeField] private bool bakeOnSave = true;
+        [SerializeField] private bool keyWholePose = true;
+        [SerializeField] private bool hasEyesView;
+        [SerializeField] private Vector3 eyesViewPosition;
+        [SerializeField] private Quaternion eyesViewRotation = Quaternion.identity;
+        [SerializeField] private float eyesViewFieldOfView = DefaultEyesViewFieldOfView;
 
 
         // ── Устройство рига ──────────────────────────────
@@ -67,17 +75,39 @@ namespace FeatherKit.HumanoidAnimation
         }
 
 
-        // ── Запекание ──────────────────────────────
+        // ── Запекание и ключи ──────────────────────────────
 
-        /// <summary>Пересобирать Humanoid-клипы при сохранении проекта.</summary>
+        /// <summary>Пересобирать игровые Humanoid-клипы самим: при сохранении проекта и перед запуском игры.</summary>
         public bool BakeOnSave
         {
             get => bakeOnSave;
             set => bakeOnSave = value;
         }
 
+        /// <summary>Сдвинул одну ручку при записи — ключ встаёт всем ручкам в этом кадре.</summary>
+        public bool KeyWholePose
+        {
+            get => keyWholePose;
+            set => keyWholePose = value;
+        }
 
-        // ── Методы ──────────────────────────────
+
+        // ── Вид глазами ──────────────────────────────
+
+        /// <summary>Запомнена ли своя точка взгляда. Нет — тула считает её от головы.</summary>
+        public bool HasEyesView => hasEyesView;
+
+        /// <summary>Откуда смотрят глаза, в пространстве рига.</summary>
+        public Vector3 EyesViewPosition => eyesViewPosition;
+
+        /// <summary>Куда смотрят глаза, в пространстве рига.</summary>
+        public Quaternion EyesViewRotation => eyesViewRotation;
+
+        /// <summary>Угол обзора, как у камеры в игре.</summary>
+        public float EyesViewFieldOfView => eyesViewFieldOfView;
+
+
+        // ── Сборка ──────────────────────────────
 
         /// <summary>Запомнить собранный риг. Зовёт только тула, которая его строит.</summary>
         public void AssignBuiltRig(Transform newControlsRoot, Transform newConstraintsRoot, List<HumanoidRigControl> newControls, List<HumanoidRigLimb> newLimbs, bool withFingers)
@@ -90,12 +120,30 @@ namespace FeatherKit.HumanoidAnimation
         }
 
 
+        // ── Поиск ручек и конечностей ──────────────────────────────
+
         /// <summary>Найти ручку по кости и роли. Нет такой — null.</summary>
         public HumanoidRigControl FindControl(HumanBodyBones bone, HumanoidRigControlType type)
         {
             foreach (var control in controls)
             {
                 if (control.Bone == bone && control.Type == type && control.Handle != null)
+                    return control;
+            }
+
+            return null;
+        }
+
+
+        /// <summary>Ручка, которой принадлежит объект. Не ручка — null.</summary>
+        public HumanoidRigControl FindControlByHandle(Transform handle)
+        {
+            if (handle == null)
+                return null;
+
+            foreach (var control in controls)
+            {
+                if (control.Handle == handle)
                     return control;
             }
 
@@ -134,7 +182,43 @@ namespace FeatherKit.HumanoidAnimation
         }
 
 
+        /// <summary>
+        /// Работает ли ручка сейчас. Ручки корпуса работают всегда, у руки и ноги — только
+        /// ручки текущего режима: в IK кольца стоят без дела, в FK — кубик и шарик.
+        /// </summary>
+        public bool IsInActiveMode(HumanoidRigControl control)
+        {
+            var limb = FindLimbOf(control);
+
+            if (limb == null)
+                return true;
+
+            var isIKControl = control.Type != HumanoidRigControlType.BoneRotation;
+            return isIKControl == limb.IsInIK;
+        }
+
+
         /// <summary>Лежит ли объект внутри этого рига.</summary>
         public bool Contains(Transform target) => target != null && target.IsChildOf(transform);
+
+
+        // ── Вид глазами ──────────────────────────────
+
+        /// <summary>Запомнить свою точку взгляда: положение и поворот в пространстве рига и угол обзора.</summary>
+        public void SetEyesView(Vector3 localPosition, Quaternion localRotation, float fieldOfView)
+        {
+            hasEyesView = true;
+            eyesViewPosition = localPosition;
+            eyesViewRotation = localRotation;
+            eyesViewFieldOfView = fieldOfView;
+        }
+
+
+        /// <summary>Забыть свою точку взгляда — тула снова будет считать её от головы.</summary>
+        public void ForgetEyesView()
+        {
+            hasEyesView = false;
+            eyesViewFieldOfView = DefaultEyesViewFieldOfView;
+        }
     }
 }

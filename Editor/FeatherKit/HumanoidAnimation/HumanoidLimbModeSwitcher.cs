@@ -84,11 +84,22 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
 
             target.Handle.SetPositionAndRotation(end.position, end.rotation);
 
-            var limbLength = Vector3.Distance(upper, middle) + Vector3.Distance(middle, end.position);
-            var bendDirection = BendDirection(upper, middle, end.position);
+            if (TryFindBendHintPosition(upper, middle, end.position, out var hintPosition))
+                hint.Handle.position = hintPosition;
+        }
 
-            if (bendDirection.sqrMagnitude > 0f)
-                hint.Handle.position = middle + bendDirection * (limbLength * HumanoidRigLimbBuilder.BendHintDistance);
+
+        /// <summary>
+        /// Где стоять шарику сгиба, чтобы сустав гнулся как сейчас: на продолжении линии
+        /// «середина плеча — локоть». Конечность прямая — сгиба нет, вернёт false.
+        /// </summary>
+        public static bool TryFindBendHintPosition(Vector3 upper, Vector3 middle, Vector3 end, out Vector3 position)
+        {
+            var limbLength = Vector3.Distance(upper, middle) + Vector3.Distance(middle, end);
+            var bendDirection = BendDirection(upper, middle, end);
+
+            position = middle + bendDirection * (limbLength * HumanoidRigLimbBuilder.BendHintDistance);
+            return bendDirection.sqrMagnitude > 0f;
         }
 
         // Куда выпирает сустав: от линии «плечо — кисть» к локтю.
@@ -188,14 +199,7 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
 
             foreach (var control in rig.Controls)
             {
-                var limb = rig.FindLimbOf(control);
-
-                if (limb == null || control.Handle == null)
-                    continue;
-
-                var isIKControl = control.Type != HumanoidRigControlType.BoneRotation;
-
-                if (isIKControl != limb.IsInIK)
+                if (control.Handle != null && !rig.IsInActiveMode(control))
                     hidden.Add(control.Handle);
             }
 

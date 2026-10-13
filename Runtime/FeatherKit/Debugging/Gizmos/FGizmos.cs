@@ -164,9 +164,12 @@ namespace FeatherKit.Debugging
 
             Handles.DrawLine(from, end);
 
-            // Наконечник разводим поперёк стрелки. У вертикальной стрелки вертикальная ось
-            // вырождается — тогда годится любая другая поперечина.
-            var axis = Mathf.Abs(Vector3.Dot(forward, Vector3.up)) > 0.99f ? Vector3.right : Vector3.up;
+            // Наконечник разводим вокруг вертикали, повёрнутой поперёк стрелки: у наклонной стрелки
+            // голая вертикаль загнула бы усы вниз, а так они ложатся в плоскость склона. У вертикальной
+            // стрелки вертикаль вырождается — тогда годится любая другая поперечина.
+            var axis = Mathf.Abs(Vector3.Dot(forward, Vector3.up)) > 0.99f
+                ? Vector3.right
+                : Vector3.ProjectOnPlane(Vector3.up, forward).normalized;
             var head = length * 0.2f;
 
             Handles.DrawLine(end, end + Quaternion.AngleAxis(150f, axis) * forward * head);

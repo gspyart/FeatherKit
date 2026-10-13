@@ -6,21 +6,17 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.HumanoidAnimation
 {
     /// <summary>
-    /// Панель «Анимация гуманоида» в окне сцены. Появляется сама, когда выделено что-то
-    /// внутри рига: схема тела для выбора ручек, режимы FK/IK рук и ног, состояние
-    /// предпросмотра, сброс и запекание.
-    /// Нужна, чтобы не возвращаться в инспектор рига каждый раз, когда выделил ручку.
+    /// Панель «Анимация гуманоида» в окне сцены — всё для анимации в одном месте, без окна
+    /// Animation и инспектора. Появляется сама, когда выделено что-то внутри рига: сверху время
+    /// и ключи, ниже кнопки позы, режимы FK/IK рук и ног и схема тела для выбора ручек.
     /// </summary>
     [Overlay(typeof(SceneView), OverlayId, "Анимация гуманоида", true)]
     internal sealed class HumanoidAnimationOverlay : IMGUIOverlay, ITransientOverlay
     {
         private const string OverlayId = "featherkit-humanoid-animation";
-        private const float PanelWidth = 260f;
-
-        private static readonly Color PreviewOnColor = new Color(0.35f, 0.85f, 0.45f);
-        private static readonly Color PreviewOffColor = new Color(1f, 0.7f, 0.3f);
-
-        private GUIStyle statusStyle;
+        private const string LimbsFoldoutKey = "FeatherKit.HumanoidAnimation.Overlay.Limbs";
+        private const string PickerFoldoutKey = "FeatherKit.HumanoidAnimation.Overlay.BodyPicker";
+        private const float PanelWidth = 280f;
 
 
         // ── Видимость ──────────────────────────────
@@ -38,78 +34,49 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
             if (rig == null)
                 return;
 
-            EnsureStyles();
             HumanoidRigClipLibrary.RememberController(rig);
             HumanoidLimbModeSwitcher.SyncVisibility(rig);
 
             using (new EditorGUILayout.VerticalScope(GUILayout.Width(PanelWidth)))
             {
-                DrawPreviewStatus(rig);
-                GUILayout.Space(6f);
+                HumanoidTimePanel.Draw(rig);
+                DrawSeparator();
 
-                HumanoidBodyPicker.Draw(rig);
-                GUILayout.Space(6f);
+                HumanoidPosePanel.Draw(rig);
+                DrawSeparator();
 
-                HumanoidLimbModePanel.Draw(rig, withBlendSliders: false);
-                GUILayout.Space(6f);
+                if (DrawFoldout(LimbsFoldoutKey, "Руки и ноги: FK или IK", true))
+                    HumanoidLimbModePanel.Draw(rig, withBlendSliders: false);
 
-                DrawActions(rig);
+                if (DrawFoldout(PickerFoldoutKey, "Схема тела", false))
+                    HumanoidBodyPicker.Draw(rig);
+
+                GUILayout.Space(4f);
+
+                if (GUILayout.Button(new GUIContent("Риг в инспекторе", "Все анимации персонажа и настройки рига."), EditorStyles.miniButton))
+                    Selection.activeGameObject = rig.gameObject;
             }
         }
 
 
-        private void DrawPreviewStatus(HumanoidAnimationRig rig)
+        // Свёрнуто или нет — помнится между перезапусками редактора.
+        private static bool DrawFoldout(string key, string title, bool expandedByDefault)
         {
-            var isPreviewing = HumanoidAnimationRigActions.IsPreviewing;
+            var expanded = EditorPrefs.GetBool(key, expandedByDefault);
+            var newExpanded = EditorGUILayout.Foldout(expanded, title, true);
 
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                statusStyle.normal.textColor = isPreviewing ? PreviewOnColor : PreviewOffColor;
+            if (newExpanded != expanded)
+                EditorPrefs.SetBool(key, newExpanded);
 
-                var status = isPreviewing
-                    ? new GUIContent("● Предпросмотр включён", "Ручки двигают тело. Включите запись в окне Animation, чтобы ставить ключи.")
-                    : new GUIContent("● Предпросмотр выключен", "Без предпросмотра ручки двигаются, но тело стоит на месте.");
-
-                GUILayout.Label(status, statusStyle);
-                GUILayout.FlexibleSpace();
-
-                if (!isPreviewing && GUILayout.Button(new GUIContent("Включить", "Включить предпросмотр в окне Animation."), EditorStyles.miniButton))
-                {
-                    HumanoidAnimationRigActions.StartPreview(rig);
-                    GUIUtility.ExitGUI();
-                }
-            }
+            return newExpanded;
         }
 
 
-        private static void DrawActions(HumanoidAnimationRig rig)
+        private static void DrawSeparator()
         {
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                if (GUILayout.Button(new GUIContent("Сбросить выделенные", "Вернуть выделенные ручки в исходную позу. При записи поставит ключи."), EditorStyles.miniButtonLeft))
-                {
-                    HumanoidAnimationRigActions.ResetControls(HumanoidAnimationRigActions.FindSelectedControls(rig));
-                    GUIUtility.ExitGUI();
-                }
-
-                if (GUILayout.Button(new GUIContent("Запечь клипы", "Собрать Humanoid-версии всех клипов рига прямо сейчас. Обычно это делает Ctrl+S."), EditorStyles.miniButtonRight))
-                {
-                    HumanoidAnimationRigActions.BakeAll(rig);
-                    GUIUtility.ExitGUI();
-                }
-            }
-
-            if (GUILayout.Button(new GUIContent("Открыть риг в инспекторе", "Все настройки и список клипов."), EditorStyles.miniButton))
-                Selection.activeGameObject = rig.gameObject;
-        }
-
-
-        private void EnsureStyles()
-        {
-            if (statusStyle != null)
-                return;
-
-            statusStyle = new GUIStyle(EditorStyles.miniBoldLabel);
+            GUILayout.Space(4f);
+            EditorGUI.DrawRect(GUILayoutUtility.GetRect(1f, 1f, GUILayout.ExpandWidth(true)), new Color(0.5f, 0.5f, 0.5f, 0.3f));
+            GUILayout.Space(4f);
         }
     }
 }

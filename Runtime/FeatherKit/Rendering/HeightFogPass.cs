@@ -7,28 +7,25 @@ using UnityEngine.Rendering.Universal;
 namespace FeatherKit.Rendering
 {
     /// <summary>
-    /// Полноэкранный проход тумана: раскладывает числа из Volume по блоку свойств и рисует
-    /// туман — либо прямо в кадр, либо в свою текстуру пониженного разрешения, которую потом
-    /// растягивает поверх кадра. Отвечает ТОЛЬКО за отрисовку: надо ли рисовать, решает
-    /// <see cref="HeightFogFeature"/>, а сами числа живут в <see cref="HeightFogVolume"/>.
+    /// Полноэкранный проход тумана: собирает числа кадра — из Volume, областей тумана
+    /// и света сцены, — считает туман в свою текстуру и растягивает её поверх кадра,
+    /// слегка размыв. Отвечает ТОЛЬКО за отрисовку: надо ли рисовать, решает
+    /// <see cref="HeightFogFeature"/>, перевод в числа шейдера — <see cref="HeightFogShaderInputs"/>.
+    ///
+    /// Своя текстура и размытие даже в полном разрешении: начало шагов по лучу у соседних
+    /// пикселей сдвинуто, чтобы не было полос, и без размытия этот сдвиг виден штриховкой.
     /// </summary>
     internal sealed class HeightFogPass : ScriptableRenderPass
     {
-        private const string DirectPassName = "Height Fog";
+        private const string ProfilingName = "Height Fog";
         private const string OffscreenPassName = "Height Fog (в свою текстуру)";
         private const string CompositePassName = "Height Fog (растянуть)";
 
         // Порядок проходов в шейдере.
-        private const int DirectShaderPass = 0;
-        private const int OffscreenShaderPass = 1;
-        private const int CompositeShaderPass = 2;
+        private const int OffscreenShaderPass = 0;
+        private const int CompositeShaderPass = 1;
 
-        private static readonly int ColorId = Shader.PropertyToID("_HeightFogColor");
-        private static readonly int LayerId = Shader.PropertyToID("_HeightFogLayer");
-        private static readonly int NoiseId = Shader.PropertyToID("_HeightFogNoise");
-        private static readonly int WindId = Shader.PropertyToID("_HeightFogWind");
         private static readonly int DepthTapId = Shader.PropertyToID("_HeightFogDepthTap");
-        private static readonly int StartDistanceId = Shader.PropertyToID("_HeightFogStartDistance");
         private static readonly int TexelSizeId = Shader.PropertyToID("_HeightFogTexelSize");
         private static readonly int SourceId = Shader.PropertyToID("_BlitTexture");
 
@@ -40,20 +37,22 @@ namespace FeatherKit.Rendering
 
         private static readonly MaterialPropertyBlock Properties = new MaterialPropertyBlock();
 
+        private readonly HeightFogShaderInputs inputs = new HeightFogShaderInputs();
+        private readonly HeightFogLampsCollector lampsCollector = new HeightFogLampsCollector();
         private Material material;
-        private int resolutionDivider = 1;
-        private Vector4 color;
-        private Vector4 layer;
-        private Vector4 noise;
-        private Vector4 wind;
+        private HeightFogShaderKeywords keywords;
+        private HeightFogQualitySettings quality = HeightFogQualitySettings.ForPreset(HeightFogQuality.Medium);
         private Vector4 depthTap;
-        private float startDistance;
 
 
         public HeightFogPass()
         {
-            profilingSampler = new ProfilingSampler(DirectPassName);
+            profilingSampler = new ProfilingSampler(ProfilingName);
         }
+
+
+        // Во сколько раз туман считается мельче кадра. Единица — в полном разрешении.
+        private int ResolutionDivider => Mathf.Max((int)quality.Downscale, 1);
 
 
         // ── Настройка ─────────────────────────────────────────────────────────
@@ -62,55 +61,23 @@ namespace FeatherKit.Rendering
         // уже посчитан под нужную камеру, а сам граф исполняется позже и про камеру,
         // для которой его записали, уже не спрашивает.
         // Высота пола приходит отдельно: она зависит от камеры, а не только от Volume.
-        public void Setup(Material fogMaterial, HeightFogVolume settings, float floorHeight, int divider)
+        public void Setup(Material fogMaterial, HeightFogVolume settings, float floorHeight, VisibleFogAreas areas, bool noiseVolumeAssigned)
         {
             material = fogMaterial;
-            resolutionDivider = Mathf.Max(divider, 1);
 
-            color = ToShaderColor(settings.color.value);
+            if (keywords == null || keywords.Shader != fogMaterial.shader)
+                keywords = new HeightFogShaderKeywords(fogMaterial.shader);
 
-            var reach = Mathf.Max(settings.maxDistance.value, 1f);
-            var thickness = Mathf.Max(settings.layerThickness.value, 0.1f);
-
-            layer = new Vector4(ToDensity(settings.coverage.value, thickness),
-                                floorHeight,
-                                1f / thickness,
-                                reach);
-
-            // Текстура клубов повторяется через несколько клубов, а не через один: масштаб
-            // делим на их число, чтобы размер клуба в метрах остался тем, что в инспекторе.
-            var spotSize = Mathf.Max(settings.spotSize.value, 0.5f);
-
-            noise = new Vector4(1f / (spotSize * HeightFogFeature.NoiseVolumeSpotsPerTile),
-                                settings.noiseStrength.value,
-                                settings.fogSky.value ? 1f : 0f,
-                                settings.noiseBrightness.value);
-
-            wind = settings.wind.value;
-            startDistance = Mathf.Max(settings.startDistance.value, 0f);
+            inputs.CaptureVolume(settings, floorHeight, noiseVolumeAssigned);
+            inputs.CaptureAreas(areas);
         }
 
-        // Доля закрытия — в плотность на метр. Обратная сторона того, как туман копится:
-        // пелена растёт по формуле «единица минус экспонента», поэтому обратный ход —
-        // логарифм. Человеку при этом остаётся понятное «сквозь слой видно столько-то»,
-        // и вход в зону идёт ровно, а не выскакивает в первой трети бленда.
-        //
-        // Делим на ТОЛЩИНУ, а не на дальность: столб тумана над полом при взгляде сверху
-        // равен плотности, помноженной на толщину, — дальность в него не входит вовсе.
-        // Пока делили на дальность, число в инспекторе обещало закрытие горизонтального луча
-        // длиной в дальность, а сверху луч режет слой лишь на его толщину: закрытие 0.2
-        // при слое 0.6 м и дальности 60 давало на полу 0.3%.
-        private static float ToDensity(float coverage, float thickness)
-        {
-            return -Mathf.Log(1f - Mathf.Clamp(coverage, 0f, 0.99f)) / thickness;
-        }
 
-        // Цвет из Volume — в то, что ждёт шейдер. Свойства материала Unity переводит
-        // в линейное пространство сама, а блок свойств отдаёт числа как есть, и туман
-        // оказался бы заметно светлее выбранного на палитре.
-        private static Vector4 ToShaderColor(Color value)
+        // То, что задаёт цену тумана, а не его вид, — настройки фичи, а не Volume.
+        public void SetQuality(HeightFogQualitySettings qualitySettings)
         {
-            return QualitySettings.activeColorSpace == ColorSpace.Linear ? value.linear : value;
+            quality = qualitySettings;
+            inputs.CaptureQuality(qualitySettings);
         }
 
 
@@ -123,53 +90,38 @@ namespace FeatherKit.Rendering
             if (material == null || !resources.activeColorTexture.IsValid() || !resources.cameraDepthTexture.IsValid())
                 return;
 
-            if (resolutionDivider <= 1)
-            {
-                depthTap = Vector4.zero;
-                RecordDirectPass(renderGraph, resources);
-                return;
-            }
+            CaptureLight(frameData, resources);
 
             var cameraData = frameData.Get<UniversalCameraData>();
 
             depthTap = CalculateDepthTap(cameraData);
 
-            var fogTexture = CreateFogTexture(renderGraph, resources, cameraData);
+            var fogTexture = CreateFogTexture(renderGraph, resources);
 
             RecordOffscreenPass(renderGraph, resources, fogTexture);
             RecordCompositePass(renderGraph, resources, fogTexture, CalculateTexelSize(renderGraph, fogTexture));
         }
 
-        // Полное разрешение: считаем и подмешиваем за один проход, промежуточной текстуры нет.
-        private void RecordDirectPass(RenderGraph renderGraph, UniversalResourceData resources)
+        // Свет берём при записи графа: данные о свете и тенях URP собирает под камеру
+        // как раз к этому времени, а в момент постановки прохода их ещё нет.
+        private void CaptureLight(ContextContainer frameData, UniversalResourceData resources)
         {
-            using (var builder = renderGraph.AddRasterRenderPass<HeightFogPassData>(DirectPassName, out var passData, profilingSampler))
-            {
-                FillPassData(passData, DirectShaderPass);
+            var lightData = frameData.Get<UniversalLightData>();
+            var shadowData = frameData.Get<UniversalShadowData>();
+            var cameraPosition = frameData.Get<UniversalCameraData>().worldSpaceCameraPos;
 
-                // Глубину объявляем зависимостью явно: иначе граф вправе не готовить её
-                // к нашему проходу, и туман лёг бы по чужому кадру.
-                builder.UseTexture(resources.cameraDepthTexture);
-
-                // ReadWrite, а не Write: туман подмешивается альфа-блендом, то есть читает
-                // то, что под ним. Чистая запись разрешила бы графу выбросить содержимое
-                // цели перед проходом — на тайловых GPU под туманом остался бы мусор.
-                builder.SetRenderAttachment(resources.activeColorTexture, 0, AccessFlags.ReadWrite);
-
-                builder.SetRenderFunc((HeightFogPassData data, RasterGraphContext context) => Render(context.cmd, data));
-            }
+            inputs.CaptureLight(lightData, shadowData, resources, cameraPosition, lampsCollector, quality);
         }
 
-        // Пониженное разрешение: сперва считаем туман в свою текстуру...
+        // Сперва считаем туман в свою текстуру...
         private void RecordOffscreenPass(RenderGraph renderGraph, UniversalResourceData resources, TextureHandle fogTexture)
         {
             using (var builder = renderGraph.AddRasterRenderPass<HeightFogPassData>(OffscreenPassName, out var passData, profilingSampler))
             {
                 FillPassData(passData, OffscreenShaderPass);
+                DeclareFogInputs(builder, resources);
 
-                builder.UseTexture(resources.cameraDepthTexture);
-
-                // Здесь запись честно полная: текстура наша, очищается перед проходом,
+                // Здесь запись честно полная: текстура наша, проход пишет каждый её тексель,
                 // и читать из неё в этом же проходе нечего.
                 builder.SetRenderAttachment(fogTexture, 0, AccessFlags.Write);
 
@@ -187,10 +139,35 @@ namespace FeatherKit.Rendering
                 passData.texelSize = texelSize;
 
                 builder.UseTexture(fogTexture);
+
+                // Глубина — чтобы размытие не тащило туман через края предметов.
+                builder.UseTexture(resources.cameraDepthTexture);
+
+                // ReadWrite, а не Write: туман подмешивается поверх кадра, то есть читает
+                // то, что под ним. Чистая запись разрешила бы графу выбросить содержимое
+                // цели перед проходом — на тайловых GPU под туманом остался бы мусор.
                 builder.SetRenderAttachment(resources.activeColorTexture, 0, AccessFlags.ReadWrite);
 
                 builder.SetRenderFunc((HeightFogPassData data, RasterGraphContext context) => Render(context.cmd, data));
             }
+        }
+
+        // Что проход, считающий туман, берёт у графа. Глубину и карты теней объявляем явно:
+        // иначе граф вправе не готовить глубину к нашему проходу или отдать память карт
+        // теней кому-то раньше, чем туман их прочтёт.
+        private void DeclareFogInputs(IRasterRenderGraphBuilder builder, UniversalResourceData resources)
+        {
+            builder.UseTexture(resources.cameraDepthTexture);
+
+            // Части шейдера включаются командой прямо перед отрисовкой, а граф считает
+            // это правкой общего состояния и без разрешения бросает исключение.
+            builder.AllowGlobalStateModification(true);
+
+            if (inputs.SunShadows != HeightFogSunShadows.Off)
+                builder.UseTexture(resources.mainShadowsTexture);
+
+            if (inputs.HasLampShadows)
+                builder.UseTexture(resources.additionalShadowsTexture);
         }
 
         // Размер текселя своей текстуры в uv — по нему растяжение размывает туман.
@@ -205,7 +182,7 @@ namespace FeatherKit.Rendering
         // а не от _CameraDepthTexture_TexelSize: тот глобал приходит от чужой текстуры и врёт размером.
         private Vector4 CalculateDepthTap(UniversalCameraData cameraData)
         {
-            var step = resolutionDivider * 0.5f - 0.5f;
+            var step = ResolutionDivider * 0.5f - 0.5f;
 
             return new Vector4(step / Mathf.Max(cameraData.scaledWidth, 1),
                                step / Mathf.Max(cameraData.scaledHeight, 1),
@@ -215,18 +192,20 @@ namespace FeatherKit.Rendering
 
         // Размер берём от кадра, а не от экрана: render scale и динамическое разрешение
         // уже учтены в нём, и туман обязан делиться от того же числа.
-        private TextureHandle CreateFogTexture(RenderGraph renderGraph, UniversalResourceData resources, UniversalCameraData cameraData)
+        private TextureHandle CreateFogTexture(RenderGraph renderGraph, UniversalResourceData resources)
         {
             var description = renderGraph.GetTextureDesc(resources.activeColorTexture);
 
             description.name = "_HeightFogTexture";
             description.sizeMode = TextureSizeMode.Explicit;
-            description.width = Mathf.Max(description.width / resolutionDivider, 1);
-            description.height = Mathf.Max(description.height / resolutionDivider, 1);
+            description.width = Mathf.Max(description.width / ResolutionDivider, 1);
+            description.height = Mathf.Max(description.height / ResolutionDivider, 1);
 
             // Формат задаём свой: у кадра его может не быть вовсе — HDR-формат B10G11R11
-            // альфу не хранит, а туману она и есть главное.
-            description.format = cameraData.isHdrEnabled ? GraphicsFormat.R16G16B16A16_SFloat : GraphicsFormat.R8G8B8A8_UNorm;
+            // альфу не хранит, а туману она и есть главное. И всегда с плавающей точкой, даже
+            // без HDR: в тёмной сцене свет тумана — сотые доли, и в восьми битах он лёг бы
+            // ступенями, а свет ламп у самой лампы бывает ярче единицы.
+            description.format = GraphicsFormat.R16G16B16A16_SFloat;
 
             description.filterMode = FilterMode.Bilinear;
             description.wrapMode = TextureWrapMode.Clamp;
@@ -235,10 +214,9 @@ namespace FeatherKit.Rendering
             description.useMipMap = false;
             description.autoGenerateMips = false;
 
-            // Чистим в прозрачное: туман рисуется не везде, и там, где его нет, в текстуре
-            // должен остаться ноль, а не мусор прошлого кадра.
-            description.clearBuffer = true;
-            description.clearColor = Color.clear;
+            // Не чистим: проход тумана пишет каждый тексель, и там, где тумана нет, — ноль.
+            // Очистка была бы лишним проходом по памяти.
+            description.clearBuffer = false;
 
             return renderGraph.CreateTexture(description);
         }
@@ -254,11 +232,13 @@ namespace FeatherKit.Rendering
             passData.texelSize = Vector4.zero;
 
             passData.depthTap = depthTap;
-            passData.color = color;
-            passData.layer = layer;
-            passData.noise = noise;
-            passData.wind = wind;
-            passData.startDistance = startDistance;
+            // Растяжению части шейдера не нужны: туман уже посчитан.
+            passData.keywords = shaderPass == CompositeShaderPass ? null : keywords;
+
+            // Экземпляр данных у графа живёт долго — копию чисел заводим один раз и дальше
+            // только переписываем.
+            passData.inputs ??= new HeightFogShaderInputs();
+            passData.inputs.CopyFrom(inputs);
         }
 
         // Блок свойств, а не материал: команда отрисовки исполняется позже записи, и значения,
@@ -267,16 +247,14 @@ namespace FeatherKit.Rendering
         {
             Properties.Clear();
             Properties.SetVector(ScaleBiasId, NoScaleBias);
-            Properties.SetVector(ColorId, data.color);
-            Properties.SetVector(LayerId, data.layer);
-            Properties.SetVector(NoiseId, data.noise);
-            Properties.SetVector(WindId, data.wind);
             Properties.SetVector(DepthTapId, data.depthTap);
-            Properties.SetFloat(StartDistanceId, data.startDistance);
             Properties.SetVector(TexelSizeId, data.texelSize);
+            data.inputs.ApplyTo(Properties);
 
             if (data.source.IsValid())
                 Properties.SetTexture(SourceId, data.source);
+
+            data.keywords?.Apply(command, data.material, data.inputs);
 
             command.DrawProcedural(Matrix4x4.identity, data.material, data.shaderPass, MeshTopology.Triangles, 3, 1, Properties);
         }
@@ -289,13 +267,10 @@ namespace FeatherKit.Rendering
             public Material material;
             public int shaderPass;
             public Vector4 depthTap;
-            public Vector4 color;
-            public Vector4 layer;
-            public Vector4 noise;
-            public Vector4 wind;
-            public float startDistance;
             public Vector4 texelSize;
             public TextureHandle source;
+            public HeightFogShaderKeywords keywords;
+            public HeightFogShaderInputs inputs;
         }
     }
 }

@@ -12,7 +12,8 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
     /// с ним легко потерять: Ctrl+Z за шаг Create, пересоздание рига. Поэтому:
     /// риг помнит свой контроллер и получает его обратно, когда его выделяют или открывают клип
     /// (не на каждой перерисовке и не внутри Ctrl+Z — иначе ломалась бы история отмен);
-    /// любой клип можно открыть на риге — он сам попадёт в контроллер.
+    /// любой клип можно подключить к ригу — он сам попадёт в контроллер; клип в контроллере
+    /// можно заменить другим, когда исходник переехал в другой файл.
     /// </summary>
     [InitializeOnLoad]
     internal static class HumanoidRigClipLibrary
@@ -100,52 +101,40 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
 
         /// <summary>Клип записан в таймлайн: открывать его надо в окне Timeline.</summary>
         public static bool IsTimelineClip(AnimationClip clip) =>
-            AssetDatabase.IsSubAsset(clip) && AssetDatabase.GetAssetPath(clip).EndsWith(".playable");
+            HumanoidSourceClips.IsNestedClip(clip) && AssetDatabase.GetAssetPath(clip).EndsWith(".playable");
 
 
-        // ── Открыть клип ──────────────────────────────
+        // ── Подключить клип ──────────────────────────────
 
         /// <summary>
-        /// Открыть клип на риге в окне Animation. Клипа нет в контроллере — добавить,
-        /// контроллера нет совсем — завести рядом с клипом.
+        /// Подключить клип к ригу, чтобы окно Animation могло его показать. Клипа нет
+        /// в контроллере — добавить, контроллера нет совсем — завести рядом с клипом.
+        /// Клип править нельзя — объяснить почему и вернуть false.
         /// </summary>
-        public static void OpenInAnimationWindow(HumanoidAnimationRig rig, AnimationClip clip)
+        public static bool TryAddToRig(HumanoidAnimationRig rig, AnimationClip clip)
         {
             if (clip.humanMotion)
             {
-                HumanoidAnimationRigActions.ShowMessage($"«{clip.name}» — готовый Humanoid-клип. Его не правят: откройте исходник, из которого он запечён.");
-                return;
+                HumanoidAnimationRigActions.ShowMessage($"«{clip.name}» — готовый Humanoid-клип, сделанный не этой тулой. Ручками его не поправить: у него нет ключей ручек, только «мышцы».");
+                return false;
             }
 
             if (IsTimelineClip(clip))
             {
                 HumanoidAnimationRigActions.ShowMessage($"«{clip.name}» записан в Timeline. Откройте таймлайн и правьте его там.");
-                return;
+                return false;
             }
 
             var path = AssetDatabase.GetAssetPath(clip);
+            var isReadOnly = HumanoidSourceClips.IsNestedClip(clip) && !HumanoidAnimationFiles.IsEmbeddedSource(clip);
 
-            if (string.IsNullOrEmpty(path) || AssetDatabase.IsSubAsset(clip) || !path.StartsWith("Assets/"))
+            if (string.IsNullOrEmpty(path) || isReadOnly || !path.StartsWith("Assets/"))
             {
                 HumanoidAnimationRigActions.ShowMessage($"«{clip.name}» только для чтения: он лежит внутри модели или пакета.\n\nВыделите его в Project и нажмите Ctrl+D — получится копия, которую можно править.");
-                return;
+                return false;
             }
 
-            if (!TryAddToController(rig, clip))
-                return;
-
-            if (!rig.Contains(Selection.activeTransform))
-                Selection.activeGameObject = rig.gameObject;
-
-            var window = EditorWindow.GetWindow<AnimationWindow>();
-            window.animationClip = clip;
-
-            // Окно подхватывает новое выделение на следующем тике и может сбросить клип.
-            EditorApplication.delayCall += () =>
-            {
-                if (window != null)
-                    window.animationClip = clip;
-            };
+            return TryAddToController(rig, clip);
         }
 
 
@@ -179,6 +168,34 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
             controller.AddMotion(clip);
             return true;
         }
+
+
+        /// <summary>Заменить клип в контроллере рига другим: состояния, которые его играли, играют новый.</summary>
+        public static void ReplaceClip(HumanoidAnimationRig rig, AnimationClip oldClip, AnimationClip newClip)
+        {
+            RestoreController(rig);
+
+            if (!(rig.Animator.runtimeAnimatorController is AnimatorController controller))
+                return;
+
+            foreach (var layer in controller.layers)
+                ReplaceInStateMachine(layer.stateMachine, oldClip, newClip);
+
+            EditorUtility.SetDirty(controller);
+        }
+
+        private static void ReplaceInStateMachine(AnimatorStateMachine stateMachine, AnimationClip oldClip, AnimationClip newClip)
+        {
+            foreach (var childState in stateMachine.states)
+            {
+                if (childState.state.motion == oldClip)
+                    childState.state.motion = newClip;
+            }
+
+            foreach (var childStateMachine in stateMachine.stateMachines)
+                ReplaceInStateMachine(childStateMachine.stateMachine, oldClip, newClip);
+        }
+
 
         private static string FolderOf(Object asset)
         {

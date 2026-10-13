@@ -14,7 +14,8 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
 {
     /// <summary>
     /// Переводит клип с ручками в Humanoid-клип. Покадрово проигрывает исходник вместе с IK,
-    /// снимает позу тела в «мышцах» аватара и пишет их в клип рядом с исходником.
+    /// снимает позу тела в «мышцах» аватара и пишет их в игровой клип: в сам файл анимации,
+    /// если исходник спрятан в нём, или рядом с исходником в «_Humanoid».
     ///
     /// Проигрывает не на самом риге, а на копии в отдельной скрытой сцене: запекание не сбивает
     /// предпросмотр в Animation и Timeline. На копии ручки без ключей стоят в исходной позе —
@@ -22,13 +23,18 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
     ///
     /// Готовый клип обновляется на месте — ссылки на него не рвутся, его настройки
     /// (корень, зацикливание, зеркало) и события остаются твоими. Перезаписывает только свои
-    /// клипы: метит их в настройках импорта, заодно запоминая исходник и его версию.
+    /// файлы: метит их в настройках импорта, заодно запоминая исходник, его версию и аватар,
+    /// на котором пекли.
     /// </summary>
     internal static class HumanoidClipBaker
     {
         private const string GraphName = "Humanoid Clip Bake";
         private const string BakedClipMark = "FeatherKit.HumanoidAnimation.BakedClip";
         private const char MarkSeparator = '|';
+        private const char SourceIdSeparator = '/';
+        private const int MarkSourcePart = 1;
+        private const int MarkFingerprintPart = 2;
+        private const int MarkAvatarPart = 3;
         private const float MinimalFrameRate = 30f;
         private const string ConstraintWeightProperty = "m_Weight";
 
@@ -45,15 +51,17 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
             Validate(rig);
 
             var path = HumanoidSourceClips.GetHumanoidClipPath(sourceClip);
-            var sourceId = SourceId(sourceClip);
 
-            if (IsOccupiedByOtherAsset(path, sourceId))
+            if (IsOccupiedByOtherAsset(path, sourceClip))
                 throw new InvalidOperationException($"По пути «{path}» уже лежит клип, который тула сделала не из «{sourceClip.name}» или не делала вовсе. Переименуйте его или исходник — тула его не перезапишет.");
 
             var curves = SampleOnHiddenCopy(rig, sourceClip);
             var clip = WriteHumanoidClip(curves, sourceClip, path);
 
-            Mark(path, sourceId, Fingerprint(rig, sourceClip));
+            // Сначала на диск, потом метка: метка перечитывает файл.
+            AssetDatabase.SaveAssetIfDirty(clip);
+            Mark(path, SourceId(sourceClip), Fingerprint(rig, sourceClip), AvatarId(rig.Animator.avatar));
+
             return clip;
         }
 
@@ -64,13 +72,17 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
             var path = HumanoidSourceClips.GetHumanoidClipPath(sourceClip);
             var parts = ReadMark(path);
 
-            return parts != null && parts.Length == 3 && parts[1] == SourceId(sourceClip) && parts[2] == Fingerprint(rig, sourceClip);
+            return parts != null
+                && parts.Length > MarkFingerprintPart
+                && parts[MarkSourcePart] == SourceId(sourceClip)
+                && parts[MarkFingerprintPart] == Fingerprint(rig, sourceClip);
         }
 
 
         private static void Validate(HumanoidAnimationRig rig)
         {
-            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            // Только идущая игра: перед самым запуском запекать можно и нужно.
+            if (EditorApplication.isPlaying)
                 throw new InvalidOperationException("Во время игры не запекаем — выйдите из Play Mode.");
 
             var animator = rig.Animator;
@@ -215,7 +227,8 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
         // корень, зацикливание, зеркало и события на нём выставлял человек.
         private static AnimationClip WriteHumanoidClip(HumanPoseCurves curves, AnimationClip sourceClip, string path)
         {
-            var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+            // Главный клип файла: в файле анимации рядом с ним лежит спрятанный исходник.
+            var clip = AssetDatabase.LoadMainAssetAtPath(path) as AnimationClip;
             var isNew = clip == null;
 
             if (isNew)
@@ -243,17 +256,86 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
         }
 
 
-        // ── Пометка своих клипов ──────────────────────────────
+        // ── Пометка своих файлов ──────────────────────────────
+        //
+        // Пометка в настройках импорта: «наша метка | исходник | отпечаток версии | аватар».
+        // Файл есть, а метки нет — файл чужой, трогать нельзя.
 
-        // Пометка: «наша метка | исходник | отпечаток версии». Файл есть, а метки нет или
-        // она про другой исходник — файл чужой, трогать нельзя.
-        private static bool IsOccupiedByOtherAsset(string path, string sourceId)
+        /// <summary>Сделан ли файл тулой: игровой клип или файл анимации со спрятанным исходником.</summary>
+        public static bool IsOwnFile(string path) => ReadMark(path) != null;
+
+
+        /// <summary>Запечён ли игровой клип по этому пути из этого исходника.</summary>
+        public static bool IsBakedFrom(string path, AnimationClip sourceClip)
+        {
+            var parts = ReadMark(path);
+            return parts != null && parts.Length > MarkSourcePart && parts[MarkSourcePart] == SourceId(sourceClip);
+        }
+
+
+        /// <summary>Пометить своим новый файл анимации. Отпечатка нет — клип считается незапечённым.</summary>
+        public static void MarkNewFile(string path, AnimationClip sourceClip, Avatar avatar) =>
+            Mark(path, SourceId(sourceClip), string.Empty, AvatarId(avatar));
+
+
+        /// <summary>
+        /// Исходник переехал в другой файл, кривые те же: метка переходит на него, а запечённый
+        /// клип остаётся актуальным.
+        /// </summary>
+        public static void MoveMarkToSource(string path, HumanoidAnimationRig rig, AnimationClip newSourceClip) =>
+            Mark(path, SourceId(newSourceClip), Fingerprint(rig, newSourceClip), AvatarId(rig.Animator.avatar));
+
+
+        /// <summary>Исходник, из которого пекли клип по этому пути. Метки нет или исходник удалён — null.</summary>
+        public static AnimationClip LoadMarkedSource(string path)
+        {
+            var parts = ReadMark(path);
+
+            if (parts == null || parts.Length <= MarkSourcePart)
+                return null;
+
+            var sourceId = parts[MarkSourcePart];
+            var separator = sourceId.IndexOf(SourceIdSeparator);
+
+            if (separator < 0)
+                return null;
+
+            var sourcePath = AssetDatabase.GUIDToAssetPath(sourceId.Substring(0, separator));
+            var clipName = sourceId.Substring(separator + 1);
+
+            foreach (var clip in HumanoidSourceClips.LoadClipsAt(sourcePath))
+            {
+                if (SafeClipName(clip) == clipName)
+                    return clip;
+            }
+
+            return null;
+        }
+
+
+        /// <summary>Аватар персонажа, на котором пекли клип. Метка старая, без аватара — null.</summary>
+        public static Avatar LoadMarkedAvatar(string path)
+        {
+            var parts = ReadMark(path);
+
+            if (parts == null || parts.Length <= MarkAvatarPart || !GlobalObjectId.TryParse(parts[MarkAvatarPart], out var avatarId))
+                return null;
+
+            return GlobalObjectId.GlobalObjectIdentifierToObjectSlow(avatarId) as Avatar;
+        }
+
+
+        // Свой файл анимации со спрятанным исходником — наш, как бы исходник ни звали.
+        // Отдельный «_Humanoid» — наш, только если запечён из этого же исходника.
+        private static bool IsOccupiedByOtherAsset(string path, AnimationClip sourceClip)
         {
             if (string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path, AssetPathToGUIDOptions.OnlyExistingAssets)))
                 return false;
 
-            var parts = ReadMark(path);
-            return parts == null || parts.Length < 2 || parts[1] != sourceId;
+            if (HumanoidAnimationFiles.IsEmbeddedSource(sourceClip))
+                return false;
+
+            return !IsBakedFrom(path, sourceClip);
         }
 
 
@@ -268,21 +350,27 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
         }
 
 
-        private static void Mark(string path, string sourceId, string fingerprint)
+        private static void Mark(string path, string sourceId, string fingerprint, string avatarId)
         {
             var importer = AssetImporter.GetAtPath(path);
 
             if (importer == null)
                 return;
 
-            importer.userData = BakedClipMark + MarkSeparator + sourceId + MarkSeparator + fingerprint;
+            importer.userData = string.Join(MarkSeparator.ToString(), BakedClipMark, sourceId, fingerprint, avatarId);
             AssetDatabase.WriteImportSettingsIfDirty(path);
         }
 
 
         // Исходник — файл и имя клипа в нём: у клипов внутри таймлайна файл общий.
         private static string SourceId(AnimationClip sourceClip) =>
-            AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(sourceClip)) + "/" + sourceClip.name.Replace(MarkSeparator, '_');
+            AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(sourceClip)) + SourceIdSeparator + SafeClipName(sourceClip);
+
+        private static string SafeClipName(AnimationClip clip) => clip.name.Replace(MarkSeparator, '_');
+
+
+        private static string AvatarId(Avatar avatar) =>
+            avatar != null ? GlobalObjectId.GetGlobalObjectIdSlow(avatar).ToString() : string.Empty;
 
 
         // Отпечаток всего, от чего зависит результат: кривые и длина клипа, устройство рига

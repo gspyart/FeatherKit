@@ -174,6 +174,14 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
         }
 
 
+        /// <summary>
+        /// Лежит ли клип внутри чужого файла: в таймлайне, модели или файле анимации.
+        /// AssetDatabase.IsSubAsset спрятанные вложения (HideInHierarchy) не видит — поэтому своя проверка.
+        /// </summary>
+        public static bool IsNestedClip(AnimationClip clip) =>
+            clip != null && EditorUtility.IsPersistent(clip) && !AssetDatabase.IsMainAsset(clip);
+
+
         /// <summary>Все клипы файла: сам .anim или клипы внутри таймлайна.</summary>
         public static List<AnimationClip> LoadClipsAt(string assetPath)
         {
@@ -197,16 +205,21 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
         // ── Куда класть результат ──────────────────────────────
 
         /// <summary>
-        /// Путь Humanoid-версии рядом с исходником: «Walk.anim» → «Walk_Humanoid.anim».
+        /// Путь Humanoid-версии. Исходник спрятан в файле анимации — сам этот файл.
+        /// Отдельный исходник — рядом с ним: «Walk.anim» → «Walk_Humanoid.anim».
         /// Клип внутри таймлайна → «Таймлайн_Клип_Humanoid.anim» рядом с файлом таймлайна.
         /// </summary>
         public static string GetHumanoidClipPath(AnimationClip sourceClip)
         {
             var sourcePath = AssetDatabase.GetAssetPath(sourceClip);
+
+            if (HumanoidAnimationFiles.IsEmbeddedSource(sourceClip))
+                return sourcePath;
+
             var folder = Path.GetDirectoryName(sourcePath)?.Replace('\\', '/');
             var mainAssetName = Path.GetFileNameWithoutExtension(sourcePath);
 
-            var baseName = AssetDatabase.IsSubAsset(sourceClip)
+            var baseName = IsNestedClip(sourceClip)
                 ? mainAssetName + "_" + sourceClip.name
                 : mainAssetName;
 
@@ -222,8 +235,11 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
         }
 
 
-        /// <summary>Уже запечённая Humanoid-версия клипа. Ещё не пекли — null.</summary>
+        /// <summary>
+        /// Humanoid-версия клипа — главный клип её файла. Отдельный «_Humanoid» ещё не пекли — null.
+        /// У файла анимации игровой клип есть всегда, но до первого запекания он пустой.
+        /// </summary>
         public static AnimationClip LoadHumanoidClip(AnimationClip sourceClip) =>
-            AssetDatabase.LoadAssetAtPath<AnimationClip>(GetHumanoidClipPath(sourceClip));
+            AssetDatabase.LoadMainAssetAtPath(GetHumanoidClipPath(sourceClip)) as AnimationClip;
     }
 }
