@@ -17,7 +17,7 @@ namespace FeatherKit.EditorTools
     /// </summary>
     public class PrefabToVariantWindow : EditorWindow
     {
-        private const string WindowTitle = "Префабы в варианты";
+        private const string WindowTitle = "Prefabs to Variants";
         private const string RemoveTemplateExtrasKey = "FeatherKit.PrefabToVariant.RemoveTemplateExtras";
         private const string RunResultKeyPrefix = "run:";
         private const float KindColumnWidth = 190f;
@@ -50,16 +50,16 @@ namespace FeatherKit.EditorTools
 
         // ── Открытие ─────────────────────────────────
 
-        [MenuItem("FeatherKit/Префабы в варианты")]
+        [MenuItem("FeatherKit/Prefabs to Variants")]
         public static void Open() => GetOrCreateWindow();
 
 
         // Дублируем в контекстное меню Project: пачку удобнее собрать выделением.
-        [MenuItem("Assets/Сделать вариантами шаблона…", false, 31)]
+        [MenuItem("Assets/Make Variants of Template…", false, 31)]
         private static void OpenForSelection() => GetOrCreateWindow().ReplacePrefabs(FindSelectedPrefabGuids());
 
 
-        [MenuItem("Assets/Сделать вариантами шаблона…", true)]
+        [MenuItem("Assets/Make Variants of Template…", true)]
         private static bool CanOpenForSelection() => FindSelectedPrefabGuids().Count > 0;
 
 

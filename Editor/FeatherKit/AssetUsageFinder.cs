@@ -40,19 +40,19 @@ namespace FeatherKit.EditorTools
         [MenuItem("FeatherKit/Asset Usage Finder")]
         private static void Open()
         {
-            GetWindow<AssetUsageFinder>("Где используется").minSize = new Vector2(420f, 320f);
+            GetWindow<AssetUsageFinder>("Asset Usage").minSize = new Vector2(420f, 320f);
         }
 
         // Дублируем в контекстное меню Project: искать удобнее прямо с правого клика по ассету.
-        [MenuItem("Assets/Найти использования", false, 30)]
+        [MenuItem("Assets/Find Usages", false, 30)]
         private static void FindForSelected()
         {
-            var window = GetWindow<AssetUsageFinder>("Где используется");
+            var window = GetWindow<AssetUsageFinder>("Asset Usage");
             window.target = Selection.activeObject;
             window.Search();
         }
 
-        [MenuItem("Assets/Найти использования", true)]
+        [MenuItem("Assets/Find Usages", true)]
         private static bool FindForSelectedValidate()
         {
             return Selection.activeObject != null

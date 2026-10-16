@@ -4,14 +4,14 @@ using UnityEngine;
 namespace FeatherKit.EditorTools
 {
     /// <summary>
-    /// Страница фильтра карт света в Project Settings → FeatherKit → Карты света:
+    /// Страница фильтра карт света в Project Settings → FeatherKit → Lightmaps:
     /// галка «ставить после запекания», выбор фильтра и кнопка «Применить сейчас».
     /// Плюс пункт меню FeatherKit с той же галкой — включить и выключить, не открывая настроек.
     /// </summary>
     public static class LightmapFilterSettingsPage
     {
-        private const string SettingsPath = "Project/FeatherKit/Карты света";
-        private const string MenuPath = "FeatherKit/Фильтр карт света после запекания";
+        private const string SettingsPath = "Project/FeatherKit/Lightmaps";
+        private const string MenuPath = "FeatherKit/Lightmap Filter After Baking";
 
         private static readonly GUIContent EnabledLabel = new GUIContent("Enabled",
             "Включено — после каждого запекания картам света сам ставится фильтр ниже. Выключено — запекание оставляет плавный.");
@@ -30,7 +30,7 @@ namespace FeatherKit.EditorTools
         {
             return new SettingsProvider(SettingsPath, SettingsScope.Project)
             {
-                label = "Карты света",
+                label = "Lightmaps",
                 guiHandler = _ => DrawSettings(),
                 keywords = new[] { "lightmap", "filter", "point", "карты света", "запекание" }
             };

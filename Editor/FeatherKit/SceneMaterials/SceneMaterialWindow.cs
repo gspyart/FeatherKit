@@ -40,11 +40,11 @@ namespace FeatherKit.EditorTools
         private bool needsRefresh = true;
 
 
-        [MenuItem("FeatherKit/Материалы сцены")]
+        [MenuItem("FeatherKit/Scene Materials")]
         public static void Open()
         {
             var window = GetWindow<SceneMaterialWindow>();
-            window.titleContent = new GUIContent("Материалы сцены", EditorGUIUtility.IconContent("Material Icon").image);
+            window.titleContent = new GUIContent("Scene Materials", EditorGUIUtility.IconContent("Material Icon").image);
             window.minSize = new Vector2(300f, MinListHeight + MinInspectorHeight + ToolbarHeight + SplitterHeight);
         }
 

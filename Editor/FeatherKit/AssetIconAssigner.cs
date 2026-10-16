@@ -13,7 +13,7 @@ namespace FeatherKit.EditorTools
     /// </summary>
     public class AssetIconAssigner : EditorWindow
     {
-        private const string Title = "Иконки ассетов";
+        private const string Title = "Asset Icons";
 
         private const float ButtonHeight = 26f;
 
@@ -36,7 +36,7 @@ namespace FeatherKit.EditorTools
         }
 
         // Дублируем в контекстное меню Project: ставить иконку удобнее прямо с правого клика.
-        [MenuItem("Assets/Назначить иконку", false, 31)]
+        [MenuItem("Assets/Assign Icon", false, 31)]
         private static void OpenForSelected()
         {
             var window = GetWindow<AssetIconAssigner>(Title);
@@ -45,7 +45,7 @@ namespace FeatherKit.EditorTools
             window.CollectTargets();
         }
 
-        [MenuItem("Assets/Назначить иконку", true)]
+        [MenuItem("Assets/Assign Icon", true)]
         private static bool OpenForSelectedValidate()
         {
             return Selection.activeObject != null

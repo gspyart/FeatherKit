@@ -342,7 +342,10 @@ namespace FeatherKit.Debugging
             ResetColumns(style);
 
             for (var i = 0; i < windows.Count; i++)
-                Draw(windows[i], screen, style);
+            {
+                if (DebugPanel.IsWindowVisible(windows[i].Title))
+                    Draw(windows[i], screen, style);
+            }
 
             GUI.matrix = previous;
         }

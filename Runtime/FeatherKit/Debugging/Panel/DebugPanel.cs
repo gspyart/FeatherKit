@@ -36,6 +36,9 @@ namespace FeatherKit.Debugging
 
         private static readonly List<DebugPanelWindow> windows = new List<DebugPanelWindow>();
 
+        // По заголовку, а не по окну: спрятать можно и окно, в которое ещё никто не написал.
+        private static readonly HashSet<string> hiddenWindows = new HashSet<string>();
+
         private static DebugPanelStyle style;
 
 
@@ -115,6 +118,24 @@ namespace FeatherKit.Debugging
                 GetOrCreate(window.Trim()).Anchor = anchor;
         }
 
+        /// <summary>Спрятать или показать одно окно, не трогая его строки. Владельцы продолжают писать как обычно.</summary>
+        [Conditional(EditorOnly), Conditional(DevelopmentOnly), Conditional(AnyBuild)]
+        public static void SetWindowVisible(string window, bool isVisible)
+        {
+            if (string.IsNullOrWhiteSpace(window))
+                return;
+
+            if (isVisible)
+                hiddenWindows.Remove(window.Trim());
+            else
+                hiddenWindows.Add(window.Trim());
+        }
+
+        public static bool IsWindowVisible(string window)
+        {
+            return string.IsNullOrWhiteSpace(window) || !hiddenWindows.Contains(window.Trim());
+        }
+
         /// <summary>
         /// Убрать все строки этого владельца. Зови в OnDisable: объект мог уехать в пул,
         /// и его функция значения обратилась бы к чужому состоянию.
@@ -176,6 +197,7 @@ namespace FeatherKit.Debugging
         private static void ResetOnEnterPlayMode()
         {
             windows.Clear();
+            hiddenWindows.Clear();
 
             IsVisible = true;
             Scale = 0f;

@@ -21,10 +21,10 @@ namespace FeatherKit.EditorTools
     /// </summary>
     public static class SceneMaterialTools
     {
-        public const string MakeUniqueLabel = "Уникальный материал в сцене";
-        public const string ProjectCopyLabel = "Новый материал в проекте";
-        public const string SaveToProjectLabel = "Сохранить материал в проект…";
-        public const string AssignLabel = "Подставить материал";
+        public const string MakeUniqueLabel = "Make Material Unique in Scene";
+        public const string ProjectCopyLabel = "New Material in Project";
+        public const string SaveToProjectLabel = "Save Material to Project…";
+        public const string AssignLabel = "Assign Material";
 
         private const string FolderSettingKey = "FeatherKit.SceneMaterials.Folder";
         private const string DefaultFolder = "Assets";

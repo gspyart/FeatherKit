@@ -42,13 +42,13 @@ namespace FeatherKit.EditorTools
         public static FBookmarksWindow Open()
         {
             var window = GetWindow<FBookmarksWindow>();
-            window.titleContent = new GUIContent("Закладки", EditorGUIUtility.IconContent("Favorite Icon").image);
+            window.titleContent = new GUIContent("Bookmarks", EditorGUIUtility.IconContent("Favorite Icon").image);
             window.minSize = new Vector2(320f, 160f);
 
             return window;
         }
 
-        [MenuItem("FeatherKit/Закладки")]
+        [MenuItem("FeatherKit/Bookmarks")]
         private static void OpenFromMenu()
         {
             Open();

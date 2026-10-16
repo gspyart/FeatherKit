@@ -18,7 +18,7 @@ namespace FeatherKit.EditorTools
     /// </summary>
     public static class GameViewGizmosToggle
     {
-        private const string MenuPath = "FeatherKit/Гизмо в Game View";
+        private const string MenuPath = "FeatherKit/Game View Gizmos";
 
         // Клавиша задана суффиксом пункта меню (%&g — Cmd/Ctrl+Alt+G), а не через
         // Shortcut Manager: пока фокус в Game View, ввод уходит в игру, и клавиши

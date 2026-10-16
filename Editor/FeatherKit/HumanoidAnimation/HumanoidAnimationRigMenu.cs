@@ -10,10 +10,10 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
     /// </summary>
     internal static class HumanoidAnimationRigMenu
     {
-        private const string HierarchyMenuPath = "GameObject/FeatherKit/Анимировать гуманоида";
-        private const string ProjectMenuPath = "Assets/FeatherKit/Анимировать гуманоида";
-        private const string AnimateMenuPath = "FeatherKit/Анимация гуманоида/Анимировать выделенное";
-        private const string BakeAllMenuPath = "FeatherKit/Анимация гуманоида/Запечь клипы всех ригов сцены";
+        private const string HierarchyMenuPath = "GameObject/FeatherKit/Animate Humanoid";
+        private const string ProjectMenuPath = "Assets/FeatherKit/Animate Humanoid";
+        private const string AnimateMenuPath = "FeatherKit/Humanoid Animation/Animate Selected";
+        private const string BakeAllMenuPath = "FeatherKit/Humanoid Animation/Bake Clips of All Scene Rigs";
 
 
         // ── Анимировать ──────────────────────────────

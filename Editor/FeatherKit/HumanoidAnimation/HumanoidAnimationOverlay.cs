@@ -10,7 +10,7 @@ namespace FeatherKit.EditorTools.HumanoidAnimation
     /// Animation и инспектора. Появляется сама, когда выделено что-то внутри рига: сверху время
     /// и ключи, ниже кнопки позы, режимы FK/IK рук и ног и схема тела для выбора ручек.
     /// </summary>
-    [Overlay(typeof(SceneView), OverlayId, "Анимация гуманоида", true)]
+    [Overlay(typeof(SceneView), OverlayId, "Humanoid Animation", true)]
     internal sealed class HumanoidAnimationOverlay : IMGUIOverlay, ITransientOverlay
     {
         private const string OverlayId = "featherkit-humanoid-animation";

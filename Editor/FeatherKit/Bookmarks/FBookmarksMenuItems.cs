@@ -9,13 +9,13 @@ namespace FeatherKit.EditorTools
     /// </summary>
     public static class FBookmarksMenuItems
     {
-        [MenuItem("Assets/Добавить в закладки", false, 32)]
+        [MenuItem("Assets/Add to Bookmarks", false, 32)]
         private static void AddSelectedAssets()
         {
             AddToActiveFolder(Selection.objects);
         }
 
-        [MenuItem("Assets/Добавить в закладки", true)]
+        [MenuItem("Assets/Add to Bookmarks", true)]
         private static bool CanAddSelectedAssets()
         {
             return Selection.objects.Length > 0;
@@ -24,7 +24,7 @@ namespace FeatherKit.EditorTools
 
         // Приоритет 10 — с ним пункт попадает и в меню правого клика в Hierarchy.
         // Оттуда он зовётся по разу на каждый выделенный объект — всё выделение берём только на одном.
-        [MenuItem("GameObject/Добавить в закладки", false, 10)]
+        [MenuItem("GameObject/Add to Bookmarks", false, 10)]
         private static void AddSelectedSceneObjects(MenuCommand command)
         {
             if (command.context != null && command.context != Selection.activeGameObject)
@@ -33,7 +33,7 @@ namespace FeatherKit.EditorTools
             AddToActiveFolder(Selection.gameObjects);
         }
 
-        [MenuItem("GameObject/Добавить в закладки", true)]
+        [MenuItem("GameObject/Add to Bookmarks", true)]
         private static bool CanAddSelectedSceneObjects()
         {
             return Selection.gameObjects.Length > 0;

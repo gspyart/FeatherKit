@@ -27,7 +27,7 @@ namespace FeatherKit.EditorTools
 
         // ── Запекание ─────────────────────────────────────────────────────────
 
-        [MenuItem("FeatherKit/Запечь клубы тумана")]
+        [MenuItem("FeatherKit/Bake Fog Noise")]
         private static void BakeFromMenu()
         {
             var path = EditorUtility.SaveFilePanelInProject("Текстура клубов тумана", DefaultName, "asset",
