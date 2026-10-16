@@ -212,7 +212,7 @@ namespace FeatherKit.Rendering
         // Тени включаются, только если URP их в этом кадре нарисовала: иначе шейдер читал бы
         // карту теней, которой нет. Неосвещённому туману свет не нужен вовсе — не ищем его.
         public void CaptureLight(UniversalLightData lightData, UniversalShadowData shadowData,
-                                 UniversalResourceData resources, Vector3 cameraPosition,
+                                 UniversalResourceData resources, Vector3 cameraPosition, Matrix4x4 viewProjection,
                                  HeightFogLampsCollector lampsCollector, HeightFogQualitySettings quality)
         {
             SunShadows = HeightFogSunShadows.Off;
@@ -234,7 +234,7 @@ namespace FeatherKit.Rendering
             if (!wantsLamps)
                 return;
 
-            lampCount = lampsCollector.CollectNearest(lightData, cameraPosition, quality.MaxLamps, lamps, lampSpheres);
+            lampCount = lampsCollector.CollectNearest(lightData, cameraPosition, viewProjection, quality.MaxLamps, lamps, lampSpheres);
 
             HasLampShadows = quality.LampShadows && HasShadowedLamp()
                              && shadowData.supportsAdditionalLightShadows && resources.additionalShadowsTexture.IsValid();

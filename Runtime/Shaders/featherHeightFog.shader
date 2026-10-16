@@ -119,13 +119,10 @@ Shader "FeatherKit/Height Fog"
         // Короче этого шаг не делаем, метров: луч до близкой стены получает меньше шагов.
         #define HEIGHT_FOG_SHORTEST_STEP 0.5
 
-        // То же для шагов ламп — у лампы свет меняется быстрее, шаги нужны мельче.
-        #define HEIGHT_FOG_SHORTEST_LAMP_STEP 0.25
-
         // Шаги кончаются, когда сквозь туман видно меньше этой доли.
         #define HEIGHT_FOG_OPAQUE_ENOUGH 0.005
 
-        // Шаг, который добавляет к кадру меньше этой доли, не освещается — его не видно.
+        // Шаг, который добавляет к кадру меньше этой доли, не читает тень — её на нём не видно.
         #define HEIGHT_FOG_INVISIBLE_STEP 0.001
 
         // Туман одного шага: где он, сколько его и какой он.
@@ -365,14 +362,10 @@ Shader "FeatherKit/Height Fog"
             #if defined(HEIGHT_FOG_HAS_LAMPS)
                 float marchStart = min(layerSteps > 0 ? layerSpan.x : 1e7, areaSteps > 0 ? areasSpan.x : 1e7);
                 float marchEnd = max(layerSteps > 0 ? layerSpan.y : 0.0, areaSteps > 0 ? areasSpan.y : 0.0);
-                float2 lampSpan;
-                float2 lampAnchor;
-                uint lampMask = FindLampsOnRay(cameraPosition, rayDirection, marchStart, marchEnd, lampSpan, lampAnchor);
+                LampStepsOnRay lampStepsOnRay = FindLampStepsOnRay(cameraPosition, rayDirection, marchStart, marchEnd,
+                                                                   (int)_HeightFogStepCounts.y, jitter);
 
-                if (lampMask != 0u && lampSpan.y > lampSpan.x)
-                    lampSteps = CountSteps(lampSpan.y - lampSpan.x, (int)_HeightFogStepCounts.y, HEIGHT_FOG_SHORTEST_LAMP_STEP);
-
-                LampStepsLayout lampLayout = LayOutLampSteps(lampSpan, lampAnchor, max(lampSteps, 1));
+                lampSteps = lampStepsOnRay.totalSteps;
             #endif
 
             // Сколько света тумана ещё доходит до камеры, сколько кадра ещё видно за туманом
@@ -382,7 +375,7 @@ Shader "FeatherKit/Height Fog"
             float3 fogLight = 0.0;
             int layerStep = 0;
             int areaStep = 0;
-            int lampStep = 0;
+            float marchedDistance = 0.0;  // докуда луч уже прошли шаги слоя и областей
 
             [loop]
             for (int i = 0; i < layerSteps + areaSteps + lampSteps; i++)
@@ -391,29 +384,33 @@ Shader "FeatherKit/Height Fog"
                 float layerDistance = layerStep < layerSteps ? layerSpan.x + (layerStep + jitter) * layerStepLength : 1e8;
                 float areaDistance = areaStep < areaSteps ? areasSpan.x + (areaStep + jitter) * areaStepLength : 1e8;
                 float lampDistance = 1e8;
-                float lampStepLength = 0.0;
+                int lamp = -1;
 
                 #if defined(HEIGHT_FOG_HAS_LAMPS)
-                    if (lampStep < lampSteps)
-                        lampDistance = FindLampStepDistance(lampLayout, lampStep + jitter, lampStepLength);
+                    lamp = FindNearestLampStep(lampStepsOnRay, lampDistance);
                 #endif
 
-                if (lampDistance < layerDistance && lampDistance < areaDistance)
+                if (lamp >= 0 && lampDistance < layerDistance && lampDistance < areaDistance)
                 {
-                    lampStep++;
-
-                    // Шаг ламп только добавляет свет: что его закрывает, уже посчитали шаги ближе.
+                    // Шаг лампы только добавляет её свет: что его закрывает, уже посчитали шаги ближе.
                     #if defined(HEIGHT_FOG_HAS_LAMPS)
+                        float lampStepLength = TakeLampStep(lampStepsOnRay, lamp, jitter);
                         float3 lampPoint = cameraPosition + rayDirection * lampDistance;
                         FogStepSample fogHere = SampleAllFog(lampPoint, lampDistance, layerSpan, cutMask, fogMask);
 
-                        if (fogHere.density > 0.0)
-                        {
-                            float lampShare = transmittance * (1.0 - exp(-fogHere.density * lampStepLength));
+                        // Туман между концом последнего шага слоя или областей и шагом лампы тоже
+                        // гасит её свет: шаги слоя бывают по нескольку метров.
+                        float lampTransmittance = transmittance * exp(-fogHere.density * max(lampDistance - marchedDistance, 0.0));
 
-                            UNITY_BRANCH
-                            if (lampShare > HEIGHT_FOG_INVISIBLE_STEP)
-                                fogLight += fogHere.albedo * ComputeFogLampLight(lampPoint, rayDirection, fogHere.lighting, lampMask) * lampShare;
+                        // Доля — линейная, без насыщения: длина шага лампы не настоящий кусок луча,
+                        // а его вес, и на хвостах доходит до десятков метров — 1 − exp там упиралась бы
+                        // в единицу, и ореол в густом тумане выходил бы ярче и рябее, чем есть.
+                        UNITY_BRANCH
+                        if (fogHere.density > 0.0 && lampTransmittance > HEIGHT_FOG_OPAQUE_ENOUGH)
+                        {
+                            float lampShare = lampTransmittance * fogHere.density * lampStepLength;
+
+                            fogLight += fogHere.albedo * ComputeFogLampLight(lampPoint, rayDirection, fogHere.lighting, lamp) * lampShare;
                         }
                     #endif
 
@@ -425,11 +422,13 @@ Shader "FeatherKit/Height Fog"
                 if (layerDistance <= areaDistance)
                 {
                     fogStep = SampleGlobalFog(cameraPosition + rayDirection * layerDistance, layerStepLength, cutMask);
+                    marchedDistance = layerDistance + (1.0 - jitter) * layerStepLength;
                     layerStep++;
                 }
                 else
                 {
                     fogStep = SampleAreasFog(cameraPosition + rayDirection * areaDistance, areaStepLength, fogMask);
+                    marchedDistance = areaDistance + (1.0 - jitter) * areaStepLength;
                     areaStep++;
                 }
 
@@ -439,21 +438,18 @@ Shader "FeatherKit/Height Fog"
 
                 float stepTransmittance = exp(-fogStep.density * fogStep.stepLength);
                 float visibleShare = transmittance * (1.0 - stepTransmittance);
+                float3 stepColor = fogStep.albedo;
 
-                // Шаг, которого почти не видно, не освещаем: свет — самое дорогое на шаге.
-                UNITY_BRANCH
-                if (visibleShare > HEIGHT_FOG_INVISIBLE_STEP)
-                {
-                    float3 stepColor = fogStep.albedo;
+                // Свет считаем у каждого шага, а тень — только у заметного: тень самое дорогое на
+                // шаге. Пропусти шаг целиком — тонкий туман у стен пропадал бы вовсе, и на
+                // расстоянии, где шаги становятся длиннее, проступало бы кольцо.
+                #if defined(HEIGHT_FOG_IS_LIT)
+                    UNITY_BRANCH
+                    if (fogStep.lighting.x > 0.0)
+                        stepColor *= ComputeFogLight(fogStep.position, rayDirection, fogStep.lighting, visibleShare > HEIGHT_FOG_INVISIBLE_STEP);
+                #endif
 
-                    #if defined(HEIGHT_FOG_IS_LIT)
-                        UNITY_BRANCH
-                        if (fogStep.lighting.x > 0.0)
-                            stepColor *= ComputeFogLight(fogStep.position, rayDirection, fogStep.lighting);
-                    #endif
-
-                    fogLight += stepColor * visibleShare;
-                }
+                fogLight += stepColor * visibleShare;
 
                 transmittance *= stepTransmittance;
                 sceneVisibility *= exp(-fogStep.hidingDensity * fogStep.stepLength);

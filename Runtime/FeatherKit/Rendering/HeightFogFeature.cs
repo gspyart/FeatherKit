@@ -89,10 +89,10 @@ namespace FeatherKit.Rendering
                  "лампы туман не освещают")]
         [SerializeField, Range(0, HeightFogLampsCollector.MaxLamps)] private int maxLamps = HeightFogLampsCollector.MaxLamps;
 
-        [Tooltip("Сколько шагов у света ламп — только там, где луч проходит через их свет. " +
+        [Tooltip("Сколько шагов у света каждой лампы — только там, где луч проходит через её свет. " +
                  "Шаги гуще у самой лампы, поэтому ореолу хватает немногих. Больше — ровнее " +
-                 "ореолы и лучи, но каждый шаг читает свет и тень всех ламп на луче")]
-        [SerializeField, Range(2, 16)] private int lampStepCount = 8;
+                 "ореолы и лучи, но две лампы на луче стоят вдвое больше шагов")]
+        [SerializeField, Range(2, 15)] private int lampStepCount = 8;
 
         [Tooltip("Тени солнца в освещённом тумане: лучи из окон, тёмный туман там, куда " +
                  "солнце не попадает. Стоит одну выборку карты теней на каждом шаге. " +

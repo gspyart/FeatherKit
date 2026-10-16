@@ -185,6 +185,12 @@ namespace FeatherKit.Rendering
         public float WorldHeight => ((Vector3)AreaToWorld.GetColumn(1)).magnitude;
 
         /// <summary>
+        /// Есть ли у области объём. Сжатая в ноль (размер или масштаб — ноль, например
+        /// в анимации появления) не обращается внутрь, и шейдер залил бы туманом весь кадр.
+        /// </summary>
+        public bool HasVolume => Mathf.Abs(AreaToWorld.determinant) > 1e-6f;
+
+        /// <summary>
         /// Коробка в мире, в которую область целиком помещается. По ней область
         /// отсеивается, если её не видно в кадре.
         /// </summary>

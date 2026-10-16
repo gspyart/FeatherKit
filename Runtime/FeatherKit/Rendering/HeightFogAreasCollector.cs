@@ -41,8 +41,14 @@ namespace FeatherKit.Rendering
 
             var cameraPosition = camera.transform.position;
 
-            foreach (var area in areas)
+            // По номеру, а не foreach: перебор списка через интерфейс выделяет память каждый кадр.
+            for (var i = 0; i < areas.Count; i++)
             {
+                var area = areas[i];
+
+                if (!area.HasVolume)
+                    continue;
+
                 var bounds = area.WorldBounds;
                 var distance = Mathf.Sqrt(bounds.SqrDistance(cameraPosition));
                 var fade = area.CalculateFade(distance);

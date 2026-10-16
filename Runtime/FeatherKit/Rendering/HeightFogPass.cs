@@ -108,9 +108,11 @@ namespace FeatherKit.Rendering
         {
             var lightData = frameData.Get<UniversalLightData>();
             var shadowData = frameData.Get<UniversalShadowData>();
-            var cameraPosition = frameData.Get<UniversalCameraData>().worldSpaceCameraPos;
+            var cameraData = frameData.Get<UniversalCameraData>();
+            var viewProjection = cameraData.GetProjectionMatrix() * cameraData.GetViewMatrix();
 
-            inputs.CaptureLight(lightData, shadowData, resources, cameraPosition, lampsCollector, quality);
+            inputs.CaptureLight(lightData, shadowData, resources, cameraData.worldSpaceCameraPos, viewProjection,
+                                lampsCollector, quality);
         }
 
         // Сперва считаем туман в свою текстуру...
