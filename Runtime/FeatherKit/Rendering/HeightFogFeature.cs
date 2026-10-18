@@ -44,6 +44,7 @@ namespace FeatherKit.Rendering
         public const int NoiseVolumeSpotsPerTile = 4;
 
         private static readonly int NoiseVolumeId = Shader.PropertyToID("_HeightFogNoiseVolume");
+        private static readonly int NoiseTexelsId = Shader.PropertyToID("_HeightFogNoiseTexels");
 
         [Header("Отрисовка")]
         [Tooltip("Шейдер тумана — featherHeightFog из этого же пакета. Пустое поле значит, " +
@@ -62,6 +63,12 @@ namespace FeatherKit.Rendering
                  "печётся кнопкой FeatherKit → Запечь клубы тумана. Пусто — туман ровный, " +
                  "без клубов")]
         [SerializeField] private Texture3D noiseVolume;
+
+        [Tooltip("Насколько клубы сглаживаются на длинных шагах по лучу. 1 — где шаг длиннее " +
+                 "клуба, клубы усредняются: вдали нет ряби, и там они почти ничего не стоят. " +
+                 "0 — клубы сглаживаются только по размеру пикселя: вдали они рябят зерном " +
+                 "и стоят дороже")]
+        [SerializeField, Range(0f, 1f)] private float clubsBlurByStepLength = 1f;
 
         [Header("Качество")]
         [Tooltip("Насколько подробно считать туман. Low — дёшево: разрешение x4, 8 шагов, " +
@@ -164,6 +171,7 @@ namespace FeatherKit.Rendering
 
             pass.Setup(material, settings, floorHeight, areas, noiseVolume != null);
             pass.SetQuality(GetQualitySettings());
+            pass.SetClubsBlurByStepLength(clubsBlurByStepLength);
 
             renderer.EnqueuePass(pass);
         }
@@ -210,7 +218,10 @@ namespace FeatherKit.Rendering
             // Текстура держится здесь, а не в проходе: она одна на все камеры — раскладывать
             // её по блоку свойств на каждый проход незачем.
             if (noiseVolume != null)
+            {
                 material.SetTexture(NoiseVolumeId, noiseVolume);
+                material.SetFloat(NoiseTexelsId, noiseVolume.width);
+            }
 
             return true;
         }

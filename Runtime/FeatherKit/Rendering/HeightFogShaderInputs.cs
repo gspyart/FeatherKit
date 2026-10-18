@@ -16,6 +16,7 @@ namespace FeatherKit.Rendering
         private const int MaxLamps = HeightFogLampsCollector.MaxLamps;
 
         private static readonly int StepCountsId = Shader.PropertyToID("_HeightFogStepCounts");
+        private static readonly int ClubsFootprintId = Shader.PropertyToID("_HeightFogClubsFootprint");
         private static readonly int ColorId = Shader.PropertyToID("_HeightFogColor");
         private static readonly int LayerId = Shader.PropertyToID("_HeightFogLayer");
         private static readonly int NoiseId = Shader.PropertyToID("_HeightFogNoise");
@@ -41,6 +42,7 @@ namespace FeatherKit.Rendering
         private static readonly int AreaVisibilityId = Shader.PropertyToID("_HeightFogAreaVisibility");
 
         private Vector4 stepCounts;
+        private Vector4 clubsFootprint;
 
         private Vector4 color;
         private Vector4 layer;
@@ -209,6 +211,20 @@ namespace FeatherKit.Rendering
         }
 
 
+        // Размер пикселя тумана в мире — из проекции: у перспективы он растёт с расстоянием,
+        // у ортокамеры постоянный. Половина высоты кадра на единицу расстояния — 1 / m11.
+        public void CaptureClubsFootprint(Matrix4x4 projection, bool isOrthographic, int fogTextureHeight,
+                                          float clubsBlurByStepLength)
+        {
+            var pixelSize = 2f / (Mathf.Max(Mathf.Abs(projection.m11), 1e-5f) * Mathf.Max(fogTextureHeight, 1));
+
+            clubsFootprint = new Vector4(isOrthographic ? 0f : pixelSize,
+                                         Mathf.Clamp01(clubsBlurByStepLength),
+                                         isOrthographic ? pixelSize : 0f,
+                                         0f);
+        }
+
+
         // Тени включаются, только если URP их в этом кадре нарисовала: иначе шейдер читал бы
         // карту теней, которой нет. Неосвещённому туману свет не нужен вовсе — не ищем его.
         public void CaptureLight(UniversalLightData lightData, UniversalShadowData shadowData,
@@ -259,6 +275,7 @@ namespace FeatherKit.Rendering
         public void CopyFrom(HeightFogShaderInputs source)
         {
             stepCounts = source.stepCounts;
+            clubsFootprint = source.clubsFootprint;
 
             color = source.color;
             layer = source.layer;
@@ -300,6 +317,7 @@ namespace FeatherKit.Rendering
         public void ApplyTo(MaterialPropertyBlock properties)
         {
             properties.SetVector(StepCountsId, stepCounts);
+            properties.SetVector(ClubsFootprintId, clubsFootprint);
 
             properties.SetVector(ColorId, color);
             properties.SetVector(LayerId, layer);

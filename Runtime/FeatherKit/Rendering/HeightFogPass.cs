@@ -42,6 +42,7 @@ namespace FeatherKit.Rendering
         private Material material;
         private HeightFogShaderKeywords keywords;
         private HeightFogQualitySettings quality = HeightFogQualitySettings.ForPreset(HeightFogQuality.Medium);
+        private float clubsBlurByStepLength = 1f;
         private Vector4 depthTap;
 
 
@@ -81,6 +82,12 @@ namespace FeatherKit.Rendering
         }
 
 
+        public void SetClubsBlurByStepLength(float blurByStepLength)
+        {
+            clubsBlurByStepLength = blurByStepLength;
+        }
+
+
         // ── Кадр ──────────────────────────────────────────────────────────────
 
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
@@ -97,6 +104,9 @@ namespace FeatherKit.Rendering
             depthTap = CalculateDepthTap(cameraData);
 
             var fogTexture = CreateFogTexture(renderGraph, resources);
+
+            inputs.CaptureClubsFootprint(cameraData.GetProjectionMatrix(), cameraData.camera.orthographic,
+                                         renderGraph.GetTextureDesc(fogTexture).height, clubsBlurByStepLength);
 
             RecordOffscreenPass(renderGraph, resources, fogTexture);
             RecordCompositePass(renderGraph, resources, fogTexture, CalculateTexelSize(renderGraph, fogTexture));

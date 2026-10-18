@@ -48,6 +48,8 @@
 //     сколько до горизонта;
 //   — каждый пиксель заранее отбирает области и лампы, которые задевает его луч;
 //   — пустые шаги между областями пропускают клубы и свет;
+//   — клубы вдали и на длинных шагах читаются из уменьшенной копии текстуры, а где
+//     усреднились почти в ноль — не читаются вовсе (featherHeightFogClubs.hlsl);
 //   — шаги, которых уже почти не видно за туманом впереди, не освещаются;
 //   — шаги кончаются раньше, когда туман уже закрыл всё: дальше смотреть не на что.
 //
@@ -147,7 +149,7 @@ Shader "FeatherKit/Height Fog"
         }
 
         // Общий туман в точке: густота по высоте, вырезы областей, клубы.
-        FogStepSample SampleGlobalFog(float3 position, float stepLength, uint cutMask)
+        FogStepSample SampleGlobalFog(float3 position, float stepLength, float clubsFootprint, uint cutMask)
         {
             FogStepSample result;
             result.position = position;
@@ -170,7 +172,7 @@ Shader "FeatherKit/Height Fog"
             // Клубы, которые ничего не меняют, не читаем.
             UNITY_BRANCH
             if (_HeightFogNoise.y > 0.0 || _HeightFogNoise.w != 0.0)
-                clubs = SampleFogClubs(position, _HeightFogWind.xyz, _HeightFogNoise.x, _HeightFogDetail.x, _HeightFogDetail.y);
+                clubs = SampleFogClubs(position, _HeightFogWind.xyz, _HeightFogNoise.x, _HeightFogDetail.x, _HeightFogDetail.y, clubsFootprint);
 
             result.density *= max(1.0 + _HeightFogNoise.y * clubs, 0.0);
             result.hidingDensity = result.density * _HeightFogColor.w;
@@ -211,9 +213,9 @@ Shader "FeatherKit/Height Fog"
 
         // ── Области тумана: шаг ───────────────────────────────────────────
 
-        FogStepSample SampleAreasFog(float3 position, float stepLength, uint fogMask)
+        FogStepSample SampleAreasFog(float3 position, float stepLength, float clubsFootprint, uint fogMask)
         {
-            FogAreasSample areas = SampleFogAreas(position, fogMask);
+            FogAreasSample areas = SampleFogAreas(position, fogMask, clubsFootprint);
 
             FogStepSample result;
             result.position = position;
@@ -231,7 +233,7 @@ Shader "FeatherKit/Height Fog"
         // Весь туман в точке — общий и областей вместе, цвет и свет средние с весом по густоте.
         // Шагам ламп нужен любой туман, какой там есть: у них свой кусок луча, и общий слой
         // учитывается только внутри своего куска.
-        FogStepSample SampleAllFog(float3 position, float distance, float2 layerSpan, uint cutMask, uint fogMask)
+        FogStepSample SampleAllFog(float3 position, float distance, float stepLength, float2 layerSpan, uint cutMask, uint fogMask)
         {
             FogStepSample result;
             result.position = position;
@@ -241,9 +243,11 @@ Shader "FeatherKit/Height Fog"
             result.albedo = 0.0;
             result.lighting = 0.0;
 
+            float clubsFootprint = FogClubsFootprint(distance, stepLength);
+
             if (layerSpan.y > layerSpan.x && distance >= layerSpan.x && distance <= layerSpan.y)
             {
-                FogStepSample layer = SampleGlobalFog(position, 0.0, cutMask);
+                FogStepSample layer = SampleGlobalFog(position, 0.0, clubsFootprint, cutMask);
 
                 if (layer.density > 0.0)
                 {
@@ -257,7 +261,7 @@ Shader "FeatherKit/Height Fog"
             #if defined(HEIGHT_FOG_HAS_AREAS)
                 if (fogMask != 0u)
                 {
-                    FogAreasSample areas = SampleFogAreas(position, fogMask);
+                    FogAreasSample areas = SampleFogAreas(position, fogMask, clubsFootprint);
 
                     result.density += areas.density;
                     result.hidingDensity += areas.hidingDensity;
@@ -396,7 +400,7 @@ Shader "FeatherKit/Height Fog"
                     #if defined(HEIGHT_FOG_HAS_LAMPS)
                         float lampStepLength = TakeLampStep(lampStepsOnRay, lamp, jitter);
                         float3 lampPoint = cameraPosition + rayDirection * lampDistance;
-                        FogStepSample fogHere = SampleAllFog(lampPoint, lampDistance, layerSpan, cutMask, fogMask);
+                        FogStepSample fogHere = SampleAllFog(lampPoint, lampDistance, lampStepLength, layerSpan, cutMask, fogMask);
 
                         // Туман между концом последнего шага слоя или областей и шагом лампы тоже
                         // гасит её свет: шаги слоя бывают по нескольку метров.
@@ -421,13 +425,15 @@ Shader "FeatherKit/Height Fog"
 
                 if (layerDistance <= areaDistance)
                 {
-                    fogStep = SampleGlobalFog(cameraPosition + rayDirection * layerDistance, layerStepLength, cutMask);
+                    fogStep = SampleGlobalFog(cameraPosition + rayDirection * layerDistance, layerStepLength,
+                                              FogClubsFootprint(layerDistance, layerStepLength), cutMask);
                     marchedDistance = layerDistance + (1.0 - jitter) * layerStepLength;
                     layerStep++;
                 }
                 else
                 {
-                    fogStep = SampleAreasFog(cameraPosition + rayDirection * areaDistance, areaStepLength, fogMask);
+                    fogStep = SampleAreasFog(cameraPosition + rayDirection * areaDistance, areaStepLength,
+                                             FogClubsFootprint(areaDistance, areaStepLength), fogMask);
                     marchedDistance = areaDistance + (1.0 - jitter) * areaStepLength;
                     areaStep++;
                 }

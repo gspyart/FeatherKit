@@ -164,7 +164,7 @@ float SampleAreaCuts(float3 position, uint cutMask)
 
 // Туман всех областей из маски в точке. Где две области перекрываются, цвет и свет
 // берутся средними с весом по густоте — туман окрашен той, что гуще.
-FogAreasSample SampleFogAreas(float3 position, uint fogMask)
+FogAreasSample SampleFogAreas(float3 position, uint fogMask, float clubsFootprint)
 {
     FogAreasSample result;
     result.density = 0.0;
@@ -199,7 +199,7 @@ FogAreasSample SampleFogAreas(float3 position, uint fogMask)
         // Клубы, которые ничего не меняют, не читаем.
         UNITY_BRANCH
         if (clubsSettings.y > 0.0 || clubsSettings.z != 0.0)
-            clubs = SampleFogClubs(position, windSettings.xyz, clubsSettings.x, windSettings.w, clubsSettings.w);
+            clubs = SampleFogClubs(position, windSettings.xyz, clubsSettings.x, windSettings.w, clubsSettings.w, clubsFootprint);
 
         density *= max(1.0 + clubsSettings.y * clubs, 0.0);
 

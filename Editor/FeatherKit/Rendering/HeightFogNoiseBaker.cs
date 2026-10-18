@@ -74,15 +74,18 @@ namespace FeatherKit.EditorTools
             var values = CalculateNoiseValues();
             var pixels = ToBalancedBytes(values);
 
-            var texture = new Texture3D(Size, Size, Size, TextureFormat.R8, false)
+            // С уменьшенными копиями: вдали шейдер читает мелкую — она влезает в быструю
+            // память видеокарты, а клубы мельче пикселя усредняются, а не рябят.
+            // Трилинейная — копии смешиваются плавно, без колец на границах.
+            var texture = new Texture3D(Size, Size, Size, TextureFormat.R8, true)
             {
                 name = DefaultName,
                 wrapMode = TextureWrapMode.Repeat,
-                filterMode = FilterMode.Bilinear,
+                filterMode = FilterMode.Trilinear,
             };
 
             texture.SetPixelData(pixels, 0);
-            texture.Apply(false);
+            texture.Apply(true);
 
             return texture;
         }
