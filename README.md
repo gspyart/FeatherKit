@@ -140,8 +140,9 @@
 
 Зависимости объявлены в `package.json`, Package Manager установит их сам.
 
-Необязательно: **Animation Rigging** 1.0 и новее — для анимации человечков в редакторе.
-Без него этот модуль просто не собирается, остальное работает как обычно.
+Необязательно: **Animation Rigging** 1.0 и новее — для анимации человечков в редакторе,
+**ProBuilder** 5 и новее — для палитры уровня. Без них эти модули просто не собираются,
+остальное работает как обычно.
 
 ## Установка
 
@@ -698,6 +699,8 @@ DebugPanel.Watch(this, "Игрок", "Скорость", () => speed.ToString("0
 | Своя копия материала у одного объекта | `FeatherKit → Make Material Unique in Scene` или ПКМ по рендереру |
 | Закладки на ассеты и объекты сцен: вкладки, в каждой свои папки. Общие закладки лежат в `ProjectSettings/FeatherKit` и попадают в git | `FeatherKit → Bookmarks`, ПКМ в Project и Hierarchy → `Add to Bookmarks` |
 | Свои иконки ассетам | `FeatherKit → Asset Icons`, ПКМ по ассету → `Assign Icon` |
+| Палитра уровня: вкладки с материалами, текстурами и префабами под рукой; клик красит выделенные грани ProBuilder или объекты, пипетка находит материал грани. Вкладки общие, в `ProjectSettings/FeatherKit` и попадают в git. Нужен ProBuilder | `FeatherKit → Level Palette` |
+| Материалы из текстур: из пака текстур — по материалу на каждую, на шейдере из настроек или копией образца. Настройки общие, в `ProjectSettings/FeatherKit` | ПКМ по текстурам или папке → `Create Materials from Textures…`, или `FeatherKit → Texture Materials` |
 | Текстура клубов для тумана по высоте | `FeatherKit → Bake Fog Noise` |
 | Гизмо в Game View | `FeatherKit → Game View Gizmos`, Ctrl/Cmd+Alt+G |
 | Расстановка выделенного: на поверхность под кликом (встаёт низом, наклоняется по поверхности), к камере сцены, к камере с её поворотом. Ctrl+Z отменяет | Панель `Object Placement` в окне сцены |
