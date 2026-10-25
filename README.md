@@ -124,6 +124,12 @@
 - **Описание компонента — `[FDescription]`.** Компонент без полей висит на объекте, и непонятно
   зачем. Пишешь `[FDescription("Открывает дверь, когда рядом игрок")]` — эта фраза видна прямо
   в инспекторе.
+- **Рамки и раскрытые поля — `[FGroupBox]`, `[FInlineFields]`.** Настроек много, и они сливаются
+  в одну простыню. `[FGroupBox("Камера")]` кладёт поля в рамку с заголовком, которую можно свернуть;
+  группа в группе — `[FGroupBox("Общее/Камера")]`. `[FInlineFields]` показывает поле-класс сразу
+  раскрытым: имя сверху, поля под ним, без стрелки. На компонентах и ассетах работает само; свой
+  инспектор рисует поля через `GroupedFieldsLayout.DrawFields`. Внутри списков и полей со своим
+  PropertyDrawer рамок нет.
 - **Гизмо — `FGizmos`.** Нарисовать в окне сцены силуэт префаба там, где он появится, стрелку
   направления, дугу обзора врага.
 - **`GetOrAddComponent`.** Взять компонент, а если его нет — добавить. Одна строка вместо
@@ -682,6 +688,7 @@ DebugPanel.Watch(this, "Игрок", "Скорость", () => speed.ToString("0
 | `FNumberUtils`, `FTimeFormatUtils` | Форматы `10K`, `x12`, `+5`, `12:34` |
 | `FObjectIdUtils` | Стабильный номер объекта на любой версии Unity |
 | `FDescriptionAttribute` | Описание компонента в инспекторе |
+| `FGroupBoxAttribute`, `FInlineFieldsAttribute` | Рамки с заголовком вокруг полей; поле-класс без сворачивания |
 
 </details>
 
@@ -706,6 +713,7 @@ DebugPanel.Watch(this, "Игрок", "Скорость", () => speed.ToString("0
 | Расстановка выделенного: на поверхность под кликом (встаёт низом, наклоняется по поверхности), к камере сцены, к камере с её поворотом. Ctrl+Z отменяет | Панель `Object Placement` в окне сцены |
 | Фильтр карт света: после каждого запекания ставит выбранный сам (Point — свет квадратами, как в старых играх). Настройки общие, в `ProjectSettings/FeatherKit`; по умолчанию выключен | `Project Settings → FeatherKit → Lightmaps`, `FeatherKit → Lightmap Filter After Baking` |
 | Инспекторы мультяшных шейдеров, база для своих инспекторов | `ToonLitShaderGUI`, `ToonTerrainShaderGUI`, `FeatherEditor` |
+| Рамки `[FGroupBox]` и раскрытые поля `[FInlineFields]` | Сами: у компонентов — `FDescriptionInspector`, у ассетов — запасной `FScriptableObjectInspector`; в своём инспекторе — `GroupedFieldsLayout.DrawFields` |
 | Отрисовка полей `RandomSpread` и `RandomRange` | Сама, через `RandomSpreadDrawer`, `RandomRangeDrawer` |
 | Инспектор сценария из цветных блоков | Сам, через `ScenarioEditor` и соседние классы в `Editor/FeatherKit/Scenarios` |
 | Окно сценариев: все сценарии сцены, редактор на всю ширину, журнал запусков | `FeatherKit → Сценарии` или кнопка в инспекторе сценария |

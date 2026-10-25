@@ -20,6 +20,9 @@ namespace FeatherKit.EditorTools
     ///
     /// Конкретные инспекторы (Unity для Image, свои для джойстика) заявлены на свои типы
     /// и остаются за ними — этот заменяет только отрисовку по умолчанию.
+    ///
+    /// Раз уж он рисует все монобехи, поля рисует с группами FeatherKit — [FGroupBox]
+    /// и [FInlineFields] (<see cref="GroupedFieldsLayout"/>). Нет их — рисует ровно как Unity.
     /// </summary>
     [CanEditMultipleObjects]
     [CustomEditor(typeof(MonoBehaviour), true)]
@@ -28,8 +31,7 @@ namespace FeatherKit.EditorTools
         public override void OnInspectorGUI()
         {
             DrawDescription();
-
-            DrawDefaultInspector();
+            DrawFields();
         }
 
         private void DrawDescription()
@@ -42,6 +44,20 @@ namespace FeatherKit.EditorTools
             // Без иконки: это пояснение, а не предупреждение, и восклицательный знак
             // у каждого компонента читался бы как ошибка.
             EditorGUILayout.HelpBox(text, MessageType.None);
+        }
+
+
+        private void DrawFields()
+        {
+            if (!GroupedFieldsLayout.IsUsedBy(target.GetType()))
+            {
+                DrawDefaultInspector();
+                return;
+            }
+
+            serializedObject.Update();
+            GroupedFieldsLayout.DrawFields(serializedObject);
+            serializedObject.ApplyModifiedProperties();
         }
     }
 }

@@ -8,10 +8,9 @@ using UnityEngine;
 namespace FeatherKit.EditorTools
 {
     /// <summary>
-    /// База для кастомных инспекторов. Не зовёт DrawDefaultInspector()/base.OnInspectorGUI() —
-    /// вручную воссоздаёт то же самое поведение (тот же цикл, что и у самого Unity внутри
-    /// DrawDefaultInspector), чтобы дальше было куда добавлять свою отрисовку по конкретным
-    /// полям в наследниках, не теряя стандартное поведение у всех остальных.
+    /// База для кастомных инспекторов. Не зовёт DrawDefaultInspector()/base.OnInspectorGUI():
+    /// строку скрипта заменяет своя шапка, остальные поля рисует <see cref="GroupedFieldsLayout"/> —
+    /// как у Unity, плюс группы FeatherKit ([FGroupBox], [FInlineFields]).
     /// </summary>
     public class FeatherEditor : Editor
     {
@@ -33,23 +32,17 @@ namespace FeatherKit.EditorTools
         {
             serializedObject.Update();
 
-            var property = serializedObject.GetIterator();
-            var enterChildren = true; // итератор стоит перед первым полем — самый первый шаг всегда заходит внутрь
+            var script = serializedObject.FindProperty("m_Script");
 
-            while (property.NextVisible(enterChildren))
+            if (script != null)
             {
-                enterChildren = false;
-
-                if (property.propertyPath == "m_Script")
-                {
-                    DrawHeader(property);
-                    DrawScriptDescription();
-                    EditorGUILayout.Space(6);
-                    continue;
-                }
-
-                EditorGUILayout.PropertyField(property, true);
+                DrawHeader(script);
+                DrawScriptDescription();
+                EditorGUILayout.Space(6);
             }
+
+            // Строку скрипта заменяет своя шапка; остальные поля — как у Unity, плюс группы FeatherKit.
+            GroupedFieldsLayout.DrawFields(serializedObject, drawScriptField: false);
 
             serializedObject.ApplyModifiedProperties();
         }
