@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using FeatherKit.Attributes;
 using UnityEditor;
+using UnityEngine;
 
 namespace FeatherKit.EditorTools
 {
@@ -22,6 +23,10 @@ namespace FeatherKit.EditorTools
         // Отрисовка зовётся на каждом движении мыши — рефлексию считаем один раз.
         private static readonly Dictionary<Type, bool> typesWithSections = new Dictionary<Type, bool>();
         private static readonly Dictionary<(Type, string), FieldPlace> places = new Dictionary<(Type, string), FieldPlace>();
+
+        // Первый встреченный номер каждой секции — с ним сверяем остальные.
+        private static readonly Dictionary<string, (int Order, Type Type)> firstSectionOrders = new Dictionary<string, (int Order, Type Type)>();
+        private static readonly HashSet<(string, Type)> warnedSections = new HashSet<(string, Type)>();
 
 
         // ── Есть ли секции ───────────────────────────────────────────────
@@ -116,10 +121,16 @@ namespace FeatherKit.EditorTools
                 var group = field.GetCustomAttribute<FGroupStartAttribute>(true);
 
                 if (section != null)
+                {
                     (sectionTitle, sectionOrder, groupTitle) = (section.Title, section.Order, null);
+                    WarnIfOrderDiffers(sectionTitle, sectionOrder, declaringType);
+                }
 
                 if (group?.SectionTitle != null)
+                {
                     (sectionTitle, sectionOrder, groupTitle) = (group.SectionTitle, group.SectionOrder, null);
+                    WarnIfOrderDiffers(sectionTitle, sectionOrder, declaringType);
+                }
 
                 if (group != null)
                     groupTitle = group.Title;
@@ -129,6 +140,22 @@ namespace FeatherKit.EditorTools
             }
 
             return new FieldPlace(sectionTitle, sectionOrder, groupTitle, false, depth);
+        }
+
+        // Номер секции пишут руками в каждом классе: разошёлся — секции у наследников встанут в разном порядке.
+        private static void WarnIfOrderDiffers(string sectionTitle, int order, Type declaringType)
+        {
+            if (!firstSectionOrders.TryGetValue(sectionTitle, out var first))
+            {
+                firstSectionOrders[sectionTitle] = (order, declaringType);
+                return;
+            }
+
+            if (first.Order == order || !warnedSections.Add((sectionTitle, declaringType)))
+                return;
+
+            Debug.LogWarning($"FeatherKit: у секции «{sectionTitle}» разные номера — {first.Order} в {first.Type.Name} и {order} в {declaringType.Name}. " +
+                             "Номер задаёт место секции, у одной секции он должен быть один.");
         }
 
 

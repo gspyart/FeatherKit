@@ -84,17 +84,12 @@ namespace FeatherKit.EditorTools
         }
 
 
-        /// <summary>
-        /// Раскрыта ли секция с этим ключом — тем же, что у <see cref="Draw"/>. Тем же хранилищем
-        /// пользуются и другие сворачиваемые части инспектора: <see cref="InspectorFrame"/>.
-        /// </summary>
-        public static bool IsExpanded(string key, bool expandedByDefault = true)
+        private static bool IsExpanded(string key, bool expandedByDefault)
         {
             return EditorPrefs.GetBool(PrefsPrefix + key, expandedByDefault);
         }
 
-        /// <summary>Свернуть или раскрыть секцию по её ключу.</summary>
-        public static void SetExpanded(string key, bool expanded)
+        private static void SetExpanded(string key, bool expanded)
         {
             EditorPrefs.SetBool(PrefsPrefix + key, expanded);
         }

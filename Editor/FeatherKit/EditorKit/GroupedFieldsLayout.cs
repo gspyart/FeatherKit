@@ -255,42 +255,6 @@ namespace FeatherKit.EditorTools
         }
 
 
-        /// <summary>
-        /// Свернуть или раскрыть все рамки [FGroupBox] объекта: на всех уровнях и внутри полей-классов,
-        /// даже те, что ещё ни разу не показывались. Блоки и поля-классы сворачиваются своим
-        /// isExpanded — это за вызывающим.
-        /// </summary>
-        public static void SetGroupBoxesExpanded(SerializedObject serializedObject, bool expanded)
-        {
-            var targetType = serializedObject.targetObject.GetType();
-
-            foreach (var key in GroupBoxKeysOf(TopLevelPropertiesOf(serializedObject), targetType, targetType.FullName))
-                InspectorSection.SetExpanded(key, expanded);
-        }
-
-        // Тот же обход, что у отрисовки, только без рисования: рамки уровня и рамки внутри полей, куда отрисовка заходит сама.
-        private static IEnumerable<string> GroupBoxKeysOf(List<SerializedProperty> properties, Type ownerType, string stateKey)
-        {
-            foreach (var property in properties)
-            {
-                var field = FieldOf(ownerType, property.name);
-                var groupPath = string.Empty;
-
-                foreach (var title in GroupTitlesOf(field?.GetCustomAttribute<FGroupBoxAttribute>(true)?.Path))
-                {
-                    groupPath = groupPath.Length == 0 ? title : groupPath + FGroupBoxAttribute.PathSeparator + title;
-                    yield return GroupBoxKeyOf(stateKey, groupPath);
-                }
-
-                if (!CanOpenInside(property, field, IsMarkedToOpen(field)))
-                    continue;
-
-                foreach (var key in GroupBoxKeysOf(ChildrenOf(property), field.FieldType, ChildStateKey(stateKey, property)))
-                    yield return key;
-            }
-        }
-
-
         // Ключ свёрнутости рамки: чей уровень и путь рамки на нём.
         private static string GroupBoxKeyOf(string stateKey, string groupPath)
         {
