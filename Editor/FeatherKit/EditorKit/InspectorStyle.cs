@@ -84,6 +84,22 @@ namespace FeatherKit.EditorTools
             new Color(0.50f, 0.90f, 0.85f)
         };
 
+        [Header("Плоские рамки и подписи секций")]
+        [Tooltip("Отступ содержимого от края плоской рамки, точек")]
+        [SerializeField] private float framePadding = 5f;
+
+        [Tooltip("Насколько фон плоской рамки заметнее на каждом уровне вложенности (тёмная тема)")]
+        [SerializeField] private Color darkFrameFillStep = new Color(1f, 1f, 1f, 0.03f);
+        [SerializeField] private Color darkFrameOutline = new Color(0f, 0f, 0f, 0.3f);
+        [SerializeField] private Color darkSectionTitle = new Color(0.55f, 0.75f, 1f);
+        [SerializeField] private Color darkDescription = new Color(0.6f, 0.6f, 0.6f);
+
+        [Tooltip("Насколько фон плоской рамки заметнее на каждом уровне вложенности (светлая тема)")]
+        [SerializeField] private Color lightFrameFillStep = new Color(0f, 0f, 0f, 0.04f);
+        [SerializeField] private Color lightFrameOutline = new Color(0f, 0f, 0f, 0.2f);
+        [SerializeField] private Color lightSectionTitle = new Color(0.12f, 0.38f, 0.8f);
+        [SerializeField] private Color lightDescription = new Color(0.35f, 0.35f, 0.35f);
+
 
         /// <summary>Оформление из Resources, а нет ассета — значения по умолчанию.</summary>
         public static InspectorStyle Current
@@ -107,12 +123,24 @@ namespace FeatherKit.EditorTools
         public float HeaderHeight => headerHeight;
         public int HeaderFontSize => headerFontSize;
         public float AccentWidth => accentWidth;
+        public float FramePadding => framePadding;
 
         // Тему берём у самого редактора: одна палитра на обе выглядит грязно в одной из них.
         public Color Fill => EditorGUIUtility.isProSkin ? darkFill : lightFill;
         public Color Outline => EditorGUIUtility.isProSkin ? darkOutline : lightOutline;
         public Color Header => EditorGUIUtility.isProSkin ? darkHeader : lightHeader;
         public Color Title => EditorGUIUtility.isProSkin ? darkTitle : lightTitle;
+        public Color FrameOutline => EditorGUIUtility.isProSkin ? darkFrameOutline : lightFrameOutline;
+        public Color SectionTitle => EditorGUIUtility.isProSkin ? darkSectionTitle : lightSectionTitle;
+        public Color Description => EditorGUIUtility.isProSkin ? darkDescription : lightDescription;
+
+        // Чем глубже рамка, тем заметнее фон: так видно, что внутри чего лежит.
+        public Color FrameFill(int nestingDepth)
+        {
+            var step = EditorGUIUtility.isProSkin ? darkFrameFillStep : lightFrameFillStep;
+
+            return new Color(step.r, step.g, step.b, step.a * nestingDepth);
+        }
 
         public Color Accent(int index)
         {

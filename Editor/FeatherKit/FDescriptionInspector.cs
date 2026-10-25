@@ -21,8 +21,8 @@ namespace FeatherKit.EditorTools
     /// Конкретные инспекторы (Unity для Image, свои для джойстика) заявлены на свои типы
     /// и остаются за ними — этот заменяет только отрисовку по умолчанию.
     ///
-    /// Раз уж он рисует все монобехи, поля рисует с группами FeatherKit — [FGroupBox]
-    /// и [FInlineFields] (<see cref="GroupedFieldsLayout"/>). Нет их — рисует ровно как Unity.
+    /// Раз уж он рисует все монобехи, поля рисует с разметкой FeatherKit — рамки, секции, блоки
+    /// (<see cref="GroupedFieldsLayout"/>). Нет её — рисует ровно как Unity.
     /// </summary>
     [CanEditMultipleObjects]
     [CustomEditor(typeof(MonoBehaviour), true)]

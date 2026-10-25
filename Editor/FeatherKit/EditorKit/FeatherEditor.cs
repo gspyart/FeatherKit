@@ -10,7 +10,7 @@ namespace FeatherKit.EditorTools
     /// <summary>
     /// База для кастомных инспекторов. Не зовёт DrawDefaultInspector()/base.OnInspectorGUI():
     /// строку скрипта заменяет своя шапка, остальные поля рисует <see cref="GroupedFieldsLayout"/> —
-    /// как у Unity, плюс группы FeatherKit ([FGroupBox], [FInlineFields]).
+    /// как у Unity, плюс разметка FeatherKit: рамки, секции, блоки.
     /// </summary>
     public class FeatherEditor : Editor
     {

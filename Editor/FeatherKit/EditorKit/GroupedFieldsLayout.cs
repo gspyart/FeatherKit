@@ -8,8 +8,11 @@ using UnityEngine;
 namespace FeatherKit.EditorTools
 {
     /// <summary>
-    /// Рисует поля объекта в инспекторе с группами FeatherKit: рамки <see cref="FGroupBoxAttribute"/>
-    /// и раскрытые поля-классы <see cref="FInlineFieldsAttribute"/>.
+    /// Рисует поля объекта в инспекторе с разметкой FeatherKit:
+    /// - сворачиваемые рамки <see cref="FGroupBoxAttribute"/> и раскрытые поля-классы <see cref="FInlineFieldsAttribute"/>
+    /// - секции <see cref="FSectionAttribute"/> и плоские рамки <see cref="FGroupStartAttribute"/> — раскладку
+    ///   считает <see cref="FieldSectionsArrangement"/>; внутри плоской рамки работают и сворачиваемые
+    /// - блоки <see cref="FBlockTitleAttribute"/>: своё название и пояснение у поля-класса
     ///
     /// Не инспектор, а общая отрисовка для инспекторов: ею пользуются инспектор компонентов
     /// (<see cref="FDescriptionInspector"/>), ассетов (<see cref="FScriptableObjectInspector"/>)
@@ -27,10 +30,9 @@ namespace FeatherKit.EditorTools
     {
         private const string ScriptFieldPath = "m_Script";
 
-        // Шаг отступа Unity на один уровень indentLevel — у него это внутренняя константа.
-        private const float IndentStepWidth = 15f;
-
         private const float InlineTitleGap = 4f;
+        private const float SectionGap = 6f;
+        private const string GroupBoxKeyPrefix = "Groups.";
 
         private const BindingFlags InstanceFields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
 
@@ -62,7 +64,7 @@ namespace FeatherKit.EditorTools
         {
             foreach (var field in SerializedFieldsOf(type))
             {
-                if (field.IsDefined(typeof(FGroupBoxAttribute), true) || field.IsDefined(typeof(FInlineFieldsAttribute), true))
+                if (IsLayoutMark(field))
                     return true;
 
                 if (IsSerializedClass(field.FieldType) && IsUsedBy(field.FieldType))
@@ -70,6 +72,14 @@ namespace FeatherKit.EditorTools
             }
 
             return false;
+        }
+
+        private static bool IsLayoutMark(FieldInfo field)
+        {
+            return field.IsDefined(typeof(FGroupBoxAttribute), true)
+                   || field.IsDefined(typeof(FInlineFieldsAttribute), true)
+                   || field.IsDefined(typeof(FBlockTitleAttribute), true)
+                   || FieldSectionsArrangement.IsSectionMark(field);
         }
 
         private static IEnumerable<FieldInfo> SerializedFieldsOf(Type type)
@@ -108,18 +118,12 @@ namespace FeatherKit.EditorTools
         public static void DrawFields(SerializedObject serializedObject, bool drawScriptField = true)
         {
             var targetType = serializedObject.targetObject.GetType();
-            var properties = new List<SerializedProperty>();
-            var iterator = serializedObject.GetIterator();
+            var script = serializedObject.FindProperty(ScriptFieldPath);
 
-            for (var enterChildren = true; iterator.NextVisible(enterChildren); enterChildren = false)
-            {
-                if (iterator.propertyPath != ScriptFieldPath)
-                    properties.Add(iterator.Copy());
-                else if (drawScriptField)
-                    DrawScriptField(iterator);
-            }
+            if (drawScriptField && script != null)
+                DrawScriptField(script);
 
-            DrawGroupedFields(properties, targetType, targetType.FullName);
+            DrawGroupedFields(TopLevelPropertiesOf(serializedObject), targetType, targetType.FullName);
         }
 
         private static void DrawScriptField(SerializedProperty script)
@@ -128,11 +132,70 @@ namespace FeatherKit.EditorTools
                 EditorGUILayout.PropertyField(script, true);
         }
 
+        // Поля верхнего уровня по порядку, без строки скрипта.
+        private static List<SerializedProperty> TopLevelPropertiesOf(SerializedObject serializedObject)
+        {
+            var properties = new List<SerializedProperty>();
+            var iterator = serializedObject.GetIterator();
 
-        // ── Группы ───────────────────────────────────────────────────────
+            for (var enterChildren = true; iterator.NextVisible(enterChildren); enterChildren = false)
+            {
+                if (iterator.propertyPath != ScriptFieldPath)
+                    properties.Add(iterator.Copy());
+            }
+
+            return properties;
+        }
+
+
+        // ── Секции и плоские рамки ───────────────────────────────────────
 
         // stateKey — чей это уровень: по нему запоминаем, какие рамки свёрнуты.
-        private static void DrawGroupedFields(IEnumerable<SerializedProperty> properties, Type ownerType, string stateKey)
+        private static void DrawGroupedFields(List<SerializedProperty> properties, Type ownerType, string stateKey)
+        {
+            if (!FieldSectionsArrangement.IsUsedBy(ownerType))
+            {
+                DrawGroupBoxes(properties, ownerType, stateKey);
+                return;
+            }
+
+            var isFirstSection = true;
+
+            foreach (var section in FieldSectionsArrangement.Arrange(properties, ownerType))
+            {
+                if (!isFirstSection)
+                    EditorGUILayout.Space(SectionGap);
+
+                isFirstSection = false;
+
+                if (section.Title != null)
+                    InspectorFrame.DrawSectionTitle(section.Title);
+
+                foreach (var group in section.Groups)
+                    DrawFrameGroup(group, ownerType, stateKey);
+            }
+        }
+
+        // Плоская рамка не сворачивается: раскрыл блок — внутри всё разложено. Внутри работают и сворачиваемые [FGroupBox].
+        private static void DrawFrameGroup(FieldFrameGroup group, Type ownerType, string stateKey)
+        {
+            if (group.Title == null)
+            {
+                DrawGroupBoxes(group.Properties, ownerType, stateKey);
+                return;
+            }
+
+            InspectorFrame.Draw(() =>
+            {
+                EditorGUILayout.LabelField(group.Title, EditorStyles.boldLabel);
+                DrawGroupBoxes(group.Properties, ownerType, stateKey);
+            });
+        }
+
+
+        // ── Сворачиваемые рамки ──────────────────────────────────────────
+
+        private static void DrawGroupBoxes(IEnumerable<SerializedProperty> properties, Type ownerType, string stateKey)
         {
             var root = FieldsTreeNode.ForGroup(string.Empty, string.Empty);
 
@@ -150,18 +213,10 @@ namespace FeatherKit.EditorTools
         // «Общее/Камера» — рамка «Камера» внутри «Общее». Нет такой — встаёт там, где встретилось первое её поле.
         private static FieldsTreeNode GroupOf(FieldsTreeNode root, string path)
         {
-            if (string.IsNullOrEmpty(path))
-                return root;
-
             var group = root;
 
-            foreach (var part in path.Split(FGroupBoxAttribute.PathSeparator))
+            foreach (var title in GroupTitlesOf(path))
             {
-                var title = part.Trim();
-
-                if (title.Length == 0)
-                    continue;
-
                 var child = group.Children.Find(node => node.IsGroup && node.GroupTitle == title);
 
                 if (child == null)
@@ -193,26 +248,67 @@ namespace FeatherKit.EditorTools
             }
         }
 
-        // Рамка встаёт на текущий отступ, а внутри отступ с нуля: иначе поля в ней уезжают вправо дважды.
         private static void DrawGroup(FieldsTreeNode group, string stateKey, int accentIndex)
         {
-            var indentLevel = EditorGUI.indentLevel;
+            InspectorFrame.DrawAtCurrentIndent(() =>
+                InspectorSection.Draw(GroupBoxKeyOf(stateKey, group.GroupPath), group.GroupTitle, accentIndex, () => DrawNodes(group.Children, stateKey, accentIndex + 1)));
+        }
 
-            if (indentLevel > 0)
+
+        /// <summary>
+        /// Свернуть или раскрыть все рамки [FGroupBox] объекта: на всех уровнях и внутри полей-классов,
+        /// даже те, что ещё ни разу не показывались. Блоки и поля-классы сворачиваются своим
+        /// isExpanded — это за вызывающим.
+        /// </summary>
+        public static void SetGroupBoxesExpanded(SerializedObject serializedObject, bool expanded)
+        {
+            var targetType = serializedObject.targetObject.GetType();
+
+            foreach (var key in GroupBoxKeysOf(TopLevelPropertiesOf(serializedObject), targetType, targetType.FullName))
+                InspectorSection.SetExpanded(key, expanded);
+        }
+
+        // Тот же обход, что у отрисовки, только без рисования: рамки уровня и рамки внутри полей, куда отрисовка заходит сама.
+        private static IEnumerable<string> GroupBoxKeysOf(List<SerializedProperty> properties, Type ownerType, string stateKey)
+        {
+            foreach (var property in properties)
             {
-                EditorGUILayout.BeginHorizontal();
-                GUILayout.Space(indentLevel * IndentStepWidth);
-                EditorGUILayout.BeginVertical();
+                var field = FieldOf(ownerType, property.name);
+                var groupPath = string.Empty;
+
+                foreach (var title in GroupTitlesOf(field?.GetCustomAttribute<FGroupBoxAttribute>(true)?.Path))
+                {
+                    groupPath = groupPath.Length == 0 ? title : groupPath + FGroupBoxAttribute.PathSeparator + title;
+                    yield return GroupBoxKeyOf(stateKey, groupPath);
+                }
+
+                if (!CanOpenInside(property, field, IsMarkedToOpen(field)))
+                    continue;
+
+                foreach (var key in GroupBoxKeysOf(ChildrenOf(property), field.FieldType, ChildStateKey(stateKey, property)))
+                    yield return key;
             }
+        }
 
-            EditorGUI.indentLevel = 0;
-            InspectorSection.Draw($"Groups.{stateKey}.{group.GroupPath}", group.GroupTitle, accentIndex, () => DrawNodes(group.Children, stateKey, accentIndex + 1));
-            EditorGUI.indentLevel = indentLevel;
 
-            if (indentLevel > 0)
+        // Ключ свёрнутости рамки: чей уровень и путь рамки на нём.
+        private static string GroupBoxKeyOf(string stateKey, string groupPath)
+        {
+            return GroupBoxKeyPrefix + stateKey + "." + groupPath;
+        }
+
+        // «Общее / Камера» → «Общее», «Камера»: без пробелов по краям и пустых частей.
+        private static IEnumerable<string> GroupTitlesOf(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                yield break;
+
+            foreach (var part in path.Split(FGroupBoxAttribute.PathSeparator))
             {
-                EditorGUILayout.EndVertical();
-                EditorGUILayout.EndHorizontal();
+                var title = part.Trim();
+
+                if (title.Length > 0)
+                    yield return title;
             }
         }
 
@@ -222,14 +318,21 @@ namespace FeatherKit.EditorTools
         private static void DrawField(SerializedProperty property, FieldInfo field, string stateKey)
         {
             var isInline = field != null && field.IsDefined(typeof(FInlineFieldsAttribute), true);
+            var blockTitle = field?.GetCustomAttribute<FBlockTitleAttribute>(true);
 
-            if (!CanOpenInside(property, field, isInline))
+            if (!CanOpenInside(property, field, IsMarkedToOpen(field)))
             {
                 EditorGUILayout.PropertyField(property, true);
                 return;
             }
 
             DrawDecorators(field);
+
+            if (blockTitle != null)
+            {
+                DrawBlock(property, field, blockTitle, stateKey);
+                return;
+            }
 
             var label = new GUIContent(property.displayName, property.tooltip);
 
@@ -248,17 +351,43 @@ namespace FeatherKit.EditorTools
             }
 
             EditorGUI.indentLevel++;
-            DrawGroupedFields(ChildrenOf(property), field.FieldType, stateKey + "." + property.propertyPath);
+            DrawGroupedFields(ChildrenOf(property), field.FieldType, ChildStateKey(stateKey, property));
             EditorGUI.indentLevel--;
         }
 
-        // Заходим в поле сами, только когда внутри есть что группировать или его просили раскрыть.
-        private static bool CanOpenInside(SerializedProperty property, FieldInfo field, bool isInline)
+        // Поле просили показать по-своему: раскрытым или блоком.
+        private static bool IsMarkedToOpen(FieldInfo field)
+        {
+            return field != null && (field.IsDefined(typeof(FInlineFieldsAttribute), true) || field.IsDefined(typeof(FBlockTitleAttribute), true));
+        }
+
+        // Заходим в поле сами, только когда внутри есть что группировать или его просили показать по-своему.
+        private static bool CanOpenInside(SerializedProperty property, FieldInfo field, bool isMarkedToOpen)
         {
             if (field == null || property.propertyType != SerializedPropertyType.Generic || property.isArray || !property.hasVisibleChildren)
                 return false;
 
-            return isInline || IsUsedBy(field.FieldType);
+            return isMarkedToOpen || IsUsedBy(field.FieldType);
+        }
+
+
+        // Блок [FBlockTitle]: сворачивается по заголовку, внутри — плоская рамка с пояснением и полями.
+        private static void DrawBlock(SerializedProperty property, FieldInfo field, FBlockTitleAttribute blockTitle, string stateKey)
+        {
+            var label = new GUIContent(blockTitle.Title, property.tooltip);
+
+            property.isExpanded = EditorGUILayout.Foldout(property.isExpanded, label, true, EditorStyles.foldoutHeader);
+
+            if (!property.isExpanded)
+                return;
+
+            InspectorFrame.Draw(() =>
+            {
+                if (!string.IsNullOrEmpty(blockTitle.Description))
+                    InspectorFrame.DrawDescription(blockTitle.Description);
+
+                DrawGroupedFields(ChildrenOf(property), field.FieldType, ChildStateKey(stateKey, property));
+            });
         }
 
         // Поле рисуем сами, а не через Unity, — значит, и его [Header] и [Space] тоже.
@@ -297,7 +426,13 @@ namespace FeatherKit.EditorTools
             return found;
         }
 
-        private static IEnumerable<SerializedProperty> ChildrenOf(SerializedProperty property)
+        // Ключ уровня внутри поля: свёрнутые рамки у разных полей одного класса — свои.
+        private static string ChildStateKey(string stateKey, SerializedProperty property)
+        {
+            return stateKey + "." + property.propertyPath;
+        }
+
+        private static List<SerializedProperty> ChildrenOf(SerializedProperty property)
         {
             var children = new List<SerializedProperty>();
             var iterator = property.Copy();

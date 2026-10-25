@@ -51,8 +51,7 @@ namespace FeatherKit.EditorTools
         public static void Draw(string key, string title, int accentIndex, Action content, bool expandedByDefault = true)
         {
             var style = InspectorStyle.Current;
-            var prefsKey = PrefsPrefix + key;
-            var expanded = EditorPrefs.GetBool(prefsKey, expandedByDefault);
+            var expanded = IsExpanded(key, expandedByDefault);
 
             GUILayout.Space(style.SectionGap);
 
@@ -64,7 +63,7 @@ namespace FeatherKit.EditorTools
 
             if (Event.current.type == EventType.MouseDown && header.Contains(Event.current.mousePosition))
             {
-                EditorPrefs.SetBool(prefsKey, !expanded);
+                SetExpanded(key, !expanded);
                 Event.current.Use();
             }
 
@@ -82,6 +81,22 @@ namespace FeatherKit.EditorTools
             }
 
             FeatherEditorGUIBox.BoxEnd();
+        }
+
+
+        /// <summary>
+        /// Раскрыта ли секция с этим ключом — тем же, что у <see cref="Draw"/>. Тем же хранилищем
+        /// пользуются и другие сворачиваемые части инспектора: <see cref="InspectorFrame"/>.
+        /// </summary>
+        public static bool IsExpanded(string key, bool expandedByDefault = true)
+        {
+            return EditorPrefs.GetBool(PrefsPrefix + key, expandedByDefault);
+        }
+
+        /// <summary>Свернуть или раскрыть секцию по её ключу.</summary>
+        public static void SetExpanded(string key, bool expanded)
+        {
+            EditorPrefs.SetBool(PrefsPrefix + key, expanded);
         }
 
 
