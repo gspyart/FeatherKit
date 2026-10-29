@@ -4,8 +4,9 @@ using UnityEditor.Overlays;
 namespace FeatherKit.EditorTools
 {
     /// <summary>
-    /// Панель «Расстановка» в окне сцены: три кнопки для выделенных объектов —
-    /// поставить на поверхность, перенести к камере, перенести к камере с её поворотом.
+    /// Панель «Расстановка» в окне сцены: кнопки для выделенных объектов —
+    /// поставить на поверхность, перенести к камере, перенести к камере с её поворотом,
+    /// перенести пивот, не двигая детей.
     /// Двигается, прячется и пристыковывается к краям так же, как штатные панели инструментов.
     /// </summary>
     [Overlay(typeof(SceneView), OverlayId, "Object Placement", true)]
@@ -16,7 +17,8 @@ namespace FeatherKit.EditorTools
         public ObjectPlacementOverlay() : base(
             PlaceOnSurfaceToggle.ElementId,
             MoveToCameraButton.ElementId,
-            MoveToCameraWithRotationButton.ElementId)
+            MoveToCameraWithRotationButton.ElementId,
+            PivotDropdown.ElementId)
         {
         }
     }

@@ -8,9 +8,9 @@ using UnityEditor;
 namespace FeatherKit.Debugging
 {
     /// <summary>
-    /// Фигуры и подписи для гизмо — то, чего нет в <see cref="Gizmos"/>: круг по земле,
-    /// заливка, сектор «радиус плюс угол», стрелка направления, текст в точке мира
-    /// и силуэт префаба.
+    /// Фигуры и подписи для гизмо — то, чего нет в <see cref="Gizmos"/>: толстая и пунктирная
+    /// линия, круг по земле, заливка, сектор «радиус плюс угол», стрелка направления, текст
+    /// в точке мира и силуэт префаба.
     ///
     /// Зачем: почти всё, что настраивают в инспекторе, — это радиус и угол. Сфера вместо
     /// круга и две линии вместо сектора читаются плохо, а рисовать их руками в каждом
@@ -50,6 +50,46 @@ namespace FeatherKit.Debugging
         private static readonly Dictionary<ulong, (PrefabMeshPart[] Parts, double BuiltAt)> partsByPrefab =
             new Dictionary<ulong, (PrefabMeshPart[], double)>();
 #endif
+
+
+        // ── Линия ─────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Линия толщиной в пикселях экрана: камера отъезжает — линия не тоньше и не толще.
+        /// Толстая сразу выделяется среди гизмо в один пиксель. Толщина 0 — обычная тонкая.
+        /// </summary>
+        public static void Line(Vector3 from, Vector3 to, float thickness, Color? color = null)
+        {
+#if UNITY_EDITOR
+            Apply(color);
+
+            Handles.DrawLine(from, to, thickness);
+#endif
+        }
+
+        /// <summary>
+        /// Пунктир: штрих и промежуток — в метрах мира, толщина — в пикселях экрана.
+        /// Короткий штрих с промежутком побольше читается как точки. Так две линии в одном
+        /// месте не спутать: сплошная, штрихи и точки различимы и без цвета.
+        /// </summary>
+        public static void DashedLine(Vector3 from, Vector3 to, float dashLength, float gapLength,
+            float thickness = 0f, Color? color = null)
+        {
+#if UNITY_EDITOR
+            var length = Vector3.Distance(from, to);
+
+            if (length <= 0f || dashLength <= 0f)
+                return;
+
+            Apply(color);
+
+            var direction = (to - from) / length;
+            var step = dashLength + Mathf.Max(0f, gapLength);
+
+            for (var start = 0f; start < length; start += step)
+                Handles.DrawLine(from + direction * start, from + direction * Mathf.Min(start + dashLength, length), thickness);
+#endif
+        }
 
 
         // ── Круг ──────────────────────────────────────────────────────────
@@ -150,8 +190,8 @@ namespace FeatherKit.Debugging
 
         // ── Точка и направление ───────────────────────────────────────────
 
-        /// <summary>Стрелка: куда смотрит, куда летит, куда тянет. Длина в метрах.</summary>
-        public static void Arrow(Vector3 from, Vector3 direction, float length, Color? color = null)
+        /// <summary>Стрелка: куда смотрит, куда летит, куда тянет. Длина в метрах, толщина — в пикселях экрана, 0 — тонкая.</summary>
+        public static void Arrow(Vector3 from, Vector3 direction, float length, Color? color = null, float thickness = 0f)
         {
 #if UNITY_EDITOR
             if (length <= 0f || direction.sqrMagnitude < 0.000001f)
@@ -162,7 +202,7 @@ namespace FeatherKit.Debugging
             var forward = direction.normalized;
             var end = from + forward * length;
 
-            Handles.DrawLine(from, end);
+            Handles.DrawLine(from, end, thickness);
 
             // Наконечник разводим вокруг вертикали, повёрнутой поперёк стрелки: у наклонной стрелки
             // голая вертикаль загнула бы усы вниз, а так они ложатся в плоскость склона. У вертикальной
@@ -172,8 +212,8 @@ namespace FeatherKit.Debugging
                 : Vector3.ProjectOnPlane(Vector3.up, forward).normalized;
             var head = length * 0.2f;
 
-            Handles.DrawLine(end, end + Quaternion.AngleAxis(150f, axis) * forward * head);
-            Handles.DrawLine(end, end + Quaternion.AngleAxis(-150f, axis) * forward * head);
+            Handles.DrawLine(end, end + Quaternion.AngleAxis(150f, axis) * forward * head, thickness);
+            Handles.DrawLine(end, end + Quaternion.AngleAxis(-150f, axis) * forward * head, thickness);
 #endif
         }
 

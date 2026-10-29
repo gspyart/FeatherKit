@@ -33,6 +33,7 @@ namespace FeatherKit.EditorTools
 
             EditorGUI.BeginProperty(position, label, property);
             EditorGUI.LabelField(line, label, EditorStyles.boldLabel);
+            PropertyTitleMenu.HandleRightClick(line, property);
             EditorGUI.indentLevel++;
 
             var y = line.yMax + Spacing;

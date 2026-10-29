@@ -305,10 +305,12 @@ namespace FeatherKit.EditorTools
                 // Просвет отделяет заголовок от полей предыдущего блока.
                 EditorGUILayout.Space(InlineTitleGap);
                 EditorGUILayout.LabelField(label, EditorStyles.boldLabel);
+                PropertyTitleMenu.HandleRightClick(GUILayoutUtility.GetLastRect(), property);
             }
             else
             {
                 property.isExpanded = EditorGUILayout.Foldout(property.isExpanded, label, true);
+                PropertyTitleMenu.HandleRightClick(GUILayoutUtility.GetLastRect(), property);
 
                 if (!property.isExpanded)
                     return;
@@ -341,6 +343,7 @@ namespace FeatherKit.EditorTools
             var label = new GUIContent(blockTitle.Title, property.tooltip);
 
             property.isExpanded = EditorGUILayout.Foldout(property.isExpanded, label, true, EditorStyles.foldoutHeader);
+            PropertyTitleMenu.HandleRightClick(GUILayoutUtility.GetLastRect(), property);
 
             if (!property.isExpanded)
                 return;

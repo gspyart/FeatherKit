@@ -59,33 +59,16 @@ namespace FeatherKit.EditorTools
         // мешам объекта и детей; мешей нет — опорой служит сама точка опоры.
         private static float PivotHeightAboveBottom(Transform target, Vector3 up)
         {
-            bool hasMeshes = false;
-            float lowest = float.MaxValue;
+            var corners = MeshBoundsCorners.CollectInWorld(target);
+            float lowest = 0f;
 
-            foreach (var renderer in target.GetComponentsInChildren<Renderer>())
+            for (int i = 0; i < corners.Count; i++)
             {
-                // Частицы, линии и следы не в счёт: их рамка — не форма объекта.
-                if (renderer is not (MeshRenderer or SkinnedMeshRenderer))
-                    continue;
-
-                hasMeshes = true;
-                var bounds = renderer.localBounds;
-                var toWorld = renderer.transform.localToWorldMatrix;
-
-                for (int corner = 0; corner < 8; corner++)
-                {
-                    var cornerPoint = toWorld.MultiplyPoint3x4(bounds.center + Vector3.Scale(bounds.extents, CornerDirection(corner)));
-                    lowest = Mathf.Min(lowest, Vector3.Dot(cornerPoint - target.position, up));
-                }
+                float height = Vector3.Dot(corners[i] - target.position, up);
+                lowest = i == 0 ? height : Mathf.Min(lowest, height);
             }
 
-            return hasMeshes ? -lowest : 0f;
+            return -lowest;
         }
-
-        // Восемь углов коробки: каждый бит номера — плюс или минус по своей оси.
-        private static Vector3 CornerDirection(int corner) => new(
-            (corner & 1) == 0 ? -1f : 1f,
-            (corner & 2) == 0 ? -1f : 1f,
-            (corner & 4) == 0 ? -1f : 1f);
     }
 }
