@@ -4,6 +4,8 @@
     "references": [
         "FeatherKit.LiveBuilder",
         "FeatherKit.LiveBuilder.Editor",
+        "FeatherKit",
+        "FeatherKit.Editor",
         "Unity.Splines",
         "Unity.Mathematics",
         "UnityEngine.TestRunner",

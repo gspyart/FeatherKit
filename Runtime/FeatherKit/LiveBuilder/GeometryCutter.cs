@@ -1,4 +1,5 @@
 using FeatherKit.Attributes;
+using FeatherKit.LevelDesign;
 using UnityEngine;
 
 namespace FeatherKit.LiveBuilder
@@ -19,12 +20,13 @@ namespace FeatherKit.LiveBuilder
     /// прорезает стену, куда его поставили, а свою раму — нет. Режет только в редакторе: в игру попадает уже прорезанный меш.
     /// «Копии вверх» — тот же вырез на этажах выше: окно на все этажи одним объектом.
     /// Вырез в стене по линии или в здании может помнить своё место на линии: двигаешь точки — он едет со своим отрезком и поворачивается за ним.
+    /// Своего меша у выреза нет, поэтому размер для модификатора Array (ряд окон «от края») он сообщает сам — ширина, высота, глубина.
     /// </summary>
     [FDescription("Вырез: прорезает постройки Live Builder, которые пересекает, под любым углом. Опора — низ посередине, глубина — по синей оси.")]
     [AddComponentMenu("FeatherKit/Live Builder/Geometry Cutter")]
     [DisallowMultipleComponent]
     [SelectionBase]
-    public class GeometryCutter : MonoBehaviour, IStoreyCopies
+    public class GeometryCutter : MonoBehaviour, IStoreyCopies, IArrayCopySize
     {
         // Самая маленькая сторона выреза, м: тоньше — уже не дыра, а щель в расчёте.
         public const float MinSize = 0.02f;
@@ -157,6 +159,9 @@ namespace FeatherKit.LiveBuilder
             get => revealMaterial;
             set => revealMaterial = value;
         }
+
+        // IArrayCopySize: копии массива «от края» встают по ширине, высоте и глубине выреза, с его масштабом.
+        public Vector3 ArrayCopySize => Vector3.Scale(new Vector3(width, height, depth), transform.lossyScale);
 
         // ── Место на линии стены ─────────────────────────────────────────
 

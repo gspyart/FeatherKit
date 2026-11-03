@@ -174,8 +174,12 @@ namespace FeatherKit.EditorTools
 
 
         // Размер объекта в его осях, в метрах: рамка мешей его и его детей. Копии — точно такие же, поэтому шаг «от края» — размер плюс зазор.
+        // Объект, чей размер по мешам не виден (проём режет чужую стену), говорит его сам — IArrayCopySize.
         public static Vector3 CopySizeOf(GameObject original)
         {
+            if (original.TryGetComponent<IArrayCopySize>(out var ownSize))
+                return ownSize.ArrayCopySize;
+
             var root = original.transform;
             var toOriginal = Matrix4x4.TRS(root.position, root.rotation, Vector3.one).inverse;
             var bounds = new Bounds();

@@ -1,4 +1,6 @@
+using FeatherKit.EditorTools;
 using FeatherKit.EditorTools.LiveBuilder;
+using FeatherKit.LevelDesign;
 using FeatherKit.LiveBuilder;
 using NUnit.Framework;
 using UnityEngine;
@@ -7,7 +9,8 @@ using UnityEngine.Splines;
 namespace FeatherKit.Tests.LiveBuilder
 {
     /// <summary>
-    /// Вырез (<see cref="GeometryCutter"/>) в стенах и зданиях: прорезает дыру, копии вверх, едет за точками стены, встаёт на все этажи здания.
+    /// Вырез (<see cref="GeometryCutter"/>) в стенах и зданиях: прорезает дыру, копии вверх, едет за точками стены, встаёт на все этажи здания,
+    /// ряд копий модификатором Array встаёт «от края» по размеру выреза.
     /// </summary>
     public class GeometryCutterTests
     {
@@ -69,6 +72,31 @@ namespace FeatherKit.Tests.LiveBuilder
 
             Assert.That(Vector3.Distance(window.transform.position, Origin + new Vector3(5f, 0.5f, 5f)), Is.LessThan(0.01f), "вырез — на середине нового отрезка");
             Assert.That(Vector3.Angle(window.transform.right, new Vector3(1f, 0f, 1f)), Is.LessThan(0.5f), "и повёрнут вдоль него");
+        }
+
+
+        // ── Ряд копий ────────────────────────────────────────────────────
+
+        [Test]
+        public void ArrayOfCutters_StepsFromCutterEdge()
+        {
+            // Окна 2 м шириной с зазором 1 м: дыры 1–3, 4–6, 7–9 м по стене.
+            var wall = testScene.CreateWall(Vector3.zero, new Vector3(12f, 0f, 0f));
+            var window = CreateWindow(wall, 1f, 2f, 1.5f);
+
+            var array = window.gameObject.AddComponent<ArrayModifier>();
+            array.Counts = new Vector3Int(3, 1, 1);
+            array.StepsFromSize = true;
+            array.Gap = new Vector3(1f, 0f, 0f);
+            ArrayModifierBuilder.Rebuild(array);
+            HoleCutterLineSync.SyncAll();
+            SplineWallRebuilder.Rebuild(wall);
+
+            foreach (var holeCenter in new[] { 2f, 5f, 8f })
+                Assert.IsTrue(LiveBuilderTestScene.IsOpen(Origin + new Vector3(holeCenter, 1.25f, -2f), Vector3.forward, 4f), "дыра на " + holeCenter + " м");
+
+            foreach (var gapCenter in new[] { 3.5f, 6.5f })
+                Assert.IsFalse(LiveBuilderTestScene.IsOpen(Origin + new Vector3(gapCenter, 1.25f, -2f), Vector3.forward, 4f), "простенок на " + gapCenter + " м");
         }
 
 
