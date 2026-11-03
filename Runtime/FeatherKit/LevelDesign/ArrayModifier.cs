@@ -16,8 +16,8 @@ namespace FeatherKit.LevelDesign
     /// Модификатор Array, как в Blender: этот объект — первая копия, остальные встают рядом по сетке или по кругу —
     /// окна вдоль фасада, колонны по кругу зала. Ставится из окна Feather Modifiers кнопкой «Array» на выделенный объект.
     /// Копии — соседи объекта в том же родителе: экземпляры его префаба с теми же правками, а у объекта без префаба — его клоны.
-    /// Двигаешь или правишь объект — копии повторяют за ним; руками копии не правят. «Apply» снимает модификатор,
-    /// копии остаются обычными объектами. В игре компонент ничего не делает — только хранит настройки и список копий.
+    /// Двигаешь или правишь объект — копии повторяют за ним; руками копии не правят. Удалил объект — копии уходят с ним.
+    /// «Apply» снимает модификатор, копии остаются обычными объектами. В игре компонент ничего не делает — только хранит настройки и список копий.
     /// </summary>
     [FDescription("Array modifier: this object is the first copy, the others stand next to it in a grid or a circle. " +
                   "Edit or move this object and the copies follow. Apply keeps the copies as ordinary objects.")]
@@ -64,6 +64,9 @@ namespace FeatherKit.LevelDesign
         // Копии, которые собрал редактор, и чем они собраны: изменилось — пересборка. Пишет редактор.
         [SerializeField, HideInInspector] private List<GameObject> copies = new();
         [SerializeField, HideInInspector] private string builtSignature;
+
+        // Каким был объект изнутри (компоненты, дети), когда копии собраны: после Ctrl+Z совпало — копии уже верные. Пишет редактор.
+        [SerializeField, HideInInspector] private string builtContent;
 
 
         public ArrayModifierLayout Layout
@@ -129,6 +132,12 @@ namespace FeatherKit.LevelDesign
         {
             get => builtSignature;
             set => builtSignature = value;
+        }
+
+        public string BuiltContent
+        {
+            get => builtContent;
+            set => builtContent = value;
         }
     }
 }

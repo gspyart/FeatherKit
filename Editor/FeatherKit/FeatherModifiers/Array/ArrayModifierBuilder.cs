@@ -25,9 +25,11 @@ namespace FeatherKit.EditorTools
         // ── Сборка ───────────────────────────────────────────────────────
 
         // Собрано по нынешним настройкам и месту объекта: та же подпись, все копии на месте.
-        public static bool IsUpToDate(ArrayModifier array)
+        // includesContent — ещё и объект изнутри тот же, что при сборке: так видно, что после Ctrl+Z копии уже верные.
+        public static bool IsUpToDate(ArrayModifier array, bool includesContent = false)
         {
-            return array.BuiltSignature == SignatureOf(array) && array.Copies.TrueForAll(copy => copy != null);
+            return array.BuiltSignature == SignatureOf(array) && array.Copies.TrueForAll(copy => copy != null)
+                   && (!includesContent || array.BuiltContent == ContentOf(array));
         }
 
 
@@ -54,6 +56,7 @@ namespace FeatherKit.EditorTools
             }
 
             array.BuiltSignature = SignatureOf(array);
+            array.BuiltContent = ContentOf(array);
             EditorUtility.SetDirty(array);
         }
 
@@ -242,6 +245,27 @@ namespace FeatherKit.EditorTools
                 signature.Append('|').Append(CopySizeOf(array.gameObject).ToString("F4", culture));
 
             return signature.ToString();
+        }
+
+
+        // Объект изнутри одним хешем: имена, включённость, слои и все компоненты его и детей, кроме модификатора и места самого объекта —
+        // место в подписи. Копии повторяют именно это.
+        private static string ContentOf(ArrayModifier array)
+        {
+            var content = new Hash128();
+
+            foreach (var node in array.GetComponentsInChildren<Transform>(true))
+            {
+                content.Append(node.name);
+                content.Append(node.gameObject.activeSelf ? 1 : 0);
+                content.Append(node.gameObject.layer);
+
+                foreach (var component in node.GetComponents<Component>())
+                    if (component != null && component is not ArrayModifier && component != array.transform)
+                        content.Append(EditorJsonUtility.ToJson(component));
+            }
+
+            return content.ToString();
         }
     }
 }
