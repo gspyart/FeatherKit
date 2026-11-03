@@ -6,8 +6,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Каркасы коробок и ручки выделенной коробки, комнаты или лестницы в окне сцены. Ручки — крупные квадраты на гранях (<see cref="LiveBuilderFaceHandles"/>):
-    /// тянешь — ходит только эта грань, противоположная стоит; Alt — обе сразу, Shift — все стороны вместе;
-    /// у коробки Ctrl — выдавить от грани новую коробку (<see cref="BoxModelPartExtrusion"/>).
+    /// тянешь — ходит только эта грань, противоположная стоит; Alt — обе сразу, Alt+Shift — все стороны вместе;
+    /// у коробки Ctrl — выдавить от грани новую коробку (<see cref="BoxModelPartExtrusion"/>), Shift+клик по квадрату — набрать грань (<see cref="BoxModelFaceSelection"/>):
+    /// потянул квадрат набранной — едут все набранные (<see cref="BoxModelFaceMoveHandle"/>).
     /// Грани прилипают к сетке <see cref="BoxModelGrid"/>, всё с Undo. Переносят коробку штатным инструментом Move.
     /// У лестницы ещё стрелка подъёма на полу и сколько ступеней.
     /// </summary>
@@ -46,18 +47,51 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Ручки ────────────────────────────────────────────────────────
 
         // Точки на гранях коробки: тянешь — грань ходит по сетке, коробка не тоньше одного шага.
-        // С Ctrl — коробка стоит, от грани растёт новая (<see cref="BoxModelPartExtrusion"/>).
+        // С Ctrl — коробка стоит, от грани растёт новая (<see cref="BoxModelPartExtrusion"/>). Shift+клик — грань в набор или из набора;
+        // тянешь грань из набора, где их несколько, — едут все набранные.
         public static void DrawHandles(BoxModel model, BoxModelPart part)
         {
             var color = part.Mode == BoxModelPartMode.Add ? AddColor : CutColor;
             BoxModelPartExtrusion.FinishIfReleased();
             BoxModelPartExtrusion.DrawDepthLabel();
 
-            if (!DragFaces(model, part.transform, part.Size, color, null, out var min, out var max, out var draggedMin, out var draggedMax))
+            if (!DragFaces(model, part.transform, part.Size, color, null, out var min, out var max, out var draggedMin, out var draggedMax,
+                    (axis, sign) => BoxModelFaceSelection.Toggle(new BoxModelPartFace(part, BoxFaces.Index(axis, sign > 0f)))))
                 return;
+
+            if (TryFindMovedFace(min, max, draggedMin, draggedMax, out var face, out var faceCoordinate)
+                && BoxModelFaceSelection.Faces.Count > 1 && BoxModelFaceSelection.Contains(new BoxModelPartFace(part, face)))
+            {
+                BoxModelFaceMoveHandle.DragCollectedFaces(new BoxModelPartFace(part, face), faceCoordinate, EditorGUI.actionKey);
+                return;
+            }
 
             if (!BoxModelPartExtrusion.TryExtrude(model, part, min, max, draggedMin, draggedMax, EditorGUI.actionKey))
                 ResizePiece(model, part, part.transform, min, max, draggedMin, draggedMax, size => part.Size = size);
+        }
+
+        // Какую одну грань сдвинули и где она теперь; сдвинуто больше одной (Alt, Alt+Shift) — false.
+        private static bool TryFindMovedFace(Vector3 min, Vector3 max, Vector3 draggedMin, Vector3 draggedMax, out int face, out float faceCoordinate)
+        {
+            face = -1;
+            faceCoordinate = 0f;
+
+            for (var axis = 0; axis < 3; axis++)
+            {
+                var isMinMoved = !Mathf.Approximately(min[axis], draggedMin[axis]);
+                var isMaxMoved = !Mathf.Approximately(max[axis], draggedMax[axis]);
+
+                if (!isMinMoved && !isMaxMoved)
+                    continue;
+
+                if (face >= 0 || isMinMoved && isMaxMoved)
+                    return false;
+
+                face = BoxFaces.Index(axis, isMaxMoved);
+                faceCoordinate = isMaxMoved ? draggedMax[axis] : draggedMin[axis];
+            }
+
+            return face >= 0;
         }
 
 
@@ -126,14 +160,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // Ручки граней: тянули ли. Углы до и после сдвига — в осях объекта, без сетки.
         private static bool DragFaces(BoxModel model, Transform pieceTransform, Vector3 size, Color color, string[] axisNames,
-            out Vector3 min, out Vector3 max, out Vector3 draggedMin, out Vector3 draggedMax)
+            out Vector3 min, out Vector3 max, out Vector3 draggedMin, out Vector3 draggedMax, System.Action<int, float> onShiftClick = null)
         {
             min = model.transform.InverseTransformPoint(pieceTransform.position);
             max = min + size;
             draggedMin = min;
             draggedMax = max;
 
-            return LiveBuilderFaceHandles.Draw(model.transform.localToWorldMatrix, ref draggedMin, ref draggedMax, color, axisNames);
+            return LiveBuilderFaceHandles.Draw(model.transform.localToWorldMatrix, ref draggedMin, ref draggedMax, color, axisNames, 7, onShiftClick);
         }
 
         // Сдвинутые грани — на сетку, новый угол и размер — в объект, с Undo.

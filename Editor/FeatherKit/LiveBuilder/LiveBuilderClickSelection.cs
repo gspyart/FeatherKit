@@ -6,43 +6,23 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Выделение кликом в инструменте «Live Builder» — что ближе к камере под мышью (<see cref="LiveBuilderSceneHit"/>):
+    /// Выделение кликом в Live Builder — что ближе к камере под мышью (<see cref="LiveBuilderSceneHit"/>), если это правит выбранный инструмент
+    /// (<see cref="LiveBuilderToolScope"/>): в «Выделении» — что угодно, в «Коробке» — только коробки и так далее:
     /// - грань объекта из коробок — коробка, комната или лестница, которая её создала; в режиме «Грани» — сама грань
     /// - стена по линии или здание по контуру — они сами
     /// - дыра от выреза (<see cref="GeometryCutter"/>) или вырезающей коробки в здании — сам резчик:
     ///   он невидим, но его коробка ближе того, что за дырой, — и откос дыры тоже
-    /// - мимо всего — снять выделение. Shift — добавить к выделению или убрать
+    /// - мимо всего или не своё — снять выделение. Shift — добавить к выделению или убрать
     /// Спрятанное разрезом над этажом клик не ловит.
     /// </summary>
     public static class LiveBuilderClickSelection
     {
-        public static void Select(Event current)
+        public static void Select(Event current, LiveBuilderTool tool)
         {
             var hit = LiveBuilderSceneHit.Find(HandleUtility.GUIPointToWorldRay(current.mousePosition));
 
-            if (hit.IsHoleCutterInFront)
-            {
-                Apply(hit.HoleCutter.gameObject, current.shift);
-                return;
-            }
-
-            if (hit.IsPathOwnerCloser)
-            {
-                Apply(hit.PathOwner.gameObject, current.shift);
-                return;
-            }
-
-            if (!hit.HasBoxSurface)
-            {
-                if (current.shift)
-                    return;
-
-                BoxModelFaceSelection.Clear();
-                Selection.activeObject = null;
-                return;
-            }
-
-            if (BoxModelSelectionModeSetting.IsSelectingFaces)
+            if (hit.HasBoxSurface && !hit.IsHoleCutterInFront && !hit.IsPathOwnerCloser && BoxModelSelectionModeSetting.IsSelectingFaces
+                && LiveBuilderToolScope.CanEditFaces(tool))
             {
                 if (BoxModelPartFace.TryFindUnder(hit.BoxSurface, out var partFace))
                     BoxModelFaceSelection.Select(partFace, current.shift);
@@ -50,8 +30,49 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return;
             }
 
-            var clicked = BoxModelPicker.SourceBoxOf(hit.BoxSurface)?.Owner;
-            Apply(clicked != null ? clicked.gameObject : hit.BoxSurface.Model.gameObject, current.shift);
+            var clicked = ClickedObject(hit);
+
+            if (clicked != null && LiveBuilderToolScope.CanEdit(tool, clicked))
+            {
+                Apply(clicked, current.shift);
+                return;
+            }
+
+            if (current.shift)
+                return;
+
+            BoxModelFaceSelection.Clear();
+            Selection.activeObject = null;
+        }
+
+
+        // В инструментах линии клик по своему готовому (стене в «Стене», зданию в «Здании») выделяет его, а не начинает новую линию.
+        // Не своё или пусто — false: клик достанется рисованию.
+        public static bool TrySelectOwn(Event current, LiveBuilderTool tool)
+        {
+            var clicked = ClickedObject(LiveBuilderSceneHit.Find(HandleUtility.GUIPointToWorldRay(current.mousePosition)));
+
+            if (clicked == null || !LiveBuilderToolScope.CanEdit(tool, clicked))
+                return false;
+
+            Apply(clicked, false);
+            return true;
+        }
+
+        // Что под мышью выделилось бы: резчик дыры, стена или здание, коробка или комната с лестницей, создавшая грань, иначе объект из коробок.
+        private static GameObject ClickedObject(LiveBuilderSceneHit hit)
+        {
+            if (hit.IsHoleCutterInFront)
+                return hit.HoleCutter.gameObject;
+
+            if (hit.IsPathOwnerCloser)
+                return hit.PathOwner.gameObject;
+
+            if (!hit.HasBoxSurface)
+                return null;
+
+            var owner = BoxModelPicker.SourceBoxOf(hit.BoxSurface)?.Owner;
+            return owner != null ? owner.gameObject : hit.BoxSurface.Model.gameObject;
         }
 
         // Без Shift — только этот объект; с Shift — добавить или убрать.

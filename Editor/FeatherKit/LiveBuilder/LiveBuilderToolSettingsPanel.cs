@@ -39,10 +39,27 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     DrawRulerSettings();
                     break;
 
+                case LiveBuilderTool.Select:
+                    DrawSelectSettings();
+                    break;
+
                 default:
                     DrawBoxSettings();
                     break;
             }
+        }
+
+
+        // ── Выделение ────────────────────────────────────────────────────
+
+        private static void DrawSelectSettings()
+        {
+            using (LiveBuilderWindowControls.Card("Выделение"))
+                DrawSelectionModeSwitch();
+
+            LiveBuilderWindowControls.Note("Клик выделяет что угодно: коробку, комнату, лестницу, стену, здание, проём; Shift — добавить или убрать. " +
+                                           "У выделенного — все его ручки: грани коробок (с Ctrl — выдавить новую), точки стен и контуров, ручки проёмов, повтор. " +
+                                           "Остальные инструменты создают своё и правят только своё. Esc в них — сюда.");
         }
 
 
@@ -59,19 +76,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (drawMode != BoxModelDrawModeSetting.Current)
                     BoxModelDrawModeSetting.Current = drawMode;
 
-                var selectionMode = (BoxModelSelectionMode)LiveBuilderWindowControls.Switch(
-                    new GUIContent("Клик выделяет", "Коробку целиком — тянешь точки на её гранях. Грань — с Shift несколько, стрелки двигают все"),
-                    (int)BoxModelSelectionModeSetting.Current, "Коробки", "Грани");
-
-                if (selectionMode != BoxModelSelectionModeSetting.Current)
-                    BoxModelSelectionModeSetting.Current = selectionMode;
+                DrawSelectionModeSwitch();
 
                 if (GUILayout.Button(new GUIContent("Следующая — новый объект", "Следующая коробка — отдельный объект, даже поверх другого")))
                     BoxModelActions.BeginNewModelDrawing();
             }
 
             LiveBuilderWindowControls.Note("Протяни по поверхности, мышью глубина, клик — готово. Клик по грани — выделить коробку. " +
-                                           "Выделено здание или стена — их точки тянутся прямо в сцене.");
+                                           "Здесь правятся только коробки; остальное — в своих инструментах или в «Выделении».");
+        }
+
+        // Что выделяет клик: коробку целиком или грань — в «Выделении» и «Коробке».
+        private static void DrawSelectionModeSwitch()
+        {
+            var selectionMode = (BoxModelSelectionMode)LiveBuilderWindowControls.Switch(
+                new GUIContent("Клик выделяет", "Коробку целиком — тянешь точки на её гранях. Грань — с Shift несколько, стрелки двигают все"),
+                (int)BoxModelSelectionModeSetting.Current, "Коробки", "Грани");
+
+            if (selectionMode != BoxModelSelectionModeSetting.Current)
+                BoxModelSelectionModeSetting.Current = selectionMode;
         }
 
 

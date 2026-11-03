@@ -83,6 +83,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Набрать грань выделенной коробки или убрать из набора — Shift+клик по её квадрату. Выделение в Unity не трогает.
+        public static void Toggle(BoxModelPartFace partFace)
+        {
+            var index = SelectedFaces.FindIndex(selected => IsSame(selected, partFace));
+
+            if (index >= 0)
+                SelectedFaces.RemoveAt(index);
+            else
+                SelectedFaces.Add(partFace);
+        }
+
+
         public static void Clear()
         {
             SelectedFaces.Clear();
@@ -110,9 +122,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Selection.objects = models.ToArray();
         }
 
+        // Грань живёт, пока выделен её объект (режим «Грани») или сама коробка (набор Shift+кликом по квадратам).
         private static bool IsStale(BoxModelPartFace partFace)
         {
-            return partFace.Part == null || partFace.Model == null || !Selection.Contains(partFace.Model.gameObject);
+            return partFace.Part == null || partFace.Model == null
+                   || !Selection.Contains(partFace.Model.gameObject) && !Selection.Contains(partFace.Part.gameObject);
         }
 
         private static bool IsSame(BoxModelPartFace first, BoxModelPartFace second)

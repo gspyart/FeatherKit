@@ -6,7 +6,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Ручки граней коробки в окне сцены — для коробок, комнат, лестниц и вырезов: крупный квадрат в середине каждой грани
     /// и стрелка наружу, под мышью — белые, ловятся издалека. Тянешь — ходит только эта грань, противоположная стоит;
-    /// Alt — обе грани навстречу, Shift — все стороны вместе. Пока тянешь — рядом размер по этой оси.
+    /// Alt — обе грани навстречу, Alt+Shift — все стороны вместе. Shift+клик — зовущему (у коробки: набрать грань). Пока тянешь — рядом размер по этой оси.
     /// Сетку и что делать с новым размером решает тот, кто зовёт.
     /// </summary>
     public static class LiveBuilderFaceHandles
@@ -22,7 +22,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Ручки граней коробки min–max в осях frame. Возвращает, тянули ли; min и max — новые, без сетки.
         // axisNames — как назвать размер по X, Y, Z в подписи («длина», «ширина»); null — «X», «Y», «Z».
         // editableAxes — по каким осям есть ручки, биты 1 — X, 2 — Y, 4 — Z: у проёма глубины нет, она — толщина стены.
-        public static bool Draw(Matrix4x4 frame, ref Vector3 min, ref Vector3 max, Color color, string[] axisNames = null, int editableAxes = 7)
+        // onShiftClick — Shift+клик по квадрату (ось, знак грани): ручка не тянется, клик отдаётся сюда; null — Shift ничего особого не значит.
+        public static bool Draw(Matrix4x4 frame, ref Vector3 min, ref Vector3 max, Color color, string[] axisNames = null, int editableAxes = 7,
+            System.Action<int, float> onShiftClick = null)
         {
             var isChanged = false;
 
@@ -30,7 +32,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 for (var axis = 0; axis < 3; axis++)
                     if ((editableAxes & (1 << axis)) != 0)
                         foreach (var sign in new[] { -1f, 1f })
-                            isChanged |= DrawFace(axis, sign, ref min, ref max, color, axisNames);
+                            isChanged |= DrawFace(axis, sign, ref min, ref max, color, axisNames, onShiftClick);
 
             return isChanged;
         }
@@ -71,7 +73,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Одна грань: квадрат-ползунок вдоль своей оси и стрелка наружу.
-        private static bool DrawFace(int axis, float sign, ref Vector3 min, ref Vector3 max, Color color, string[] axisNames)
+        private static bool DrawFace(int axis, float sign, ref Vector3 min, ref Vector3 max, Color color, string[] axisNames, System.Action<int, float> onShiftClick)
         {
             var control = GUIUtility.GetControlID(FaceControlHint, FocusType.Passive);
             var center = (min + max) / 2f;
@@ -87,6 +89,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (Event.current.type == EventType.Repaint)
                 DrawArrow(faceCenter, direction, size);
+
+            var current = Event.current;
+
+            if (onShiftClick != null && current.type == EventType.MouseDown && current.button == 0 && current.shift && !current.alt
+                && HandleUtility.nearestControl == control)
+            {
+                onShiftClick(axis, sign);
+                current.Use();
+                return false;
+            }
 
             EditorGUI.BeginChangeCheck();
             var moved = Handles.Slider(control, faceCenter, direction, size, Handles.DotHandleCap, 0f);
@@ -110,13 +122,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Handles.ConeHandleCap(0, tip, Quaternion.LookRotation(direction), size * 1.4f, EventType.Repaint);
         }
 
-        // Грань сдвинулась на delta: только она; с Alt — и противоположная навстречу; с Shift — все стороны в той же доле, противоположная грань стоит.
+        // Грань сдвинулась на delta: только она; с Alt — и противоположная навстречу; с Alt+Shift — все стороны в той же доле, противоположная грань стоит.
         private static void MoveFace(int axis, float sign, float delta, ref Vector3 min, ref Vector3 max)
         {
             var current = Event.current;
             var oldSize = max - min;
 
-            if (current.shift && oldSize[axis] > 0.0001f)
+            if (current.shift && current.alt && oldSize[axis] > 0.0001f)
             {
                 var newAxisSize = Mathf.Max(0.001f, oldSize[axis] + delta * sign);
                 var scale = newAxisSize / oldSize[axis];

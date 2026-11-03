@@ -10,6 +10,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Тянешь — все грани сдвигаются на одно и то же расстояние по сетке, каждая только поперёк себя:
     /// выделил верх трёх коробок, потянул вверх — все три выросли одинаково. Коробка не тоньше шага сетки, всё с Undo.
     /// С Ctrl — выдавить: от каждой грани новая коробка (<see cref="BoxModelPartExtrusion"/>).
+    /// Тот же набор без режима «Грани»: у выделенной коробки Shift+клик по квадратам граней (<see cref="BoxModelPartHandles"/>) — подсветка здесь,
+    /// а потянул квадрат любой из набранных — все грани уходят на то же расстояние наружу, каждая поперёк себя.
     /// </summary>
     public static class BoxModelFaceMoveHandle
     {
@@ -19,6 +21,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static bool isDragging;
         private static Vector3 dragStartPosition;
         private static Vector3 handlePosition;
+
+        // Где была схваченная грань набора в начале перетаскивания её квадрата, в осях объекта.
+        private static float dragStartFaceCoordinate;
         private static readonly Dictionary<BoxModelPart, (Vector3 Min, Vector3 Max)> BoxesAtDragStart = new();
 
 
@@ -41,6 +46,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 DrawFace(partFace, new Color(SelectedFaceColor.r, SelectedFaceColor.g, SelectedFaceColor.b, 0.25f), SelectedFaceColor);
 
             DrawMoveHandle(faces);
+        }
+
+
+        // Набор граней у выделенных коробок без режима «Грани»: только подсветка — тянут его квадраты граней.
+        public static void DrawCollectedFaces()
+        {
+            EndDragIfReleased();
+
+            foreach (var partFace in BoxModelFaceSelection.Faces)
+                DrawFace(partFace, new Color(SelectedFaceColor.r, SelectedFaceColor.g, SelectedFaceColor.b, 0.25f), SelectedFaceColor);
         }
 
 
@@ -91,8 +106,39 @@ namespace FeatherKit.EditorTools.LiveBuilder
             handlePosition = movedPosition;
 
             // С Ctrl грани стоят, а от каждой растёт новая коробка.
-            if (!BoxModelPartExtrusion.TryExtrudeFaces(faces, handlePosition - dragStartPosition, EditorGUI.actionKey))
-                MoveFaces(faces, handlePosition - dragStartPosition);
+            var worldOffset = handlePosition - dragStartPosition;
+
+            if (!BoxModelPartExtrusion.TryExtrudeFaces(faces, worldOffset, EditorGUI.actionKey))
+                MoveFaces(faces, partFace => BoxModelGrid.Snap(partFace.Model.transform.InverseTransformVector(worldOffset)[BoxFaces.Axis(partFace.Face)],
+                    BoxFaces.Axis(partFace.Face)));
+        }
+
+        // Тянут квадрат грани, которая в наборе: все набранные — на то же расстояние наружу, каждая поперёк себя, по сетке; с Ctrl — выдавить от всех.
+        // faceCoordinate — где сейчас схваченная грань по своей оси, в осях объекта, без сетки.
+        public static void DragCollectedFaces(BoxModelPartFace grabbed, float faceCoordinate, bool isExtruding)
+        {
+            var faces = BoxModelFaceSelection.Faces;
+            var axis = BoxFaces.Axis(grabbed.Face);
+            var isPositive = BoxFaces.IsPositive(grabbed.Face);
+
+            if (!isDragging)
+            {
+                var min = BoxModelRebuilder.LocalMinOf(grabbed.Model, grabbed.Part);
+                dragStartFaceCoordinate = isPositive ? min[axis] + grabbed.Part.Size[axis] : min[axis];
+                BeginDrag(faces, Vector3.zero);
+            }
+
+            var outward = (faceCoordinate - dragStartFaceCoordinate) * (isPositive ? 1f : -1f);
+
+            if (!BoxModelPartExtrusion.TryExtrudeFacesOutward(faces, outward, isExtruding))
+                MoveFaces(faces, partFace => BoxModelGrid.Snap(outward, BoxFaces.Axis(partFace.Face)) * (BoxFaces.IsPositive(partFace.Face) ? 1f : -1f));
+        }
+
+        // Отпустили — следующее перетаскивание начнётся заново от того, где грани сейчас.
+        public static void EndDragIfReleased()
+        {
+            if (isDragging && GUIUtility.hotControl == 0)
+                isDragging = false;
         }
 
         private static void BeginDrag(IReadOnlyList<BoxModelPartFace> faces, Vector3 position)
@@ -108,8 +154,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
         }
 
-        // Каждая грань — на сдвиг вдоль своей оси, округлённый до шага сетки. Две грани одной коробки двигаются вместе.
-        private static void MoveFaces(IReadOnlyList<BoxModelPartFace> faces, Vector3 worldOffset)
+        // Каждая грань — на свой сдвиг вдоль своей оси (уже по сетке), от того, где она была в начале. Две грани одной коробки двигаются вместе.
+        private static void MoveFaces(IReadOnlyList<BoxModelPartFace> faces, System.Func<BoxModelPartFace, float> snappedOffsetOf)
         {
             var newBoxes = new Dictionary<BoxModelPart, (Vector3 Min, Vector3 Max, Vector3Int MovedSides)>();
 
@@ -122,8 +168,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     box = (startBox.Min, startBox.Max, Vector3Int.zero);
 
                 var axis = BoxFaces.Axis(partFace.Face);
-                var localOffset = partFace.Model.transform.InverseTransformVector(worldOffset)[axis];
-                var snappedOffset = BoxModelGrid.Snap(localOffset, axis);
+                var snappedOffset = snappedOffsetOf(partFace);
 
                 // MovedSides по оси: 1 — ходит верхняя грань, −1 — нижняя, 2 — обе.
                 if (BoxFaces.IsPositive(partFace.Face))

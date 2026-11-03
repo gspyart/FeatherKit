@@ -8,6 +8,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Клавиши правки контура (<see cref="LiveBuilderContourHandles"/>), пока выбраны точки: Delete — убрать выбранные
     /// (у замкнутого контура остаётся хотя бы три, у линии — две; объект целиком тогда не удаляется), стрелки — сдвинуть на шаг сетки, Esc — снять выбор.
+    /// У стены по линии, пока видны её точки, C — замкнуть или разомкнуть, выбраны точки или нет. Здание всегда замкнуто.
     /// </summary>
     public static class LiveBuilderContourKeys
     {
@@ -19,6 +20,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public static bool Handle(Component owner, SplineContainer container)
         {
             var current = Event.current;
+
+            if (current.type == EventType.KeyDown && current.keyCode == KeyCode.C && !current.control && !current.alt && CanToggleClosed(owner, container))
+            {
+                ToggleClosed(container);
+                current.Use();
+                return true;
+            }
 
             if (LiveBuilderContourSelection.Knots.Count == 0)
                 return false;
@@ -69,6 +77,22 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var worldShift = (frame != null ? frame.TransformDirection(direction) : direction) * BoxModelGrid.CurrentStep;
             localShift = owner.transform.InverseTransformDirection(worldShift);
             return direction != Vector3.zero;
+        }
+
+
+        // Замкнуть или разомкнуть — только стену по линии, и замкнуть — не меньше чем из трёх точек.
+        public static bool CanToggleClosed(Component owner, SplineContainer container)
+        {
+            return owner is FeatherKit.LiveBuilder.SplineWall && (container.Spline.Closed || container.Spline.Count >= MinClosedKnots);
+        }
+
+
+        // Замкнуть: последняя точка соединяется с первой. Разомкнуть: замыкающий отрезок убирается, точки на месте. Одним шагом Ctrl+Z;
+        // стена пересобирается сама, проёмы на линии остаются, где стояли. Зовут клавиша C в сцене и кнопка в окне.
+        public static void ToggleClosed(SplineContainer container)
+        {
+            Undo.RecordObject(container, container.Spline.Closed ? "Open Wall" : "Close Wall");
+            container.Spline.Closed = !container.Spline.Closed;
         }
 
 

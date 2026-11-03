@@ -418,14 +418,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
                         if (GUILayout.Button(new GUIContent("Убрать выбранные", "Как Delete в сцене. Меньше трёх точек у замкнутого контура и двух у линии не останется")))
                             LiveBuilderContourKeys.RemoveSelectedKnots(container);
 
-                    if (canOpen && GUILayout.Button(container.Spline.Closed ? "Разомкнуть" : "Замкнуть"))
-                    {
-                        Undo.RecordObject(container, "Close Wall");
-                        container.Spline.Closed = !container.Spline.Closed;
-                    }
+                    using (new EditorGUI.DisabledScope(!container.Spline.Closed && container.Spline.Count < 3))
+                        if (canOpen && GUILayout.Button(new GUIContent(container.Spline.Closed ? "Разомкнуть" : "Замкнуть",
+                                "Замкнуть — последняя точка соединится с первой, разомкнуть — замыкающий отрезок уберётся. В сцене — клавиша C")))
+                            LiveBuilderContourKeys.ToggleClosed(container);
                 }
 
-                LiveBuilderWindowControls.Note("В сцене, в инструменте «Коробка» (" + LiveBuilderToolSetting.HotkeyOf(LiveBuilderTool.Box) + "): тяни точку, «+» на отрезке — новая точка, " +
+                LiveBuilderWindowControls.Note("В сцене, в «Выделении» (" + LiveBuilderToolSetting.HotkeyOf(LiveBuilderTool.Select) + ") или в инструменте этой постройки: тяни точку, «+» на отрезке — новая точка, " +
                                                "«+» за концом — продлить, Shift+клик или Shift+рамка — выбрать несколько, двойной клик — угол → плавно → Безье, " +
                                                "у Безье тяни усы, у угла — голубая ручка скругления, стрелки — на шаг сетки, Delete — убрать.");
             }

@@ -117,7 +117,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderTool.Stairs => StairsLines(),
                 LiveBuilderTool.Opening => OpeningLines(),
                 LiveBuilderTool.Ruler => RulerLines(),
+                LiveBuilderTool.Select => SelectLines(),
                 _ => BoxLines()
+            };
+        }
+
+        // Стрелка курсора.
+        private static List<Vector2[]> SelectLines()
+        {
+            return new List<Vector2[]>
+            {
+                Points(6, 3, 6, 19, 10, 15.5f, 13, 21, 15.5f, 20, 12.5f, 14, 18, 14, 6, 3)
             };
         }
 

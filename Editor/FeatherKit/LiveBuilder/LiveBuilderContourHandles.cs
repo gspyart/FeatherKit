@@ -41,16 +41,27 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public string Hint => LiveBuilderContourSelection.Knots.Count > 0
             ? "Выбрано точек: " + LiveBuilderContourSelection.Knots.Count + ". Тяни — двигать, стрелки — на шаг сетки, Delete — убрать, " +
               "двойной клик — угол, плавно или Безье, у Безье — тяни усы, у угла — голубая ручка: скругление, Esc — снять выбор"
-            : "Точки контура: тяни — двигать, «+» — новая точка, Shift+клик или Shift+рамка — выбрать несколько, двойной клик — угол, плавно или Безье";
+            : "Точки контура: тяни — двигать, «+» — новая точка, Shift+клик или Shift+рамка — выбрать несколько, двойной клик — угол, плавно или Безье" +
+              (LiveBuilderContourSelection.Owner is SplineWall ? ", C — замкнуть или разомкнуть" : "");
 
 
         // ── Окно сцены ───────────────────────────────────────────────────
 
         // Звать до общего элемента инструмента: точки и «+» ближе к мыши забирают нажатие себе.
+        // canEdit — правит ли этот контур выбранный инструмент; не правит — видна только линия контура, без ручек.
         // allowsBoxSelect — Shift+рамка по пустому месту; в инструментах линии выключена: там Shift+клик ставит плавную точку.
-        public void OnSceneGUI(bool allowsBoxSelect = true)
+        public void OnSceneGUI(System.Predicate<Component> canEdit, bool allowsBoxSelect)
         {
             var owner = SelectedOwner();
+
+            if (owner != null && !canEdit(owner))
+            {
+                if (Event.current.type == EventType.Repaint)
+                    LiveBuilderContourDrawing.DrawContourLines(owner);
+
+                owner = null;
+            }
+
             LiveBuilderContourSelection.SetOwner(owner);
 
             var dragControl = GUIUtility.GetControlID(DragControlHint, FocusType.Passive);

@@ -16,7 +16,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public static class BoxModelPartExtrusion
     {
-        public const string Hint = "Тяни квадрат — размер, Ctrl — выдавить новую коробку от грани. Delete — удалить коробку";
+        public const string Hint = "Тяни квадрат — размер, Ctrl — выдавить новую коробку от грани, Alt — обе грани, Alt+Shift — все стороны. " +
+                                   "Shift+клик по квадратам — набрать грани: потянешь одну — едут все. Delete — удалить коробку";
 
         // Что выдавливаем сейчас: по одной записи на грань. Не выдавливаем — пусто.
         private static readonly List<FaceExtrusion> Extrusions = new();
@@ -74,25 +75,47 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // без Ctrl — false, грани двигаются как обычно. Каждая растёт поперёк себя: тянешь вверх — растут только от верхних граней.
         public static bool TryExtrudeFaces(IReadOnlyList<BoxModelPartFace> faces, Vector3 worldOffset, bool isExtrudeKeyHeld)
         {
-            DropDeletedExtrusions();
-
-            if (Extrusions.Count == 0)
-            {
-                if (!isExtrudeKeyHeld || faces.Count == 0)
-                    return false;
-
-                BeginUndoGroup(true);
-
-                foreach (var partFace in faces)
-                    if (partFace.Model != null)
-                        Begin(partFace.Model, partFace.Part, partFace.Face);
-            }
+            if (!TryBeginFaces(faces, isExtrudeKeyHeld))
+                return false;
 
             foreach (var extrusion in Extrusions)
             {
                 var offset = extrusion.Model.transform.InverseTransformVector(worldOffset)[extrusion.Axis];
                 Grow(extrusion, extrusion.SourceFace + offset);
             }
+
+            return true;
+        }
+
+
+        // То же, но каждая грань — на одно расстояние наружу, поперёк себя: потянул одну из набранных — от всех растут новые коробки одинаково.
+        public static bool TryExtrudeFacesOutward(IReadOnlyList<BoxModelPartFace> faces, float outwardDistance, bool isExtrudeKeyHeld)
+        {
+            if (!TryBeginFaces(faces, isExtrudeKeyHeld))
+                return false;
+
+            foreach (var extrusion in Extrusions)
+                Grow(extrusion, extrusion.SourceFace + (extrusion.IsPositive ? outwardDistance : -outwardDistance));
+
+            return true;
+        }
+
+        // Выдавливание граней уже идёт или начинается сейчас (Ctrl зажат) — true.
+        private static bool TryBeginFaces(IReadOnlyList<BoxModelPartFace> faces, bool isExtrudeKeyHeld)
+        {
+            DropDeletedExtrusions();
+
+            if (Extrusions.Count > 0)
+                return true;
+
+            if (!isExtrudeKeyHeld || faces.Count == 0)
+                return false;
+
+            BeginUndoGroup(true);
+
+            foreach (var partFace in faces)
+                if (partFace.Model != null)
+                    Begin(partFace.Model, partFace.Part, partFace.Face);
 
             return true;
         }

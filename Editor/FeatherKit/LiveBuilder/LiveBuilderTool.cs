@@ -3,7 +3,10 @@ using UnityEngine;
 
 namespace FeatherKit.EditorTools.LiveBuilder
 {
-    /// <summary>Что делает мышь в окне сцены, пока включён Live Builder.</summary>
+    /// <summary>
+    /// Что делает мышь в окне сцены, пока включён Live Builder. «Выделение» выделяет и правит всё, остальные создают и правят своё
+    /// (<see cref="LiveBuilderToolScope"/>). Номера хранятся в настройках редактора — новые только в конец.
+    /// </summary>
     public enum LiveBuilderTool
     {
         Box,
@@ -12,7 +15,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         Wall,
         Opening,
         Stairs,
-        Ruler
+        Ruler,
+        Select
     }
 
 
@@ -21,7 +25,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public static class LiveBuilderToolSetting
     {
-        // Сколько первых инструментов палитры — «Строить»; остальные — «Детали и мера».
+        // Палитра рядами: «Выделение» — сверху одно, за ним «Строить», остальные — «Детали и мера».
+        public const int SelectToolCount = 1;
         public const int BuildToolCount = 4;
 
         private const string PreferenceKey = "FeatherKit.LiveBuilder.Tool";
@@ -29,6 +34,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Порядок в палитре окна и панели сцены; номер в нём — клавиша 1, 2, 3… в окне сцены.
         public static readonly LiveBuilderTool[] PaletteOrder =
         {
+            LiveBuilderTool.Select,
             LiveBuilderTool.Box, LiveBuilderTool.Room, LiveBuilderTool.Wall, LiveBuilderTool.Building,
             LiveBuilderTool.Stairs, LiveBuilderTool.Opening, LiveBuilderTool.Ruler
         };
@@ -43,7 +49,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             get
             {
-                var stored = (LiveBuilderTool)EditorPrefs.GetInt(PreferenceKey, (int)LiveBuilderTool.Box);
+                var stored = (LiveBuilderTool)EditorPrefs.GetInt(PreferenceKey, (int)LiveBuilderTool.Select);
                 return System.Array.IndexOf(PaletteOrder, stored) >= 0 ? stored : LiveBuilderTool.Opening;
             }
             set
@@ -84,6 +90,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderTool.Opening => "Проём",
                 LiveBuilderTool.Stairs => "Лестница",
                 LiveBuilderTool.Ruler => "Линейка",
+                LiveBuilderTool.Select => "Выделение",
                 _ => "Коробка"
             };
         }
@@ -101,7 +108,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
                                            "насквозь или ниша. Форма — прямоугольник, арка, круг. Клик по дыре — выделить проём",
                 LiveBuilderTool.Stairs => "Как кубик: протяни по полу длину и ширину, отпусти, мышью высоту, клик. Ступени подстраиваются сами",
                 LiveBuilderTool.Ruler => "Клик — начало, клик — конец: расстояние и допрыгнет ли игрок",
-                _ => "Протяни по поверхности, мышью глубина, клик — коробка. Клик по грани — выделить коробку"
+                LiveBuilderTool.Select => "Клик — выделить что угодно: коробку, комнату, лестницу, стену, здание, проём; Shift — добавить или убрать. " +
+                                          "У выделенного — все его ручки: грани, точки контура, повтор. Ничего не создаёт. Esc в других инструментах — сюда",
+                _ => "Протяни по поверхности, мышью глубина, клик — коробка. Клик по грани — выделить коробку; правит только коробки"
             };
         }
     }

@@ -124,7 +124,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 DrawHotkey("Shift + клик", "рисуешь линию — точка наоборот: угол или плавно");
                 DrawHotkey("цифры, Enter", "точная длина отрезка, пока рисуешь линию");
                 DrawHotkey("Tab", "повернуть лестницу");
-                DrawHotkey("Enter / Esc", "готово / отмена, снять выделение");
+                DrawHotkey("Enter / Esc", "готово / отмена");
+                DrawHotkey("Esc", "ничего не начато — на «Выделение», в нём — снять выделение");
                 LiveBuilderWindowControls.Note("Точки выделенного контура:");
                 DrawHotkey("Shift + клик, рамка", "выбрать несколько точек");
                 DrawHotkey("двойной клик", "угол или плавно");
@@ -145,20 +146,21 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Палитра ──────────────────────────────────────────────────────
 
-        // Два ряда по четыре плитки: чем строят и детали с мерой.
+        // «Выделение» — широкой плиткой сверху, под ним два ряда по четыре: чем строят и детали с мерой.
         private static void DrawPalette()
         {
             var tools = LiveBuilderToolSetting.PaletteOrder;
+            var selectCount = LiveBuilderToolSetting.SelectToolCount;
             var buildCount = LiveBuilderToolSetting.BuildToolCount;
-            DrawToolRow("Строить", tools, 0, buildCount);
-            DrawToolRow("Детали и мера", tools, buildCount, tools.Length - buildCount);
+            DrawToolRow("Выделить и править", tools, 0, selectCount, selectCount);
+            DrawToolRow("Строить", tools, selectCount, buildCount, buildCount);
+            DrawToolRow("Детали и мера", tools, selectCount + buildCount, tools.Length - selectCount - buildCount, buildCount);
         }
 
-        private static void DrawToolRow(string caption, LiveBuilderTool[] tools, int start, int count)
+        private static void DrawToolRow(string caption, LiveBuilderTool[] tools, int start, int count, int columns)
         {
             GUILayout.Label(caption, EditorStyles.centeredGreyMiniLabel, GUILayout.ExpandWidth(false));
             var row = EditorGUILayout.GetControlRect(false, TileHeight);
-            var columns = LiveBuilderToolSetting.BuildToolCount;
             var tileWidth = (row.width - TileGap * (columns - 1)) / columns;
 
             for (var index = 0; index < count; index++)
