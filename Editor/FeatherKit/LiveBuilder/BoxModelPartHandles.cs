@@ -1,0 +1,151 @@
+using FeatherKit.LiveBuilder;
+using UnityEditor;
+using UnityEngine;
+
+namespace FeatherKit.EditorTools.LiveBuilder
+{
+    /// <summary>
+    /// Каркасы коробок и ручки выделенной коробки, комнаты или лестницы в окне сцены. Ручки — крупные квадраты на гранях (<see cref="LiveBuilderFaceHandles"/>):
+    /// тянешь — ходит только эта грань, противоположная стоит; Alt — обе сразу, Shift — все стороны вместе.
+    /// Грани прилипают к сетке <see cref="BoxModelGrid"/>, всё с Undo. Переносят коробку штатным инструментом Move.
+    /// У лестницы ещё стрелка подъёма на полу и сколько ступеней.
+    /// </summary>
+    public static class BoxModelPartHandles
+    {
+        // Голубой, а не зелёный: зелёным Unity рисует коллайдеры, каркас коробки с ним путается.
+        public static readonly Color AddColor = new(0.3f, 0.7f, 1f);
+        public static readonly Color CutColor = new(1f, 0.35f, 0.3f);
+
+        private static readonly Color StairsArrowColor = new(1f, 0.85f, 0.2f);
+
+
+        // ── Каркасы ──────────────────────────────────────────────────────
+
+        // Каркасы всех коробок объекта, с копиями повторов и ступенями: добавляющие — голубые, вырезающие — красные; выделенные — ярче.
+        // Что целиком выше разреза над этажом — не рисуется.
+        public static void DrawWireframes(BoxModel model)
+        {
+            using (new Handles.DrawingScope(model.transform.localToWorldMatrix))
+                foreach (var box in BoxModelRebuilder.GetSolverBoxes(model))
+                {
+                    var min = (Vector3)box.Box.Min / MillimeterBox.MillimetersPerMeter;
+                    var max = (Vector3)box.Box.Max / MillimeterBox.MillimetersPerMeter;
+
+                    if (LiveBuilderStoreys.IsHiddenBySection(model.transform.TransformPoint(min)))
+                        continue;
+
+                    var isSelected = box.Owner != null && Selection.Contains(box.Owner.gameObject);
+                    var color = box.Mode == BoxModelPartMode.Add ? AddColor : CutColor;
+                    Handles.color = isSelected ? color : new Color(color.r, color.g, color.b, 0.45f);
+                    Handles.DrawWireCube((min + max) / 2f, max - min);
+                }
+        }
+
+
+        // ── Ручки ────────────────────────────────────────────────────────
+
+        // Точки на гранях коробки: тянешь — грань ходит по сетке, коробка не тоньше одного шага.
+        public static void DrawHandles(BoxModel model, BoxModelPart part)
+        {
+            var color = part.Mode == BoxModelPartMode.Add ? AddColor : CutColor;
+            DrawBoundsHandle(model, part, part.transform, part.Size, color, size => part.Size = size);
+        }
+
+
+        // То же для комнаты — по её внутреннему размеру.
+        public static void DrawHandles(BoxModel model, BoxModelRoom room)
+        {
+            DrawBoundsHandle(model, room, room.transform, room.Size, CutColor, size => room.Size = size);
+        }
+
+
+        // Лестница — как кубик в ProBuilder: тянешь грань — длина, ширина или высота, ступени подстраиваются.
+        // Число ступеней — от высоты, глубина ступени — под длину марша.
+        public static void DrawHandles(BoxModel model, BoxModelStairs stairs)
+        {
+            var axisNames = stairs.RunAxis == 0 ? new[] { "длина", "высота", "ширина" } : new[] { "ширина", "высота", "длина" };
+            DrawStairsDirection(model, stairs);
+
+            DrawBoundsHandle(model, stairs, stairs.transform, stairs.Size, AddColor, size =>
+            {
+                stairs.Width = stairs.RunAxis == 0 ? size.z : size.x;
+                stairs.Height = size.y;
+                stairs.StepDepth = size[stairs.RunAxis] / stairs.StepCount;
+            }, axisNames);
+        }
+
+        // Стрелка на полу от низа марша к верху и подпись: сколько ступеней, подъём и глубина ступени.
+        private static void DrawStairsDirection(BoxModel model, BoxModelStairs stairs)
+        {
+            if (Event.current.type != EventType.Repaint)
+                return;
+
+            var min = model.transform.InverseTransformPoint(stairs.transform.position);
+            var size = stairs.Size;
+            var run = stairs.RunAxis;
+            var cross = run == 0 ? 2 : 0;
+            var start = min + Vector3.up * 0.03f;
+            start[cross] += size[cross] / 2f;
+            start[run] += stairs.RunsTowardsPlus ? size[run] * 0.15f : size[run] * 0.85f;
+
+            var end = start;
+            end[run] = min[run] + (stairs.RunsTowardsPlus ? size[run] * 0.85f : size[run] * 0.15f);
+
+            var along = (end - start).normalized;
+            var side = Vector3.Cross(Vector3.up, along) * Mathf.Min(size[cross] * 0.25f, 0.5f);
+            var head = end - along * Mathf.Min(size[run] * 0.2f, 0.6f);
+
+            using (new Handles.DrawingScope(StairsArrowColor, model.transform.localToWorldMatrix))
+            {
+                Handles.DrawAAPolyLine(4f, start, end);
+                Handles.DrawAAPolyLine(4f, head + side, end, head - side);
+            }
+
+            BoxModelSceneText.DrawLabel(model.transform.TransformPoint(min + size), stairs.StepCount + " ступеней · подъём " +
+                                                                                    BoxModelSceneText.FormatMeters(stairs.Height / stairs.StepCount) + " · глубина " +
+                                                                                    BoxModelSceneText.FormatMeters(stairs.StepDepth) + " м");
+        }
+
+
+        // Ручки граней по углу и размеру; сдвинутые грани — на сетку, с Undo.
+        private static void DrawBoundsHandle(BoxModel model, Object piece, Transform pieceTransform, Vector3 size, Color color, System.Action<Vector3> setSize,
+            string[] axisNames = null)
+        {
+            var min = model.transform.InverseTransformPoint(pieceTransform.position);
+            var max = min + size;
+            var draggedMin = min;
+            var draggedMax = max;
+
+            if (!LiveBuilderFaceHandles.Draw(model.transform.localToWorldMatrix, ref draggedMin, ref draggedMax, color, axisNames))
+                return;
+
+            SnapMovedFaces(min, max, ref draggedMin, ref draggedMax);
+
+            Undo.RecordObjects(new[] { piece, pieceTransform }, "Resize Box");
+            pieceTransform.position = model.transform.TransformPoint(draggedMin);
+            setSize(draggedMax - draggedMin);
+        }
+
+        // Сдвинутые грани — на сетку; несдвинутые остаются ровно где были, без дрожания от округлений.
+        private static void SnapMovedFaces(Vector3 oldMin, Vector3 oldMax, ref Vector3 newMin, ref Vector3 newMax)
+        {
+            for (var axis = 0; axis < 3; axis++)
+            {
+                var step = BoxModelGrid.StepOn(axis);
+                var isMinMoved = !Mathf.Approximately(newMin[axis], oldMin[axis]);
+                var isMaxMoved = !Mathf.Approximately(newMax[axis], oldMax[axis]);
+
+                newMin[axis] = isMinMoved ? BoxModelGrid.Snap(newMin[axis], axis) : oldMin[axis];
+                newMax[axis] = isMaxMoved ? BoxModelGrid.Snap(newMax[axis], axis) : oldMax[axis];
+
+                if (newMax[axis] - newMin[axis] >= step)
+                    continue;
+
+                if (isMaxMoved)
+                    newMax[axis] = newMin[axis] + step;
+                else
+                    newMin[axis] = newMax[axis] - step;
+            }
+        }
+    }
+}

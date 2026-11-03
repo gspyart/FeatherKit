@@ -1,0 +1,26 @@
+{
+    "name": "FeatherKit.LiveBuilder",
+    "rootNamespace": "FeatherKit.LiveBuilder",
+    "references": [
+        "FeatherKit",
+        "Unity.Splines",
+        "Unity.Mathematics"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "FEATHERKIT_SPLINES"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.splines",
+            "expression": "2.0.0",
+            "define": "FEATHERKIT_SPLINES"
+        }
+    ],
+    "noEngineReferences": false
+}

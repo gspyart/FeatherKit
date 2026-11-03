@@ -1,0 +1,36 @@
+{
+    "name": "FeatherKit.LiveBuilder.Editor",
+    "rootNamespace": "FeatherKit.EditorTools.LiveBuilder",
+    "references": [
+        "FeatherKit.LiveBuilder",
+        "FeatherKit",
+        "FeatherKit.Editor",
+        "Unity.Splines",
+        "Unity.Mathematics",
+        "Unity.ProBuilder"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "FEATHERKIT_SPLINES"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.splines",
+            "expression": "2.0.0",
+            "define": "FEATHERKIT_SPLINES"
+        },
+        {
+            "name": "com.unity.probuilder",
+            "expression": "5.0.0",
+            "define": "FEATHERKIT_PROBUILDER"
+        }
+    ],
+    "noEngineReferences": false
+}

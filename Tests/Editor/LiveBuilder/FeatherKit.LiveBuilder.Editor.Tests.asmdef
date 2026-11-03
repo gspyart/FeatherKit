@@ -1,0 +1,34 @@
+{
+    "name": "FeatherKit.LiveBuilder.Editor.Tests",
+    "rootNamespace": "FeatherKit.Tests.LiveBuilder",
+    "references": [
+        "FeatherKit.LiveBuilder",
+        "FeatherKit.LiveBuilder.Editor",
+        "Unity.Splines",
+        "Unity.Mathematics",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "FEATHERKIT_SPLINES"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.splines",
+            "expression": "2.0.0",
+            "define": "FEATHERKIT_SPLINES"
+        }
+    ],
+    "noEngineReferences": false
+}

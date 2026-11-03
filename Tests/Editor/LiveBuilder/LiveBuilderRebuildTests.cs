@@ -1,0 +1,123 @@
+using System.Collections.Generic;
+using FeatherKit.EditorTools.LiveBuilder;
+using FeatherKit.LiveBuilder;
+using NUnit.Framework;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.Splines;
+
+namespace FeatherKit.Tests.LiveBuilder
+{
+    /// <summary>
+    /// Пересборка и файлы мешей: окно на одном этаже пересобирает только этот этаж; экземпляр префаба под чужим вырезом получает свой меш
+    /// и возвращается к мешу префаба, когда выреза нет; уборка находит брошенные файлы мешей и не трогает нужные.
+    /// </summary>
+    public class LiveBuilderRebuildTests
+    {
+        private const string TempFolder = "Assets/LiveBuilderTestTemp";
+
+        private static readonly Vector3 Origin = LiveBuilderTestScene.Origin;
+
+        private LiveBuilderTestScene testScene;
+
+
+        [SetUp]
+        public void OpenScene()
+        {
+            testScene = new LiveBuilderTestScene();
+        }
+
+
+        [TearDown]
+        public void CloseScene()
+        {
+            testScene.Dispose();
+
+            if (AssetDatabase.IsValidFolder(TempFolder))
+                AssetDatabase.DeleteAsset(TempFolder);
+        }
+
+
+        // ── Части здания ─────────────────────────────────────────────────
+
+        [Test]
+        public void CutterOnOneStorey_RebuildsOnlyThatStorey()
+        {
+            var building = testScene.CreateBuilding(3, Vector3.zero, new Vector3(8f, 0f, 0f), new Vector3(8f, 0f, 8f), new Vector3(0f, 0f, 8f));
+            var signaturesBefore = PartSignaturesOf(building);
+
+            var height = building.FirstFloorWorldHeight + 1f;
+            BoxModelFactory.CreateCutter(building.transform, new Vector3(Origin.x + 4f, height, Origin.z + 0.15f), Quaternion.identity, new Vector2(2f, 1.5f), 0.5f);
+            SplineBuildingRebuilder.RebuildChangedBuildings();
+
+            var changed = new List<string>();
+
+            foreach (var part in building.GetComponentsInChildren<SplineBuildingPart>())
+                if (part.BuiltSignature != signaturesBefore[part])
+                    changed.Add(part.Kind + " " + part.Storey);
+
+            CollectionAssert.AreEquivalent(new[] { "Walls 0" }, changed, "пересобрались: " + string.Join(", ", changed));
+        }
+
+        private static Dictionary<SplineBuildingPart, string> PartSignaturesOf(SplineBuilding building)
+        {
+            var signatures = new Dictionary<SplineBuildingPart, string>();
+
+            foreach (var part in building.GetComponentsInChildren<SplineBuildingPart>())
+                signatures[part] = part.BuiltSignature;
+
+            return signatures;
+        }
+
+
+        // ── Экземпляры префабов ──────────────────────────────────────────
+
+        [Test]
+        public void PrefabInstanceUnderOutsideCutter_GetsOwnMeshAndReturns()
+        {
+            AssetDatabase.CreateFolder("Assets", "LiveBuilderTestTemp");
+            var wall = testScene.CreateWall(Vector3.zero, new Vector3(10f, 0f, 0f));
+            BoxModelFactory.CreateCutter(wall.transform, Origin + new Vector3(2f, 0.5f, 0f), Quaternion.identity, new Vector2(1f, 1f), 0.5f);
+            SplineWallRebuilder.Rebuild(wall);
+
+            var prefab = PrefabUtility.SaveAsPrefabAssetAndConnect(wall.gameObject, TempFolder + "/Test Wall.prefab", InteractionMode.AutomatedAction);
+            var instance = ((GameObject)PrefabUtility.InstantiatePrefab(prefab)).GetComponent<SplineWall>();
+            instance.transform.position = Origin + new Vector3(0f, 0f, 5f);
+            BoxModelPrefabInstances.ForgetAllChecks();
+
+            Assert.IsTrue(BoxModelPrefabInstances.UsesPrefabGeometry(instance, out _), "свой вырез префаба — меш префаба");
+
+            var outsideCutter = BoxModelFactory.CreateCutter(null, Origin + new Vector3(6f, 0.5f, 5f), Quaternion.identity, new Vector2(1.5f, 2f), 0.6f);
+            Assert.IsFalse(BoxModelPrefabInstances.UsesPrefabGeometry(instance, out _), "чужой вырез — свой меш");
+            Assert.IsTrue(BoxModelPrefabInstances.UsesPrefabGeometry(wall, out _), "другой экземпляр — по-прежнему меш префаба");
+
+            Object.DestroyImmediate(outsideCutter.gameObject);
+            Assert.IsTrue(BoxModelPrefabInstances.UsesPrefabGeometry(instance, out var isRechecked), "вырез убрали — снова меш префаба");
+            Assert.IsTrue(isRechecked, "и сверено заново — снимутся лишние правки меша");
+        }
+
+
+        // ── Файлы мешей ──────────────────────────────────────────────────
+
+        [Test]
+        public void MeshCleanup_FindsAbandonedFileOnly()
+        {
+            var kept = testScene.CreateWall(Vector3.zero, new Vector3(10f, 0f, 0f));
+            var removed = testScene.CreateWall(new Vector3(0f, 0f, 5f), new Vector3(10f, 0f, 5f));
+            var keptPath = AssetDatabase.GetAssetPath(kept.GetComponent<MeshFilter>().sharedMesh);
+            var removedPath = AssetDatabase.GetAssetPath(removed.GetComponent<MeshFilter>().sharedMesh);
+            Object.DestroyImmediate(removed.gameObject);
+
+            try
+            {
+                var unused = BoxModelMeshCleanup.FindUnusedMeshFiles();
+                CollectionAssert.Contains(unused, removedPath, "файл удалённой стены — лишний");
+                CollectionAssert.DoesNotContain(unused, keptPath, "файл живой стены — нужен");
+            }
+            finally
+            {
+                AssetDatabase.DeleteAsset(removedPath);
+            }
+        }
+    }
+}
