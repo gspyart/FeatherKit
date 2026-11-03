@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FeatherKit.EditorTools;
 using FeatherKit.EditorTools.LiveBuilder;
 using FeatherKit.LevelDesign;
@@ -10,7 +11,7 @@ namespace FeatherKit.Tests.LiveBuilder
 {
     /// <summary>
     /// Вырез (<see cref="GeometryCutter"/>) в стенах и зданиях: прорезает дыру, копии вверх, едет за точками стены, встаёт на все этажи здания,
-    /// ряд копий модификатором Array встаёт «от края» по размеру выреза.
+    /// ряд копий модификатором Array встаёт «от края» по размеру выреза; сдвиг формы двигает дыру, а не объект, и дыру держит её отрезок стены.
     /// </summary>
     public class GeometryCutterTests
     {
@@ -72,6 +73,45 @@ namespace FeatherKit.Tests.LiveBuilder
 
             Assert.That(Vector3.Distance(window.transform.position, Origin + new Vector3(5f, 0.5f, 5f)), Is.LessThan(0.01f), "вырез — на середине нового отрезка");
             Assert.That(Vector3.Angle(window.transform.right, new Vector3(1f, 0f, 1f)), Is.LessThan(0.5f), "и повёрнут вдоль него");
+        }
+
+
+        // ── Сдвиг формы ──────────────────────────────────────────────────
+
+        [Test]
+        public void MovingHole_KeepsObjectInPlace()
+        {
+            var wall = testScene.CreateWall(Vector3.zero, new Vector3(10f, 0f, 0f));
+            var window = CreateWindow(wall, 4f, 2f, 1.5f);
+            var objectPosition = window.transform.position;
+            var cutters = new List<GeometryCutter> { window };
+            var keyBefore = GeometryCutterLookup.KeyOf(wall, cutters);
+
+            GeometryCutterHandles.MoveShapeBottom(window, GeometryCutterOutline.ShapeBottomOf(window) + new Vector3(-3f, 0f, 0f));
+            Assert.AreNotEqual(keyBefore, GeometryCutterLookup.KeyOf(wall, cutters), "подпись стены другая — пересоберётся сама");
+            SplineWallRebuilder.Rebuild(wall);
+
+            Assert.That(Vector3.Distance(window.transform.position, objectPosition), Is.LessThan(0.001f), "объект стоит");
+            Assert.IsTrue(LiveBuilderTestScene.IsOpen(Origin + new Vector3(2f, 1.25f, -2f), Vector3.forward, 4f), "дыра — на новом месте");
+            Assert.IsFalse(LiveBuilderTestScene.IsOpen(Origin + new Vector3(5f, 1.25f, -2f), Vector3.forward, 4f), "на старом — стена");
+        }
+
+
+        [Test]
+        public void ShiftedHoleOnWallLine_FollowsMovedKnot()
+        {
+            // Объект — у края стены, дыра сдвигом — посередине: на линии держится дыра.
+            var wall = testScene.CreateWall(Vector3.zero, new Vector3(10f, 0f, 0f));
+            var window = CreateWindow(wall, 1f, 2f, 1.5f);
+            GeometryCutterHandles.MoveShapeBottom(window, GeometryCutterOutline.ShapeBottomOf(window) + new Vector3(3f, 0f, 0f));
+            HoleCutterLineSync.SyncAll();
+
+            LiveBuilderTestScene.MoveKnot(wall.GetComponent<SplineContainer>().Spline, 1, new Vector3(10f, 0f, 10f));
+            HoleCutterLineSync.SyncAll();
+
+            var holeBottom = GeometryCutterOutline.ShapeBottomOf(window);
+            Assert.That(Vector3.Distance(holeBottom, Origin + new Vector3(5f, 0.5f, 5f)), Is.LessThan(0.01f), "дыра — на середине нового отрезка");
+            Assert.That(Vector3.Distance(window.transform.position, holeBottom), Is.EqualTo(3f).Within(0.01f), "объект — на прежнем сдвиге от неё");
         }
 
 

@@ -6,8 +6,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Ручки выделенного выреза (<see cref="GeometryCutter"/>) в Live Builder: рамка всех копий поверх стен, крупные квадраты на гранях — размер
-    /// (<see cref="LiveBuilderFaceHandles"/>: противоположная грань стоит, размер — целыми клетками сетки), стрелки в середине — перенос в осях выреза.
-    /// Ручки — на той копии вверх, что ближе к середине окна сцены: окно на пятом этаже правится там, где его видно. Повернуть — штатным поворотом Unity (E).
+    /// (<see cref="LiveBuilderFaceHandles"/>: противоположная грань стоит, размер — целыми клетками сетки), стрелки в середине — перенос дыры в осях выреза.
+    /// Ручки правят только дыру — размер и сдвиг формы, сам объект стоит: визуал внутри выреза не едет. Объект целиком — штатным переносом (W) и поворотом (E) Unity.
+    /// Ручки — на той копии вверх, что ближе к середине окна сцены: окно на пятом этаже правится там, где его видно.
     /// </summary>
     public static class GeometryCutterHandles
     {
@@ -88,12 +89,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
         }
 
-        // Грани коробки выреза: опора — низ посередине, поэтому после правки она переезжает в новый низ.
-        // Оси ручек — только поворот выреза, без его места: иначе тянешь грань — вырез едет, оси с ним, и Unity прибавляет сдвиг снова и снова.
+        // Грани коробки выреза: опора формы — низ посередине, поэтому после правки она переезжает в новый низ.
+        // Оси ручек — только поворот выреза, без его места: иначе тянешь грань — дыра едет, оси с ней, и Unity прибавляет сдвиг снова и снова.
         private static void DrawSizeHandles(GeometryCutter cutter, Vector3 copyLift)
         {
             var rotation = cutter.transform.rotation;
-            var pivot = Quaternion.Inverse(rotation) * (cutter.transform.position + copyLift);
+            var pivot = Quaternion.Inverse(rotation) * (GeometryCutterOutline.ShapeBottomOf(cutter) + copyLift);
             var min = pivot + new Vector3(-cutter.Width / 2f, 0f, -cutter.Depth / 2f);
             var max = pivot + new Vector3(cutter.Width / 2f, cutter.Height, cutter.Depth / 2f);
             var oldMin = min;
@@ -106,8 +107,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var size = max - min;
             var newBottom = rotation * new Vector3((min.x + max.x) / 2f, min.y, (min.z + max.z) / 2f);
 
-            Undo.RecordObjects(new Object[] { cutter, cutter.transform }, "Resize Cutter");
-            cutter.transform.position = newBottom - copyLift;
+            Undo.RecordObject(cutter, "Resize Cutter");
+            MoveShapeBottom(cutter, newBottom - copyLift);
             cutter.Width = size.x;
             cutter.Height = size.y;
             cutter.Depth = size.z;
@@ -116,7 +117,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Стрелки — в середине копии, не в опоре: там внизу ручка размера.
         private static void DrawMoveHandle(GeometryCutter cutter, Vector3 copyLift)
         {
-            var center = cutter.transform.TransformPoint(new Vector3(0f, cutter.Height / 2f, 0f)) + copyLift;
+            var center = GeometryCutterOutline.ShapeToWorld(cutter).MultiplyPoint3x4(new Vector3(0f, cutter.Height / 2f, 0f)) + copyLift;
 
             EditorGUI.BeginChangeCheck();
             var moved = Handles.PositionHandle(center, cutter.transform.rotation);
@@ -124,8 +125,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (!EditorGUI.EndChangeCheck())
                 return;
 
-            Undo.RecordObject(cutter.transform, "Move Cutter");
-            cutter.transform.position += moved - center;
+            Undo.RecordObject(cutter, "Move Cutter Hole");
+            MoveShapeBottom(cutter, GeometryCutterOutline.ShapeBottomOf(cutter) + moved - center);
+        }
+
+
+        // Низ дыры — в эту точку мира сдвигом формы; сам объект стоит.
+        public static void MoveShapeBottom(GeometryCutter cutter, Vector3 worldBottom)
+        {
+            cutter.ShapeOffset = cutter.transform.InverseTransformPoint(worldBottom);
         }
     }
 }

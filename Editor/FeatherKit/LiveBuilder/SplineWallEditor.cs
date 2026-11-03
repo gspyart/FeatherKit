@@ -38,7 +38,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderInspectorLayout.Properties(serializedObject, "height");
             }
 
-            LiveBuilderInspectorLayout.StoreyCopies(serializedObject, wall, isLinked);
+            // Копии вверх — дело здания. У стены без здания поле видно, только если копии уже есть: чтобы их можно было убрать.
+            if (isLinked || wall.CopiesUp > 1)
+                LiveBuilderInspectorLayout.StoreyCopies(serializedObject, wall, isLinked);
 
             LiveBuilderInspectorLayout.Section("Вид");
 

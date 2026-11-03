@@ -20,8 +20,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
     public static class SplineWallRebuilder
     {
         // Версия расчёта стены: поменялась — все стены пересобираются. 2 — стороны на отрезке строго поперёк, откосы прямые;
-        // 4 — коробка во всю высоту стены её не режет.
-        private const int GeometryVersion = 4;
+        // 4 — коробка во всю высоту стены её не режет; 5 — развёртка верха и низа по плану.
+        private const int GeometryVersion = 5;
 
 
         // ── Пересборка ───────────────────────────────────────────────────

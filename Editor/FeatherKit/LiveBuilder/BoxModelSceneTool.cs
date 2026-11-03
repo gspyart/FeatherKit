@@ -23,7 +23,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private const float DragThresholdPixels = 4f;
 
         private const string IdleHint = "Протяни по поверхности — новая коробка. Клик по грани — выделить коробку";
-        private const string FaceSelectionHint = "Клик — выделить грань, Shift — добавить или убрать. Стрелки — двигать выделенные грани. Протяни — новая коробка";
+        private const string FaceSelectionHint = "Клик — выделить грань, Shift — добавить или убрать. Стрелки — двигать выделенные грани, с Ctrl — выдавить от каждой. Протяни — новая коробка";
         private const string NewModelHint = "Новый объект: протяни прямоугольник на поверхности или земле. Esc — отмена";
 
         private readonly BoxModelDrawGesture drawGesture = new();
@@ -70,8 +70,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
             _ => null
         };
 
-        // Точки контура выделенного можно тянуть везде, кроме инструментов, где клик ставит точку: там он начал бы новую линию, а не схватил старую.
-        private bool CanEditContour => CurrentPathGesture == null && CurrentTool != LiveBuilderTool.Ruler;
+        // Точки контура выделенного можно тянуть везде, кроме «Линейки» и уже начатой новой линии: ручки ближе к мыши забирают клик себе,
+        // клик по пустому месту в «Стене», «Здании» и «Комнате по контуру» начинает новую линию.
+        private bool CanEditContour => CurrentTool != LiveBuilderTool.Ruler && (CurrentPathGesture == null || !CurrentPathGesture.IsActive);
 
 
         // ── Включение ────────────────────────────────────────────────────
@@ -126,7 +127,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             LiveBuilderSelectionHandles.Draw();
 
             if (CanEditContour)
-                contourHandles.OnSceneGUI();
+                contourHandles.OnSceneGUI(CurrentPathGesture == null);
 
             var controlId = GUIUtility.GetControlID(FocusType.Passive);
             var current = Event.current;
@@ -184,10 +185,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 ? hoveredBuildingContext.DescriptionOf(CurrentTool == LiveBuilderTool.Stairs) + " · "
                 : "Этаж " + LiveBuilderStoreys.CurrentStorey + (LiveBuilderStoreys.IsSectionEnabled ? ", разрез" : "") + " · ";
 
-            // Здесь клик ставит новую точку — точки уже выделенного правят в «Коробке»: подсказать, где.
+            // Клик по пустому ставит новую точку, а точки уже выделенного правятся тут же — подсказать как.
             if (CurrentPathGesture is { } pathGesture)
                 return storey + pathGesture.Hint + (!pathGesture.IsActive && LiveBuilderContourHandles.SelectedOwner() != null
-                    ? " · Точки выделенного — в «Коробке» (" + LiveBuilderToolSetting.HotkeyOf(LiveBuilderTool.Box) + ")"
+                    ? " · Точки выделенного — тяни, «+» — новая, двойной клик — вид"
                     : "");
 
             return storey + CurrentTool switch
@@ -215,7 +216,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (contourHandles.IsShown)
                 return contourHandles.Hint;
 
-            return BoxModelSelectionModeSetting.IsSelectingFaces ? FaceSelectionHint : IdleHint;
+            if (BoxModelSelectionModeSetting.IsSelectingFaces)
+                return FaceSelectionHint;
+
+            return Selection.activeGameObject != null && Selection.activeGameObject.TryGetComponent<BoxModelPart>(out _) ? BoxModelPartExtrusion.Hint : IdleHint;
         }
 
 

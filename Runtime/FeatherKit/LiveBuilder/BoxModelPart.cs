@@ -40,8 +40,22 @@ namespace FeatherKit.LiveBuilder
         [Tooltip("Материал верха. У вырезающей коробки — потолок комнаты. Пусто — общий материал коробки.")]
         [SerializeField] private Material topMaterial;
 
-        [Tooltip("Материал четырёх боков. У вырезающей коробки — стены комнаты. Пусто — общий материал коробки.")]
+        [Tooltip("Материал четырёх боков, если у бока нет своего ниже. У вырезающей коробки — стены комнаты. Пусто — общий материал коробки.")]
         [SerializeField] private Material sideMaterial;
+
+        [Space]
+        [Header("Бока по отдельности")]
+        [Tooltip("Бок справа, по +X объекта. Пусто — материал боков. Перетащил материал на этот бок в окне сцены — он ляжет сюда.")]
+        [SerializeField] private Material rightMaterial;
+
+        [Tooltip("Бок слева, по −X объекта. Пусто — материал боков.")]
+        [SerializeField] private Material leftMaterial;
+
+        [Tooltip("Бок спереди, по +Z объекта. Пусто — материал боков.")]
+        [SerializeField] private Material frontMaterial;
+
+        [Tooltip("Бок сзади, по −Z объекта. Пусто — материал боков.")]
+        [SerializeField] private Material backMaterial;
 
 
         public BoxModelPartMode Mode
@@ -78,6 +92,30 @@ namespace FeatherKit.LiveBuilder
         {
             get => sideMaterial;
             set => sideMaterial = value;
+        }
+
+        public Material RightMaterial
+        {
+            get => rightMaterial;
+            set => rightMaterial = value;
+        }
+
+        public Material LeftMaterial
+        {
+            get => leftMaterial;
+            set => leftMaterial = value;
+        }
+
+        public Material FrontMaterial
+        {
+            get => frontMaterial;
+            set => frontMaterial = value;
+        }
+
+        public Material BackMaterial
+        {
+            get => backMaterial;
+            set => backMaterial = value;
         }
     }
 }

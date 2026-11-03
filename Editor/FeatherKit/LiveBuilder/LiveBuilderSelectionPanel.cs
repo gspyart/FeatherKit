@@ -183,14 +183,29 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var sides = LiveBuilderWindowControls.MaterialField(isCut ? "Стены" : "Бока", "Пусто — материал коробки", part.SideMaterial);
                 var top = LiveBuilderWindowControls.MaterialField(isCut ? "Потолок" : "Верх", "Пусто — материал коробки", part.TopMaterial);
 
-                if (material != part.Material || bottom != part.BottomMaterial || sides != part.SideMaterial || top != part.TopMaterial)
+                EditorGUILayout.Space(2f);
+                EditorGUILayout.LabelField(isCut ? "Каждая стена отдельно" : "Каждый бок отдельно", EditorStyles.miniBoldLabel);
+                var right = LiveBuilderWindowControls.MaterialField("+X", "Пусто — материал всех боков", part.RightMaterial);
+                var left = LiveBuilderWindowControls.MaterialField("−X", "Пусто — материал всех боков", part.LeftMaterial);
+                var front = LiveBuilderWindowControls.MaterialField("+Z", "Пусто — материал всех боков", part.FrontMaterial);
+                var back = LiveBuilderWindowControls.MaterialField("−Z", "Пусто — материал всех боков", part.BackMaterial);
+
+                if (material != part.Material || bottom != part.BottomMaterial || sides != part.SideMaterial || top != part.TopMaterial
+                    || right != part.RightMaterial || left != part.LeftMaterial || front != part.FrontMaterial || back != part.BackMaterial)
                 {
                     Undo.RecordObject(part, "Edit Box Materials");
                     part.Material = material;
                     part.BottomMaterial = bottom;
                     part.SideMaterial = sides;
                     part.TopMaterial = top;
+                    part.RightMaterial = right;
+                    part.LeftMaterial = left;
+                    part.FrontMaterial = front;
+                    part.BackMaterial = back;
                 }
+
+                LiveBuilderWindowControls.Note("Быстрее — перетащи материал из Project или палитры уровня на грань в окне сцены: он ляжет в эту сторону. " +
+                                               "С Alt — во всю коробку.");
             }
         }
 

@@ -125,7 +125,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Вместе со всеми копиями вверх: от самого выреза до верхней копии.
         public static Bounds WorldBoundsOf(GeometryCutter cutter)
         {
-            var bounds = GeometryCutterOutline.BoundsIn(cutter, cutter.transform.localToWorldMatrix);
+            var bounds = GeometryCutterOutline.BoundsIn(cutter, GeometryCutterOutline.CopyToWorld(cutter, 0));
 
             if (cutter.CopiesUp > 1)
                 bounds.Encapsulate(GeometryCutterOutline.BoundsIn(cutter, GeometryCutterOutline.CopyToWorld(cutter, cutter.CopiesUp - 1)));
@@ -147,7 +147,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             foreach (var cutter in cutters)
             {
-                var cutterToOwner = owner.transform.worldToLocalMatrix * cutter.transform.localToWorldMatrix;
+                // Форма, а не сам объект: сдвинули дыру — подпись другая.
+                var cutterToOwner = owner.transform.worldToLocalMatrix * GeometryCutterOutline.ShapeToWorld(cutter);
 
                 for (var index = 0; index < 16; index++)
                     key.Append(cutterToOwner[index]);

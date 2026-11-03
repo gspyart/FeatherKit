@@ -7,8 +7,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Клик инструментом «Проём»: наводишь на стену — рамка проёма выбранного размера (<see cref="LiveBuilderOpeningPresets"/>) и формы, клик — проём насквозь.
-    /// Низ проёма — от пола: у здания — его этажа, выбранного в окне (если он у здания есть), иначе того, на который навёл;
-    /// у стены по линии — от её низа (у копий вверх — от низа копии под мышью); у объекта из коробок — от пола этажа уровня. Левый край — по сетке вдоль стены.
+    /// Место — по настройке «Место»: «Где навёл» — серединой ровно под мышью, «По сетке» — левым краем и низом по сетке.
+    /// По высоте этажи есть только у здания (и его перегородок): там низ — от пола его этажа, выбранного в окне (если он у здания есть,
+    /// иначе того, на который навёл), на «Низ над полом». Без здания низ — там же, где навёл, но не ниже пола: у стены по линии — её низа
+    /// (у копий вверх — низа копии под мышью), у объекта из коробок — пола этажа уровня.
     /// - стена объекта из коробок — прямоугольник: вырезающая коробка в конце списка, глубиной ровно в толщину стены; арка и круг — вырез в объекте
     /// - стена по линии и здание по контуру — вырез (<see cref="GeometryCutter"/>) в них: прямой, вдоль стены в этом месте, насквозь с запасом,
     ///   едет за точками линии; у здания — к его этажам, с «И все выше» — копии вверх до крыши
@@ -87,9 +89,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var min = Vector3.zero;
             var max = Vector3.zero;
-            min[alongAxis] = BoxModelGrid.Snap(hit.LocalPoint[alongAxis] - size.Width / 2f, alongAxis);
+            min[alongAxis] = LeftEdgeAlong(hit.LocalPoint[alongAxis] - size.Width / 2f, alongAxis);
             max[alongAxis] = min[alongAxis] + size.Width;
-            min.y = floorLocal + size.Sill;
+            min.y = BottomUnderMouse(hit.LocalPoint.y, size.Height, floorLocal);
             max.y = min.y + size.Height;
 
             var thickness = ThicknessBehind(hit.Model, face, surfacePlane, (min + max) / 2f);
@@ -130,7 +132,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Стена по линии или здания: место вдоль пути, левый край по сетке, низ — от пола этажа (у здания — его этажа).
+        // Стена по линии или здания: место вдоль пути; низ — у здания от пола его этажа, иначе где навёл.
         private void AimAtPathWall(Component wall, Vector3 worldPoint)
         {
             var size = LiveBuilderOpeningPresets.Selected;
@@ -155,6 +157,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return;
 
             var floorLocal = wall is SplineWall splineWall ? CopyFloorOf(splineWall, nearestPath, along, localPoint.y) : 0f;
+            var hasStoreys = wall is SplineBuilding;
             storeysAbove = 1;
 
             // Перегородка в здании: проём привяжется к зданию — «и все выше» считается от этажа копии под мышью, как и при создании.
@@ -163,6 +166,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var copy = Mathf.RoundToInt((floorLocal - nearestPath.BaseHeightAt(along)) / Mathf.Max(0.1f, wallLink.Building.StoreyHeight));
                 storeysAbove = Mathf.Max(1, wallLink.Building.StoreyCount - (wallLink.Storey + copy));
                 buildingStoreyHeight = wallLink.Building.StoreyHeight;
+                hasStoreys = true;
             }
 
             if (wall is SplineBuilding building)
@@ -178,9 +182,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 buildingStoreyHeight = building.StoreyHeight;
             }
 
-            var alongFrom = Mathf.Clamp(BoxModelGrid.Snap(along - size.Width / 2f, 0), 0f, Mathf.Max(0f, nearestPath.Length - size.Width));
+            var alongFrom = Mathf.Clamp(LeftEdgeAlong(along - size.Width / 2f, 0), 0f, Mathf.Max(0f, nearestPath.Length - size.Width));
+            var bottom = hasStoreys ? floorLocal + size.Sill : BottomUnderMouse(localPoint.y, size.Height, floorLocal);
             targetPathOwner = wall;
-            FitCutterToWall(wall, nearestPath, alongFrom, size.Width, floorLocal + size.Sill, out cutterLocalBottom, out cutterLocalRotation, out cutterDepth);
+            FitCutterToWall(wall, nearestPath, alongFrom, size.Width, bottom, out cutterLocalBottom, out cutterLocalRotation, out cutterDepth);
         }
 
         // Низ стены по линии под мышью, в её осях: низ линии, а у стены с копиями вверх — низ той копии, на которую навёл.
@@ -190,6 +195,23 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var baseHeight = path.BaseHeightAt(along);
             var copy = Mathf.Clamp(Mathf.FloorToInt((localHeight - baseHeight) / wall.CopyStep + 0.001f), 0, wall.CopiesUp - 1);
             return baseHeight + copy * wall.CopyStep;
+        }
+
+        // Левый край проёма вдоль стены: там, где середина под мышью, или по сетке — по настройке «Место».
+        private static float LeftEdgeAlong(float edgeUnderMouse, int gridAxis)
+        {
+            return LiveBuilderCutterSettings.IsSnappedToGrid ? BoxModelGrid.Snap(edgeUnderMouse, gridAxis) : edgeUnderMouse;
+        }
+
+        // Низ проёма без этажей здания: середина по высоте под мышью или низ по сетке — по настройке «Место»; не ниже пола.
+        private static float BottomUnderMouse(float heightUnderMouse, float openingHeight, float floor)
+        {
+            var bottom = heightUnderMouse - openingHeight / 2f;
+
+            if (LiveBuilderCutterSettings.IsSnappedToGrid)
+                bottom = BoxModelGrid.Snap(bottom, 1);
+
+            return Mathf.Max(bottom, floor);
         }
 
         // Вырез в стену по линии или здания на отрезке пути от alongFrom шириной width, в осях стены: прямой, по хорде отрезка, посередине толщины;

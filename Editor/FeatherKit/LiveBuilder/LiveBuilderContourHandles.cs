@@ -47,7 +47,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Окно сцены ───────────────────────────────────────────────────
 
         // Звать до общего элемента инструмента: точки и «+» ближе к мыши забирают нажатие себе.
-        public void OnSceneGUI()
+        // allowsBoxSelect — Shift+рамка по пустому месту; в инструментах линии выключена: там Shift+клик ставит плавную точку.
+        public void OnSceneGUI(bool allowsBoxSelect = true)
         {
             var owner = SelectedOwner();
             LiveBuilderContourSelection.SetOwner(owner);
@@ -96,7 +97,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     return;
             }
 
-            boxSelect.TryBegin(boxSelectControl, ownControls);
+            if (allowsBoxSelect)
+                boxSelect.TryBegin(boxSelectControl, ownControls);
         }
 
         // Одно здание, стена по линии или комната по контуру в выделении; иначе — null.

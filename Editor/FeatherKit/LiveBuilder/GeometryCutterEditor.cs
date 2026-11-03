@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Инспектор выреза: форма → размер → скругление (у прямоугольника; «Арка» — полукруг сверху) → этажи → вид → место в стене.
+    /// Инспектор выреза: форма → размер → сдвиг от точки объекта → скругление (у прямоугольника; «Арка» — полукруг сверху) → этажи → вид → место в стене.
     /// Вырез в здании — копии по этажам задаёт привязка к зданию, здесь число только показано. Тонкая настройка гладкости — свёрнута в «Тонко».
     /// </summary>
     [CustomEditor(typeof(GeometryCutter))]
@@ -23,6 +23,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             LiveBuilderInspectorLayout.Section("Размер");
             LiveBuilderInspectorLayout.Properties(serializedObject, "width", "height", "depth");
+
+            LiveBuilderInspectorLayout.Section("Сдвиг");
+            LiveBuilderInspectorLayout.Properties(serializedObject, "shapeOffset");
 
             if (cutter.Shape == GeometryCutterShape.Box)
             {

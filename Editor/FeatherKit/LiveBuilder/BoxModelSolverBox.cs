@@ -5,17 +5,22 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Материалы сторон одной коробки: свой у низа, верха и боков, иначе общий; всё пусто — материал объекта.
+    /// Материалы сторон одной коробки: свой у низа, верха, каждого бока или всех боков, иначе общий; всё пусто — материал объекта.
     /// Сторона — у самой коробки: у вырезающей низ — это пол дыры, верх — потолок, бока — стены.
     /// </summary>
     public readonly struct BoxModelSideMaterials
     {
-        public BoxModelSideMaterials(Material all, Material bottom = null, Material top = null, Material side = null)
+        public BoxModelSideMaterials(Material all, Material bottom = null, Material top = null, Material side = null,
+            Material right = null, Material left = null, Material front = null, Material back = null)
         {
             All = all;
             Bottom = bottom;
             Top = top;
             Side = side;
+            Right = right;
+            Left = left;
+            Front = front;
+            Back = back;
         }
 
 
@@ -24,21 +29,50 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public Material Top { get; }
         public Material Side { get; }
 
+        // Свой у каждого бока: +X, −X, +Z, −Z.
+        public Material Right { get; }
+        public Material Left { get; }
+        public Material Front { get; }
+        public Material Back { get; }
+
         // Для подписи меша: поменялся любой материал — пересборка.
-        public string Key => KeyOf(All) + "," + KeyOf(Bottom) + "," + KeyOf(Top) + "," + KeyOf(Side);
+        public string Key => KeyOf(All) + "," + KeyOf(Bottom) + "," + KeyOf(Top) + "," + KeyOf(Side)
+                             + "," + KeyOf(Right) + "," + KeyOf(Left) + "," + KeyOf(Front) + "," + KeyOf(Back);
 
 
         public static BoxModelSideMaterials Of(BoxModelPart part)
         {
-            return new BoxModelSideMaterials(part.Material, part.BottomMaterial, part.TopMaterial, part.SideMaterial);
+            return new BoxModelSideMaterials(part.Material, part.BottomMaterial, part.TopMaterial, part.SideMaterial,
+                part.RightMaterial, part.LeftMaterial, part.FrontMaterial, part.BackMaterial);
         }
 
 
         // Материал стороны коробки (номер по BoxFaces); null — материал объекта.
         public Material ForSide(int face)
         {
-            var own = BoxFaces.Axis(face) != 1 ? Side : BoxFaces.IsPositive(face) ? Top : Bottom;
-            return own != null ? own : All;
+            if (BoxFaces.Axis(face) == 1)
+                return Either(BoxFaces.IsPositive(face) ? Top : Bottom, All);
+
+            return Either(Either(OwnOfSide(face), Side), All);
+        }
+
+        // Свой материал одного бока, без запасных.
+        private Material OwnOfSide(int face)
+        {
+            return face switch
+            {
+                0 => Right,
+                1 => Left,
+                4 => Front,
+                5 => Back,
+                _ => null
+            };
+        }
+
+        // Свой, а нет — запасной.
+        private static Material Either(Material own, Material fallback)
+        {
+            return own != null ? own : fallback;
         }
 
 

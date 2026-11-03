@@ -208,7 +208,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Комната по контуру в пустоте — здание в один этаж: контур — внутренняя сторона стен, пол и потолок по форме.
+        // Комната по контуру в пустоте — здание в один этаж: чем считается контур — по настройке «Стены», пол и потолок по форме.
         // Толщины и материалы — из настроек «Комнаты», как у прямоугольной: снаружи — серый набора, изнутри — стены, пол, потолок комнаты.
         public static SplineBuilding CreateContourRoom(BoxModel parentModel, Vector3 worldPosition, Quaternion worldRotation)
         {
@@ -216,7 +216,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             room.StoreyCount = 1;
             room.StoreyHeight = LiveBuilderStoreys.StoreyHeight;
             room.WallThickness = LiveBuilderRoomSettings.WallThickness;
-            room.ContourSide = SplineBuildingContourSide.Inside;
+            room.ContourSide = LiveBuilderRoomWalls.ContourSideFor(LiveBuilderRoomSettings.WallSide);
             room.SlabThickness = LiveBuilderRoomSettings.SlabThickness;
             room.HasFloor = true;
             room.HasRoof = true;

@@ -88,6 +88,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 if (LiveBuilderRoomSettings.Shape == LiveBuilderRoomShape.Contour)
                     DrawKnotModeSwitch();
+
+                LiveBuilderRoomSettings.WallSide = (LiveBuilderRoomWallSide)LiveBuilderWindowControls.Switch(
+                    new GUIContent("Стены", "Куда встают стены от того, что рисуешь. Наружу — нарисованное и есть комната изнутри. " +
+                                            "Внутрь — нарисованное — габарит вместе со стенами. По центру — линия идёт по середине стен. " +
+                                            "Прямоугольник в доме из коробок вырезается — своих стен у него нет"),
+                    (int)LiveBuilderRoomSettings.WallSide, "Наружу", "Внутрь", "По центру");
             }
 
             using (LiveBuilderWindowControls.Card("Размер"))
@@ -246,6 +252,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             using (LiveBuilderWindowControls.Card("Клик — готовый размер"))
             {
+                LiveBuilderCutterSettings.IsSnappedToGrid = LiveBuilderWindowControls.Switch(
+                    new GUIContent("Место", "Где навёл — середина проёма ровно под мышью. По сетке — левый край и низ прилипают к сетке: проёмы встают ровными рядами. " +
+                                            "В здании с этажами низ — всегда от пола его этажа, на «Низ над полом»"),
+                    LiveBuilderCutterSettings.IsSnappedToGrid ? 1 : 0, "Где навёл", "По сетке") == 1;
+
                 var presets = LiveBuilderOpeningPresets.Presets;
                 var names = new string[presets.Count + 1];
 

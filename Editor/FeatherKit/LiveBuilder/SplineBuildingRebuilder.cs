@@ -16,8 +16,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public static class SplineBuildingRebuilder
     {
-        // Версия раскладки: поменялась — все здания пересобираются, даже если их числа те же. 2 — на точке опоры, 3 — по частям, 4 — прямые откосы и торцы дыр.
-        private const int LayoutVersion = 5;
+        // Версия раскладки: поменялась — все здания пересобираются, даже если их числа те же. 2 — на точке опоры, 3 — по частям, 4 — прямые откосы и торцы дыр;
+        // 6 — развёртка верха стен по плану.
+        private const int LayoutVersion = 6;
 
         // Имя группы этажа: «Storey 1», «Storey 2»… Панель окна узнаёт по нему собранную часть здания.
         public const string StoreyGroupPrefix = "Storey ";

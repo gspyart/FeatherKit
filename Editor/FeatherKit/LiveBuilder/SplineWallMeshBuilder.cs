@@ -222,11 +222,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var normal = facesUp ? Vector3.up : Vector3.down;
 
-            geometry.AddQuad(
-                new SplineWallVertex(PointAt(path, alongFrom, leftOffset, height), normal, new Vector2(alongFrom, leftOffset)),
-                new SplineWallVertex(PointAt(path, alongTo, leftOffset, height), normal, new Vector2(alongTo, leftOffset)),
-                new SplineWallVertex(PointAt(path, alongTo, rightOffset, height), normal, new Vector2(alongTo, rightOffset)),
-                new SplineWallVertex(PointAt(path, alongFrom, rightOffset, height), normal, new Vector2(alongFrom, rightOffset)), submesh);
+            geometry.AddQuad(PlanVertex(PointAt(path, alongFrom, leftOffset, height), normal), PlanVertex(PointAt(path, alongTo, leftOffset, height), normal),
+                PlanVertex(PointAt(path, alongTo, rightOffset, height), normal), PlanVertex(PointAt(path, alongFrom, rightOffset, height), normal), submesh);
+        }
+
+        // Верх и низ — развёртка по плану, в метрах, как у коробок и перекрытий: клетка идёт сплошь через все изломы и сходится с соседями.
+        private static SplineWallVertex PlanVertex(Vector3 point, Vector3 normal)
+        {
+            return new SplineWallVertex(point, normal, new Vector2(point.x, point.z));
         }
 
         // Поперечные грани на границе столбцов: бока проёмов и торцы открытого пути. Лицом туда, где пусто.

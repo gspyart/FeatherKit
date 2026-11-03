@@ -15,7 +15,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
     /// <summary>
-    /// Рисование линии точками для инструментов «Стена», «Здание» и «Комната» по контуру: кликами точки на полу текущего этажа, по сетке,
+    /// Рисование линии точками для инструментов «Стена», «Здание» и «Комната» по контуру: кликами точки по сетке — первая на верх того, что под мышью
+    /// (коробки, крыши, перекрытия), а под мышью пусто или стена сбоку — на пол текущего этажа; дальше линия идёт на высоте первой точки,
     /// и по ним сразу встаёт стена (<see cref="SplineWall"/>), здание (<see cref="SplineBuilding"/>) или комната.
     /// Точка — угол или плавный изгиб: по переключателю в окне, Shift на клике — наоборот.
     /// Клик по первой точке — замкнуть; Enter или Esc — готово (здание и комната замыкаются сами); Ctrl+Z, пока рисуешь, — убрать последнюю точку.
@@ -25,7 +26,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Стена внутри здания (<see cref="LiveBuilderBuildingContext"/>) — перегородка: на полу его этажа, до потолка, толщиной перегородки,
     /// точки прилипают к стенам здания, на этом этаже или на всех выше.
     /// Комната: в здании — замкнутая перегородка, стороны вдоль его стен не строятся; в доме из коробок — стены до его потолка;
-    /// в пустоте — здание в один этаж, где контур — внутренняя сторона стен.
+    /// в пустоте — здание в один этаж. Куда встают её стены от линии — наружу, внутрь или по центру — по настройке «Стены» (<see cref="LiveBuilderRoomWalls"/>).
     /// Выделен объект из коробок — линия встаёт в него и его вырезающие коробки режут и её. Здание и комната в пустоте — в новом объекте из коробок:
     /// так в них сразу работают лестницы и вырезы. Двигать точки потом — <see cref="LiveBuilderContourHandles"/>.
     /// </summary>
@@ -377,6 +378,23 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             Undo.RecordObject(Container, "Add Path Point");
             Container.Spline.Add(new BezierKnot(localPoint), isSmooth ? TangentMode.AutoSmooth : TangentMode.Linear);
+            ApplyRoomWallSide();
+        }
+
+        // Комната из стены по линии — сторона стены от линии по настройке «Стены» и по тому, в какую сторону обходишь комнату. Пересчёт на каждой точке:
+        // пока рисуешь, видно, куда встанут стены.
+        private void ApplyRoomWallSide()
+        {
+            if (kind != LiveBuilderPathKind.Room || pathOwner is not SplineWall walls)
+                return;
+
+            var alignment = LiveBuilderRoomWalls.AlignmentFor(Container.Spline, LiveBuilderRoomSettings.WallSide);
+
+            if (walls.Alignment == alignment)
+                return;
+
+            Undo.RecordObject(walls, "Add Path Point");
+            walls.Alignment = alignment;
         }
 
         private bool IsNearFirstKnot(Vector3 worldPoint)
@@ -423,6 +441,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return true;
             }
 
+            if (pathOwner == null && TryGetSurfaceTopPoint(worldRay, out worldPoint))
+                return true;
+
             var model = pathOwner != null ? SplineWallRebuilder.OuterModelOf(pathOwner) : BoxModelActions.SelectedModel();
             var plane = BoxModelDrawPlaneFinder.StoreyFloorPlane(model);
 
@@ -436,6 +457,19 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             worldPoint = plane.FrameToWorld.MultiplyPoint3x4(plane.SnapOnPlane(localPoint));
+            return true;
+        }
+
+        // Первая точка — на верх того, что под мышью (коробки, крыши, перекрытия, любой геометрии), если он смотрит вверх; по сетке.
+        // Дальше линия идёт на этой высоте. Под мышью стена сбоку или пусто — false: тогда пол этажа.
+        private static bool TryGetSurfaceTopPoint(Ray worldRay, out Vector3 worldPoint)
+        {
+            worldPoint = default;
+
+            if (!BoxModelDrawPlaneFinder.TryFind(worldRay, false, out var plane, out var localPoint) || plane.Axis != 1 || plane.OutwardSign < 0f)
+                return false;
+
+            worldPoint = plane.FrameToWorld.MultiplyPoint3x4(localPoint);
             return true;
         }
 

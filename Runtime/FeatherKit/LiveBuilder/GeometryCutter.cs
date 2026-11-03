@@ -47,6 +47,10 @@ namespace FeatherKit.LiveBuilder
         [Min(MinSize)]
         [SerializeField] private float depth = 0.5f;
 
+        [Tooltip("Где низ середины дыры относительно точки объекта, м, в его осях. Нужен, когда внутри выреза лежит визуал: " +
+                 "точка объекта стоит, где удобно визуалу, а дыра — где надо. 0 — дыра от точки объекта.")]
+        [SerializeField] private Vector3 shapeOffset;
+
         [Space]
         [Header("Скругление")]
         [Tooltip("Радиус двух верхних углов, м. Половина ширины — полукруглая арка. 0 — прямые углы.")]
@@ -123,6 +127,12 @@ namespace FeatherKit.LiveBuilder
         {
             get => depth;
             set => depth = Mathf.Max(MinSize, value);
+        }
+
+        public Vector3 ShapeOffset
+        {
+            get => shapeOffset;
+            set => shapeOffset = value;
         }
 
         // Не больше половины ширины и высоты: иначе скругления верха и низа налезут друг на друга.

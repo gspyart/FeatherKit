@@ -98,7 +98,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
     }
 
 
-    /// <summary>Настройки инструмента «Комната»: форма, толщина стен и перекрытий, материалы пола, стен и потолка.</summary>
+    /// <summary>Куда встают стены комнаты от нарисованного: наружу — нарисовал саму комнату, внутрь — её габарит вместе со стенами, по центру — ось стен.</summary>
+    public enum LiveBuilderRoomWallSide
+    {
+        Outward,
+        Inward,
+        Centered
+    }
+
+
+    /// <summary>Настройки инструмента «Комната»: форма, куда встают стены, толщина стен и перекрытий, материалы пола, стен и потолка.</summary>
     public static class LiveBuilderRoomSettings
     {
         // Сменилась форма — начатое рисование отменяется, как при смене инструмента.
@@ -115,6 +124,20 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 LiveBuilderPreferences.SetInt("Room.Shape", (int)value);
                 ShapeChanged?.Invoke();
+                SceneView.RepaintAll();
+            }
+        }
+
+        // Куда встают стены от нарисованного. Прямоугольнику в доме из коробок всё равно: он вырезается, своих стен у него нет.
+        public static LiveBuilderRoomWallSide WallSide
+        {
+            get => (LiveBuilderRoomWallSide)LiveBuilderPreferences.GetInt("Room.WallSide", (int)LiveBuilderRoomWallSide.Outward);
+            set
+            {
+                if (WallSide == value)
+                    return;
+
+                LiveBuilderPreferences.SetInt("Room.WallSide", (int)value);
                 SceneView.RepaintAll();
             }
         }
@@ -310,7 +333,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
     /// <summary>
-    /// Каким будет вырез (<see cref="GeometryCutter"/>), который ставит инструмент «Проём»: форма, насквозь или ниша и её глубина
+    /// Каким будет вырез (<see cref="GeometryCutter"/>), который ставит инструмент «Проём», и где он встаёт кликом: форма, насквозь или ниша и её глубина
     /// (у протянутого), материал стенок дыры. Готовые размеры для клика — <see cref="LiveBuilderOpeningPresets"/>.
     /// </summary>
     public static class LiveBuilderCutterSettings
@@ -340,6 +363,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             get => LiveBuilderPreferences.GetMaterial("Cutter.RevealMaterial");
             set => LiveBuilderPreferences.SetMaterial("Cutter.RevealMaterial", value);
+        }
+
+        // Проём кликом — левым краем и низом по сетке; выключено — серединой ровно под мышью. По высоте в здании — всегда от пола его этажа.
+        public static bool IsSnappedToGrid
+        {
+            get => LiveBuilderPreferences.GetBool("Cutter.IsSnappedToGrid", false);
+            set => LiveBuilderPreferences.SetBool("Cutter.IsSnappedToGrid", value);
         }
     }
 

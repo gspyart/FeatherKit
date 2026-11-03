@@ -11,6 +11,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Держит вырезы с включённым «местом в стене» (<see cref="GeometryCutter"/>) на их местах
     /// линии стены или контура здания — перед каждой пересборкой. Каждый помнит сплайн и место на нём: номер точки с долей до следующей.
+    /// Место — у самой дыры (низ формы со сдвигом), а не у точки объекта: дыру, сдвинутую на другой отрезок, держит её отрезок.
     /// Сдвинули точки — едет на то же место своего отрезка; вырез ещё и держит свой сдвиг от линии и поворачивается вместе с отрезком.
     /// Точек стало больше или меньше — остаётся где стоял и запоминает новое место; сдвинули или повернули его самого — запоминается, куда.
     /// Высоту не трогает. Правки — без Undo, как у привязки к этажам: после любого Ctrl+Z сверка повторяет их сама.
@@ -57,7 +58,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Линию двигали, а число точек то же, — вырез едет за своим отрезком. Иначе, если что-то поменялось (и поворот руками), — запомнить, где он сейчас.
         private static void SyncCutter(GeometryCutter cutter, Transform owner, SplineContainer container, int lineHash)
         {
-            var localPosition = owner.InverseTransformPoint(cutter.transform.position);
+            var localPosition = owner.InverseTransformPoint(GeometryCutterOutline.ShapeBottomOf(cutter));
             var localRotation = Quaternion.Inverse(owner.rotation) * cutter.transform.rotation;
             var isLineChanged = cutter.SyncedLineHash != lineHash;
             var isCutterMoved = (localPosition - cutter.SyncedLocalPosition).sqrMagnitude > Tolerance * Tolerance
@@ -79,7 +80,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var targetRotation = lineRotation * cutter.RotationOnLine;
 
             if ((targetPosition - localPosition).sqrMagnitude > Tolerance * Tolerance || Quaternion.Angle(targetRotation, localRotation) > RotationTolerance)
-                LiveBuilderSyncEdits.Apply(cutter.transform, () => cutter.transform.SetPositionAndRotation(owner.TransformPoint(targetPosition), owner.rotation * targetRotation));
+                LiveBuilderSyncEdits.Apply(cutter.transform, () => PlaceShapeBottom(cutter, owner.TransformPoint(targetPosition), owner.rotation * targetRotation));
 
             LiveBuilderSyncEdits.Apply(cutter, () =>
             {
@@ -87,6 +88,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 cutter.SyncedLocalPosition = targetPosition;
                 cutter.SyncedLocalRotation = targetRotation;
             });
+        }
+
+        // Объект — так, чтобы низ дыры встал в эту точку: со сдвигом формы сам объект стоит в стороне от дыры.
+        private static void PlaceShapeBottom(GeometryCutter cutter, Vector3 shapeBottom, Quaternion rotation)
+        {
+            cutter.transform.rotation = rotation;
+            cutter.transform.position += shapeBottom - GeometryCutterOutline.ShapeBottomOf(cutter);
         }
 
         // Ближайшее место на линии; сдвиг выреза от неё в плане и поворот — в осях линии в этом месте.

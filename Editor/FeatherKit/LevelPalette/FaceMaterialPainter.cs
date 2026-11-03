@@ -12,6 +12,8 @@ namespace FeatherKit.EditorTools.LevelPalette
     /// - на объекте ProBuilder выделены грани — только они
     /// - граней не выделено — объект целиком: у ProBuilder все грани, у остальных все слоты материалов
     /// - ProBuilder в режиме граней, а граней не выделено — ничего: красить весь объект тут было бы неожиданно
+    /// - объект, который хранит материалы сам и собирает из них меш (постройка Live Builder), — его данные, своей покраской
+    ///   (<see cref="ObjectMaterialPainters"/>): покраска рендерера у него слетела бы при пересборке
     /// Лишние слоты материалов у объекта ProBuilder после покраски убираются: каждый слот — лишний вызов отрисовки.
     /// Всё одним шагом отмены.
     ///
@@ -38,6 +40,7 @@ namespace FeatherKit.EditorTools.LevelPalette
         {
             var faceCount = 0;
             var objectCount = 0;
+            var ownDescriptions = new List<string>();
 
             foreach (var gameObject in Selection.gameObjects)
             {
@@ -50,8 +53,17 @@ namespace FeatherKit.EditorTools.LevelPalette
                     case PaintTarget.WholeObject:
                         objectCount++;
                         break;
+
+                    case PaintTarget.OwnPainter:
+                        ownDescriptions.Add(ObjectMaterialPainters.Find(gameObject).DescribeTarget(gameObject));
+                        break;
                 }
             }
+
+            if (ownDescriptions.Count > 0)
+                return faceCount == 0 && objectCount == 0 && ownDescriptions.Count == 1
+                    ? ownDescriptions[0]
+                    : $"объектов: {faceCount + objectCount + ownDescriptions.Count}";
 
             if (faceCount == 0 && objectCount == 0)
                 return null;
@@ -83,6 +95,11 @@ namespace FeatherKit.EditorTools.LevelPalette
 
                     case PaintTarget.WholeObject:
                         PaintWholeObject(gameObject, material);
+                        paintedCount++;
+                        break;
+
+                    case PaintTarget.OwnPainter:
+                        ObjectMaterialPainters.Find(gameObject).TryPaint(gameObject, material);
                         paintedCount++;
                         break;
                 }
@@ -158,12 +175,16 @@ namespace FeatherKit.EditorTools.LevelPalette
         {
             Nothing,
             SelectedFaces,
-            WholeObject
+            WholeObject,
+            OwnPainter
         }
 
 
         private static PaintTarget TargetOf(GameObject gameObject)
         {
+            if (ObjectMaterialPainters.Find(gameObject) != null)
+                return PaintTarget.OwnPainter;
+
             if (gameObject.TryGetComponent<ProBuilderMesh>(out var mesh))
             {
                 if (mesh.selectedFaceCount > 0)

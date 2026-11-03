@@ -6,14 +6,29 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Форма выреза (<see cref="GeometryCutter"/>) точками: контур на плоскости XY выреза — прямоугольник со скруглёнными углами или овал,
-    /// и тело — этот контур, протянутый по Z на глубину; где стоит каждая копия вверх. Нужна вычитанию из меша, рамке в окне сцены и поиску пересечений.
+    /// и тело — этот контур, протянутый по Z на глубину; где стоит форма (точка объекта плюс сдвиг формы) и каждая копия вверх.
+    /// Нужна вычитанию из меша, рамке и ручкам в окне сцены и поиску пересечений.
     /// </summary>
     public static class GeometryCutterOutline
     {
+        // Форма в мире: оси объекта, сдвинутые на сдвиг формы. Отсюда считается всё, что касается дыры, — сам объект может стоять в стороне.
+        public static Matrix4x4 ShapeToWorld(GeometryCutter cutter)
+        {
+            return cutter.transform.localToWorldMatrix * Matrix4x4.Translate(cutter.ShapeOffset);
+        }
+
+
+        // Опора формы в мире — низ посередине дыры.
+        public static Vector3 ShapeBottomOf(GeometryCutter cutter)
+        {
+            return ShapeToWorld(cutter).MultiplyPoint3x4(Vector3.zero);
+        }
+
+
         // Копия выреза в мире: сам вырез, поднятый на шаг копий столько раз, какая это копия. Копия 0 — сам вырез.
         public static Matrix4x4 CopyToWorld(GeometryCutter cutter, int copy)
         {
-            return Matrix4x4.Translate(Vector3.up * (copy * cutter.CopyStep)) * cutter.transform.localToWorldMatrix;
+            return Matrix4x4.Translate(Vector3.up * (copy * cutter.CopyStep)) * ShapeToWorld(cutter);
         }
 
 

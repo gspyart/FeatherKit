@@ -9,6 +9,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Выделенные грани в окне сцены (<see cref="BoxModelFaceSelection"/>): подсветка и одна ручка-стрелки посередине.
     /// Тянешь — все грани сдвигаются на одно и то же расстояние по сетке, каждая только поперёк себя:
     /// выделил верх трёх коробок, потянул вверх — все три выросли одинаково. Коробка не тоньше шага сетки, всё с Undo.
+    /// С Ctrl — выдавить: от каждой грани новая коробка (<see cref="BoxModelPartExtrusion"/>).
     /// </summary>
     public static class BoxModelFaceMoveHandle
     {
@@ -25,6 +26,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public static void DrawSelection()
         {
+            BoxModelPartExtrusion.FinishIfReleased();
+            BoxModelPartExtrusion.DrawDepthLabel();
+
             var faces = BoxModelFaceSelection.Faces;
 
             if (isDragging && GUIUtility.hotControl == 0)
@@ -85,7 +89,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 BeginDrag(faces, position);
 
             handlePosition = movedPosition;
-            MoveFaces(faces, handlePosition - dragStartPosition);
+
+            // С Ctrl грани стоят, а от каждой растёт новая коробка.
+            if (!BoxModelPartExtrusion.TryExtrudeFaces(faces, handlePosition - dragStartPosition, EditorGUI.actionKey))
+                MoveFaces(faces, handlePosition - dragStartPosition);
         }
 
         private static void BeginDrag(IReadOnlyList<BoxModelPartFace> faces, Vector3 position)

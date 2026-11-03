@@ -9,13 +9,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Инструмент «Комната»: протянул прямоугольник на полу — комната (<see cref="BoxModelRoom"/>) на высоту этажа (этаж минус перекрытие).
     /// Внутри дома (пол под потолком того же объекта или сплошной объём) — без стен вокруг: комната вырезается в его объёме.
-    /// В пустоте — со стенами, полом и потолком вокруг. Толщины и материалы — из <see cref="LiveBuilderRoomSettings"/>;
-    /// потом всё это — числа самой комнаты. Пока тянешь, объект уже показан с комнатой.
+    /// В пустоте — со стенами, полом и потолком вокруг: куда встают стены от нарисованного — наружу, внутрь или по центру — по настройке «Стены».
+    /// Толщины и материалы — из <see cref="LiveBuilderRoomSettings"/>; потом всё это — числа самой комнаты. Пока тянешь, объект уже показан с комнатой.
     /// В здании по контуру — не коробки, а одна замкнутая перегородка-комната (стена по линии): стороны, что легли на его стены, не строятся,
     /// но остаются в контуре — поменяешь потом форму комнаты или здания, они пересчитаются. Высота — до потолка его этажа, на этом этаже или на всех выше.
     /// </summary>
     public sealed class LiveBuilderRoomGesture
     {
+        // Уже этого комната не станет, сколько бы стены ни отступали внутрь, м.
+        private const float MinRoomWidth = 0.1f;
+
         private readonly LiveBuilderFloorRectangle rectangle = new();
         private readonly BoxModelPreview preview = new();
 
@@ -26,7 +29,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
             ? "Тяни — комната, встанут только недостающие перегородки. Отпусти — готово"
             : rectangle.IsInsideModel
                 ? "Тяни — размер комнаты, она вырежется в доме. Отпусти — готово. Esc — отмена"
-                : "Тяни — размер комнаты, стены вокруг добавятся. Отпусти — готово. Esc — отмена";
+                : "Тяни — комната, стены встанут " + WallSideText + ". Отпусти — готово. Esc — отмена";
+
+        private static string WallSideText => LiveBuilderRoomSettings.WallSide switch
+        {
+            LiveBuilderRoomWallSide.Inward => "внутрь",
+            LiveBuilderRoomWallSide.Centered => "по центру линии",
+            _ => "снаружи"
+        };
 
 
         // ── Жест ─────────────────────────────────────────────────────────
@@ -71,7 +81,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             var model = rectangle.TargetModel;
-            var min = rectangle.Min;
+            var min = RoomMin();
             var size = RoomSize();
             var hasWalls = !rectangle.IsInsideModel;
 
@@ -102,7 +112,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private List<BoxModelSolverBox> BuildBoxes()
         {
             var boxes = new List<BoxModelSolverBox>();
-            var min = rectangle.Min;
+            var min = RoomMin();
             var size = RoomSize();
             var materials = new BoxModelSideMaterials(null, LiveBuilderRoomSettings.FloorMaterial, LiveBuilderRoomSettings.CeilingMaterial,
                 LiveBuilderRoomSettings.WallMaterial);
@@ -117,12 +127,33 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return boxes;
         }
 
-        // Внутренний размер: прямоугольник на высоту этажа минус перекрытие.
+        // Угол комнаты изнутри: стены внутрь или по центру — отступ от нарисованного.
+        private Vector3 RoomMin()
+        {
+            var inset = WallInset();
+            return rectangle.Min + new Vector3(inset.x, 0f, inset.y);
+        }
+
+        // Внутренний размер: нарисованное без отступа стен, на высоту этажа минус перекрытие.
         private Vector3 RoomSize()
         {
+            var inset = WallInset();
             var size = rectangle.Max - rectangle.Min;
+            size.x -= inset.x * 2f;
+            size.z -= inset.y * 2f;
             size.y = LiveBuilderRoomSettings.ClearHeight;
             return size;
+        }
+
+        // Отступ комнаты от нарисованного по X и Z, м. В доме своих стен нет — и отступа нет; комната не уже 0,1 м.
+        private Vector2 WallInset()
+        {
+            if (rectangle.IsInsideModel)
+                return Vector2.zero;
+
+            var inset = LiveBuilderRoomWalls.InsetOf(LiveBuilderRoomSettings.WallSide, LiveBuilderRoomSettings.WallThickness);
+            var drawn = rectangle.Max - rectangle.Min;
+            return new Vector2(Mathf.Clamp(inset, 0f, (drawn.x - MinRoomWidth) / 2f), Mathf.Clamp(inset, 0f, (drawn.z - MinRoomWidth) / 2f));
         }
 
         // Толщина стен и перекрытий вокруг комнаты в пустоте.
@@ -148,6 +179,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 spline.Add(new BezierKnot(room.transform.InverseTransformPoint(buildingTransform.TransformPoint(corner))), TangentMode.Linear);
 
             spline.Closed = true;
+            room.Alignment = LiveBuilderRoomWalls.AlignmentFor(spline, LiveBuilderRoomSettings.WallSide);
             SplineWallRebuilder.Rebuild(room);
             Selection.activeGameObject = room.gameObject;
         }
@@ -182,14 +214,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             using (new Handles.DrawingScope(rectangle.Plane.FrameToWorld))
             {
-                var min = rectangle.Min;
-                var max = rectangle.Max;
-                var size = max - min;
+                var min = RoomMin();
+                var size = RoomSize();
+                var max = min + size;
                 Handles.color = BoxModelPartHandles.CutColor;
-                Handles.DrawWireCube(new Vector3((min.x + max.x) / 2f, min.y + LiveBuilderRoomSettings.ClearHeight / 2f, (min.z + max.z) / 2f),
-                    new Vector3(size.x, LiveBuilderRoomSettings.ClearHeight, size.z));
-                BoxModelSceneText.DrawLabel(max, BoxModelSceneText.FormatMeters(size.x) + " × " + BoxModelSceneText.FormatMeters(size.z) +
-                                                 " м, высота " + BoxModelSceneText.FormatMeters(LiveBuilderRoomSettings.ClearHeight) + " м");
+                Handles.DrawWireCube(min + size / 2f, size);
+                BoxModelSceneText.DrawLabel(max, "комната " + BoxModelSceneText.FormatMeters(size.x) + " × " + BoxModelSceneText.FormatMeters(size.z) +
+                                                 " м, высота " + BoxModelSceneText.FormatMeters(size.y) + " м");
             }
         }
 
