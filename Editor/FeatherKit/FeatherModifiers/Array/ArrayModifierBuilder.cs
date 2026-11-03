@@ -16,12 +16,16 @@ namespace FeatherKit.EditorTools
     /// Копии скрытые (<see cref="ArrayPreviewCopy"/>): видны в сцене, но их нет в иерархии, в файле сцены и в шаге Ctrl+Z —
     /// это след настроек, его всегда можно собрать заново. Поменялись настройки или объект сдвинули — копии переставляются, сами те же;
     /// объект поправили — копии собираются заново, чтобы повторить правку (<see cref="ArrayModifierWatcher"/>).
+    /// Меши, которые не лежат файлом, а собираются компонентом (ProBuilder), у копии — свои: скрытой копии ProBuilder сам их не собирает.
+    /// Модификатор из самого префаба копии не достаётся: иначе копии строили бы свои копии без конца.
     /// «Apply» превращает копии в обычные объекты, и это уже один шаг Ctrl+Z.
     /// </summary>
     public static class ArrayModifierBuilder
     {
         // Скрыты в иерархии и инспекторе, не сохраняются ни в сцену, ни в сборку.
         private const HideFlags PreviewFlags = HideFlags.HideAndDontSave;
+
+        private const string ProBuilderMeshTypeName = "UnityEngine.ProBuilder.ProBuilderMesh";
 
 
         // Копии появились, переехали или ушли: то, что от них зависит (вырезы копий режут стены), пора сверить.
@@ -42,6 +46,10 @@ namespace FeatherKit.EditorTools
         // Копии — на места по настройкам. recreatesCopies — собрать копии заново: объект поправили, и они должны это повторить.
         public static void Rebuild(ArrayModifier array, bool recreatesCopies = false)
         {
+            // Модификатор внутри чужой копии (он в префабе, а копия — экземпляр префаба) не строит своих: иначе копии копий без конца.
+            if (IsInsidePreviewCopy(array))
+                return;
+
             var copies = array.PreviewCopies;
             copies.RemoveAll(copy => copy == null);
 
@@ -78,7 +86,6 @@ namespace FeatherKit.EditorTools
                 var prefab = PrefabUtility.GetCorrespondingObjectFromSource(original);
                 copy = parent != null ? (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent) : (GameObject)PrefabUtility.InstantiatePrefab(prefab, original.scene);
 
-                // Модификатор — добавленный поверх префаба компонент, в правки он не входит: у копий его нет.
                 PrefabUtility.SetPropertyModifications(copy, PrefabUtility.GetPropertyModifications(original));
             }
             else
@@ -87,16 +94,97 @@ namespace FeatherKit.EditorTools
 
                 if (parent == null)
                     SceneManager.MoveGameObjectToScene(copy, original.scene);
-
-                Object.DestroyImmediate(copy.GetComponent<ArrayModifier>());
             }
+
+            // У копии модификатора нет — даже если он в самом префабе.
+            foreach (var copyArray in copy.GetComponents<ArrayModifier>())
+                Object.DestroyImmediate(copyArray);
 
             var marker = copy.AddComponent<ArrayPreviewCopy>();
             marker.Owner = array;
             SetFlagsInHierarchy(copy, PreviewFlags);
+            DetachSceneMeshes(copy);
+            BuildGeneratedMeshes(original, copy);
+            CopyMissingMeshes(original, copy);
 
             array.PreviewCopies.Add(copy);
             return copy;
+        }
+
+        // Меш не из файла — собранный для оригинала (ProBuilder): копии нужен свой, иначе сборка копии писала бы в меш оригинала.
+        private static void DetachSceneMeshes(GameObject copy)
+        {
+            foreach (var filter in copy.GetComponentsInChildren<MeshFilter>(true))
+                if (filter.sharedMesh != null && !EditorUtility.IsPersistent(filter.sharedMesh))
+                    filter.sharedMesh = null;
+        }
+
+        // Меш, которого нет в файле, а его собирает компонент, — ProBuilder: у скрытой копии он сам его не собирает.
+        // Просим собрать копии свой меш (MakeUnique): клон помнит меш оригинала, и обычная сборка писала бы в него.
+        // ProBuilder зовём по имени: FeatherKit от него не зависит. Собранный меш — копии, живёт и уходит вместе с ней.
+        private static void BuildGeneratedMeshes(GameObject original, GameObject copy)
+        {
+            var originalMeshes = MeshesOf(original);
+
+            foreach (var component in copy.GetComponentsInChildren<Component>(true))
+            {
+                if (component == null || component.GetType().FullName != ProBuilderMeshTypeName)
+                    continue;
+
+                InvokeWithDefaults(component, "MakeUnique");
+
+                if (component.TryGetComponent<MeshFilter>(out var filter) && filter.sharedMesh != null
+                                                                           && !EditorUtility.IsPersistent(filter.sharedMesh) && !originalMeshes.Contains(filter.sharedMesh))
+                    filter.sharedMesh.hideFlags = PreviewFlags;
+            }
+        }
+
+        private static HashSet<Mesh> MeshesOf(GameObject root)
+        {
+            var meshes = new HashSet<Mesh>();
+
+            foreach (var filter in root.GetComponentsInChildren<MeshFilter>(true))
+                if (filter.sharedMesh != null)
+                    meshes.Add(filter.sharedMesh);
+
+            return meshes;
+        }
+
+        private static void InvokeWithDefaults(Component component, string methodName)
+        {
+            foreach (var method in component.GetType().GetMethods())
+            {
+                if (method.Name != methodName)
+                    continue;
+
+                var parameters = method.GetParameters();
+
+                if (!System.Array.TrueForAll(parameters, parameter => parameter.HasDefaultValue))
+                    continue;
+
+                method.Invoke(component, System.Array.ConvertAll(parameters, parameter => parameter.DefaultValue));
+                return;
+            }
+        }
+
+        // Остальные пустые меши (собирает не ProBuilder) — своя копия меша оригинала. Части совпадают по порядку в иерархии.
+        private static void CopyMissingMeshes(GameObject original, GameObject copy)
+        {
+            var originalFilters = original.GetComponentsInChildren<MeshFilter>(true);
+            var copyFilters = copy.GetComponentsInChildren<MeshFilter>(true);
+
+            for (var index = 0; index < copyFilters.Length && index < originalFilters.Length; index++)
+            {
+                var originalMesh = originalFilters[index].sharedMesh;
+
+                if (copyFilters[index].sharedMesh != null || originalMesh == null)
+                    continue;
+
+                var ownMesh = Object.Instantiate(originalMesh);
+                ownMesh.name = originalMesh.name;
+                ownMesh.hideFlags = PreviewFlags;
+                copyFilters[index].sharedMesh = ownMesh;
+            }
         }
 
         // Место и поворот — от самого объекта, масштаб — его; имя по номеру. Меняется только то, что отличается.
@@ -128,7 +216,10 @@ namespace FeatherKit.EditorTools
             for (var index = copies.Count - 1; index >= firstRemoved; index--)
             {
                 if (copies[index] != null)
+                {
+                    DestroyOwnMeshes(copies[index]);
                     Object.DestroyImmediate(copies[index]);
+                }
 
                 copies.RemoveAt(index);
             }
@@ -152,6 +243,7 @@ namespace FeatherKit.EditorTools
             foreach (var copy in copies)
             {
                 SetFlagsInHierarchy(copy, HideFlags.None);
+                KeepOwnMeshes(copy);
                 Object.DestroyImmediate(copy.GetComponent<ArrayPreviewCopy>());
                 copy.transform.SetSiblingIndex(++siblingIndex);
                 Undo.RegisterCreatedObjectUndo(copy, "Apply Array");
@@ -186,6 +278,9 @@ namespace FeatherKit.EditorTools
                     continue;
 
                 var owner = marker.Owner;
+
+                if (owner != null && IsInsidePreviewCopy(owner))
+                    owner = null;
 
                 if (owner != null && owner.PreviewCopies.Contains(marker.gameObject))
                     continue;
@@ -276,6 +371,28 @@ namespace FeatherKit.EditorTools
 
 
         // ── Помощники ────────────────────────────────────────────────────
+
+        // Свои меши скрытой копии (CopyMissingMeshes) живут, только пока жива копия.
+        private static void DestroyOwnMeshes(GameObject copy)
+        {
+            foreach (var filter in copy.GetComponentsInChildren<MeshFilter>(true))
+                if (filter.sharedMesh != null && filter.sharedMesh.hideFlags == PreviewFlags)
+                    Object.DestroyImmediate(filter.sharedMesh);
+        }
+
+        // «Apply»: свои меши копии сохраняются в сцену вместе с ней.
+        private static void KeepOwnMeshes(GameObject copy)
+        {
+            foreach (var filter in copy.GetComponentsInChildren<MeshFilter>(true))
+                if (filter.sharedMesh != null && filter.sharedMesh.hideFlags == PreviewFlags)
+                    filter.sharedMesh.hideFlags = HideFlags.None;
+        }
+
+        // Модификатор на скрытой копии другого массива или внутри неё.
+        private static bool IsInsidePreviewCopy(ArrayModifier array)
+        {
+            return array.GetComponentInParent<ArrayPreviewCopy>(true) != null;
+        }
 
         // Флаги — на сам объект и всех его детей: иначе дети скрытой копии сохранились бы в сцену.
         private static void SetFlagsInHierarchy(GameObject root, HideFlags flags)
