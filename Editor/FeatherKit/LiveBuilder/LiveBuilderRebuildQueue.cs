@@ -31,6 +31,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Spline.Changed += OnSplineChanged;
             EditorApplication.update += OnEditorUpdate;
             EditorSceneManager.sceneOpened += OnSceneOpened;
+
+            // Скрытые копии массива правок редактора не дают, а их вырезы режут стены.
+            ArrayModifierBuilder.PreviewCopiesChanged += RequestCheck;
             RequestCheck();
         }
 

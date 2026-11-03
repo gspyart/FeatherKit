@@ -106,7 +106,7 @@ namespace FeatherKit.EditorTools
             if (problem != null)
                 EditorGUILayout.HelpBox(problem, MessageType.Warning);
             else
-                EditorGUILayout.LabelField("This object and " + array.Copies.Count + " copies", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField("This object and " + array.PreviewCopies.Count + " copies", EditorStyles.miniLabel);
         }
     }
 }

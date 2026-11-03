@@ -27,7 +27,7 @@ namespace FeatherKit.EditorTools
             if (ArrayModifierBuilder.ProblemOf(array) != null)
                 return false;
 
-            var copySize = ArrayModifierBuilder.CopySizeOf(array.gameObject);
+            var copySize = ArrayModifierPlacement.CopySizeOf(array.gameObject);
             var frame = Matrix4x4.TRS(array.transform.position, array.transform.rotation, Vector3.one);
 
             using (new Handles.DrawingScope(frame))

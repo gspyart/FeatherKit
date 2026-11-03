@@ -1,8 +1,7 @@
 using System.Collections.Generic;
-using FeatherKit.LevelDesign;
 using UnityEngine;
 
-namespace FeatherKit.EditorTools
+namespace FeatherKit.LevelDesign
 {
     /// <summary>Одна копия массива: её номер (у самого объекта — 1), место и поворот относительно объекта — в его осях, в метрах.</summary>
     public readonly struct ArrayCopyPose
@@ -26,9 +25,16 @@ namespace FeatherKit.EditorTools
     /// Сетка нумерует копии вдоль X, потом вверх по Y, потом по Z — у окон фасада номера идут вдоль стены, этаж за этажом.
     /// Круг — вокруг оси Y, объект — первая точка круга, центр — напротив его «лица», если копии смотрят в центр.
     /// Пропущенные номера — мест нет, номера остальных те же; объект пропустить нельзя.
+    /// Считает одинаково и в редакторе, и в игре: там копии ставит сам компонент.
     /// </summary>
     public static class ArrayModifierPlacement
     {
+        // Размер копии без мешей — как у кубика в метр: шаг от края не схлопывается в ноль.
+        private static readonly Vector3 FallbackCopySize = Vector3.one;
+
+
+        // ── Раскладка ────────────────────────────────────────────────────
+
         // Сколько копий по настройкам, вместе с самим объектом и пропущенными.
         public static int TotalCountOf(ArrayModifier array)
         {
@@ -121,5 +127,64 @@ namespace FeatherKit.EditorTools
             position = direction * array.Radius;
             rotation = array.FacesCenter ? Quaternion.LookRotation(-direction, Vector3.up) : Quaternion.identity;
         }
+
+
+        // Мировое место копии: от самого объекта, в его осях.
+        public static void WorldPoseOf(Transform original, ArrayCopyPose pose, out Vector3 position, out Quaternion rotation)
+        {
+            position = original.position + original.rotation * pose.Position;
+            rotation = original.rotation * pose.Rotation;
+        }
+
+
+        // ── Размер копии ─────────────────────────────────────────────────
+
+        // Размер объекта в его осях, в метрах: рамка мешей его и его детей. Копии — точно такие же, поэтому шаг «от края» — размер плюс зазор.
+        // Объект, чей размер по мешам не виден (проём режет чужую стену), говорит его сам — IArrayCopySize.
+        public static Vector3 CopySizeOf(GameObject original)
+        {
+            if (original.TryGetComponent<IArrayCopySize>(out var ownSize))
+                return ownSize.ArrayCopySize;
+
+            var root = original.transform;
+            var toOriginal = Matrix4x4.TRS(root.position, root.rotation, Vector3.one).inverse;
+            var bounds = new Bounds();
+            var hasBounds = false;
+
+            foreach (var mesh in MeshesOf(original))
+            {
+                var meshToOriginal = toOriginal * mesh.Owner.localToWorldMatrix;
+
+                for (var corner = 0; corner < 8; corner++)
+                {
+                    var point = meshToOriginal.MultiplyPoint3x4(mesh.Bounds.center + Vector3.Scale(mesh.Bounds.extents, CornerDirection(corner)));
+
+                    if (hasBounds)
+                        bounds.Encapsulate(point);
+                    else
+                        bounds = new Bounds(point, Vector3.zero);
+
+                    hasBounds = true;
+                }
+            }
+
+            return hasBounds ? bounds.size : FallbackCopySize;
+        }
+
+        private static IEnumerable<(Transform Owner, Bounds Bounds)> MeshesOf(GameObject original)
+        {
+            foreach (var filter in original.GetComponentsInChildren<MeshFilter>(true))
+                if (filter.sharedMesh != null)
+                    yield return (filter.transform, filter.sharedMesh.bounds);
+
+            foreach (var skinned in original.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                if (skinned.sharedMesh != null)
+                    yield return (skinned.transform, skinned.sharedMesh.bounds);
+        }
+
+        private static Vector3 CornerDirection(int corner) => new(
+            (corner & 1) == 0 ? -1f : 1f,
+            (corner & 2) == 0 ? -1f : 1f,
+            (corner & 4) == 0 ? -1f : 1f);
     }
 }

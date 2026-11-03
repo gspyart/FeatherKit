@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using FeatherKit.Attributes;
 using UnityEngine;
@@ -16,8 +17,9 @@ namespace FeatherKit.LevelDesign
     /// Модификатор Array, как в Blender: этот объект — первая копия, остальные встают рядом по сетке или по кругу —
     /// окна вдоль фасада, колонны по кругу зала. Ставится из окна Feather Modifiers кнопкой «Array» на выделенный объект.
     /// Копии — соседи объекта в том же родителе: экземпляры его префаба с теми же правками, а у объекта без префаба — его клоны.
+    /// В редакторе копии скрытые (<see cref="ArrayPreviewCopy"/>): видны в сцене, но их нет в иерархии и в файле сцены — собирает их редактор.
     /// Двигаешь или правишь объект — копии повторяют за ним; руками копии не правят. Удалил объект — копии уходят с ним.
-    /// «Apply» снимает модификатор, копии остаются обычными объектами. В игре компонент ничего не делает — только хранит настройки и список копий.
+    /// В игре копии ставит сам компонент при запуске. «Apply» снимает модификатор, копии становятся обычными объектами.
     /// </summary>
     [FDescription("Array modifier: this object is the first copy, the others stand next to it in a grid or a circle. " +
                   "Edit or move this object and the copies follow. Apply keeps the copies as ordinary objects.")]
@@ -27,6 +29,9 @@ namespace FeatherKit.LevelDesign
     {
         // Больше — уже не расстановка окон, а ошибка в числе: редактор не станет плодить тысячи объектов.
         public const int MaxCopies = 1000;
+
+        // Копии из игры ставят свои копии — нельзя: у клона модификатор снимается, пока он ничего не начал.
+        private static bool isSpawningCopies;
 
         [Tooltip("Grid — rows along this object's X, Y and Z. Circle — copies around a center, this object is one of them")]
         [SerializeField] private ArrayModifierLayout layout = ArrayModifierLayout.Grid;
@@ -61,12 +66,12 @@ namespace FeatherKit.LevelDesign
         [Tooltip("Copy numbers to leave out: 2 — the copy next to this object. For example, a door instead of the third window")]
         [SerializeField] private List<int> skippedCopies = new();
 
-        // Копии, которые собрал редактор, и чем они собраны: изменилось — пересборка. Пишет редактор.
-        [SerializeField, HideInInspector] private List<GameObject> copies = new();
-        [SerializeField, HideInInspector] private string builtSignature;
+        // Скрытые копии редактора и чем они собраны: изменилось — пересборка. Пишет редактор, в сцену не сохраняется.
+        [NonSerialized] private readonly List<GameObject> previewCopies = new();
+        [NonSerialized] private string builtSignature;
 
-        // Каким был объект изнутри (компоненты, дети), когда копии собраны: после Ctrl+Z совпало — копии уже верные. Пишет редактор.
-        [SerializeField, HideInInspector] private string builtContent;
+        // Каким был объект изнутри (компоненты, дети), когда копии собраны: совпало — копии уже верные. Пишет редактор.
+        [NonSerialized] private string builtContent;
 
 
         public ArrayModifierLayout Layout
@@ -126,7 +131,7 @@ namespace FeatherKit.LevelDesign
 
         public List<int> SkippedCopies => skippedCopies;
 
-        public List<GameObject> Copies => copies;
+        public List<GameObject> PreviewCopies => previewCopies;
 
         public string BuiltSignature
         {
@@ -138,6 +143,47 @@ namespace FeatherKit.LevelDesign
         {
             get => builtContent;
             set => builtContent = value;
+        }
+
+
+        // ── Копии в игре ─────────────────────────────────────────────────
+
+        // Клоны объекта по местам массива, без модификатора. Скрытые копии редактора уже стоят (запуск без перезагрузки сцены) — хватит их.
+        private void SpawnCopies()
+        {
+            previewCopies.RemoveAll(copy => copy == null);
+
+            if (previewCopies.Count > 0)
+                return;
+
+            var original = transform;
+            var poses = ArrayModifierPlacement.CopyPosesOf(this, ArrayModifierPlacement.CopySizeOf(gameObject));
+            isSpawningCopies = true;
+
+            try
+            {
+                foreach (var pose in poses)
+                {
+                    ArrayModifierPlacement.WorldPoseOf(original, pose, out var position, out var rotation);
+                    var copy = Instantiate(gameObject, position, rotation, original.parent);
+                    DestroyImmediate(copy.GetComponent<ArrayModifier>());
+                    copy.name = gameObject.name + " " + pose.Number;
+                    copy.transform.localScale = original.localScale;
+                }
+            }
+            finally
+            {
+                isSpawningCopies = false;
+            }
+        }
+
+
+        // ── Unity-события ────────────────────────────────────────────────
+
+        private void Awake()
+        {
+            if (Application.isPlaying && !isSpawningCopies)
+                SpawnCopies();
         }
     }
 }
