@@ -5,19 +5,19 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Дёрнуть триггер аниматора: дверь открывается, люк падает.</summary>
     [Serializable]
-    [ScenarioBlock("Анимация/Триггер аниматора")]
+    [ScenarioBlock("Animation/Animator Trigger")]
     public class AnimatorTriggerAction : ScenarioInstantAction
     {
-        [Tooltip("Чей аниматор. Пусто — аниматор на объекте сценария")]
-        [ScenarioLabel("Аниматор")]
+        [Tooltip("Whose animator. Empty — the animator on the scenario object")]
+        [ScenarioLabel("Animator")]
         [SerializeField] private Animator animator;
 
-        [Tooltip("Имя параметра-триггера в аниматоре, как в окне Animator")]
-        [ScenarioLabel("Триггер")]
+        [Tooltip("Name of the trigger parameter, as in the Animator window")]
+        [ScenarioLabel("Trigger")]
         [SerializeField] private string triggerName;
 
 
-        public override string Summary => string.IsNullOrEmpty(triggerName) ? "триггер не задан" : triggerName;
+        public override string Summary => string.IsNullOrEmpty(triggerName) ? "no trigger set" : triggerName;
 
 
         protected override void Apply(ScenarioRun run)
@@ -25,7 +25,7 @@ namespace FeatherKit.Scenarios
             var targetAnimator = run.ComponentOrOwners(animator);
 
             if (targetAnimator == null)
-                throw new InvalidOperationException("Аниматор не найден");
+                throw new InvalidOperationException("Animator not found");
 
             targetAnimator.SetTrigger(triggerName);
         }

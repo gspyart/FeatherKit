@@ -6,31 +6,25 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>
     /// Запустить другой сценарий — со своими условиями.
-    /// «Кто вызвал» передаётся дальше: тот, кто вошёл в триггер здесь, будет им и там.
+    /// «Caller» передаётся дальше: тот, кто вошёл в триггер здесь, будет им и там.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Сценарий/Запустить сценарий")]
-    public class RunScenarioAction : ScenarioAction
+    [ScenarioBlock("Scenario/Run Scenario")]
+    public class RunScenarioAction : ScenarioLongAction
     {
-        [ScenarioLabel("Сценарий")]
+        [ScenarioLabel("Scenario")]
         [SerializeField] private Scenario scenario;
 
-        [Tooltip("Следующий шаг начнётся, когда тот сценарий закончит")]
-        [ScenarioLabel("Ждать конца")]
-        [SerializeField] private bool waitsForEnd;
 
-
-        public override string Summary => scenario != null
-            ? scenario.name + (waitsForEnd ? " · ждать конца" : "")
-            : "сценарий не выбран";
+        public override string Summary => scenario != null ? scenario.name : "no scenario selected";
 
 
         public override IEnumerator Perform(ScenarioRun run)
         {
             if (scenario == null)
-                throw new InvalidOperationException("Сценарий не выбран");
+                throw new InvalidOperationException("No scenario selected");
 
-            if (!scenario.TryRun(run.Instigator) || !waitsForEnd)
+            if (!scenario.TryRun(run.Instigator))
                 yield break;
 
             while (scenario != null && scenario.IsRunning)

@@ -5,15 +5,15 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Оборвать идущий сценарий — другой или этот же: шаги после этого блока не выполнятся.</summary>
     [Serializable]
-    [ScenarioBlock("Сценарий/Остановить сценарий")]
+    [ScenarioBlock("Scenario/Stop Scenario")]
     public class StopScenarioAction : ScenarioInstantAction
     {
-        [Tooltip("Какой сценарий остановить. Пусто — этот")]
-        [ScenarioLabel("Сценарий")]
+        [Tooltip("Which scenario to stop. Empty — this one")]
+        [ScenarioLabel("Scenario")]
         [SerializeField] private Scenario scenario;
 
 
-        public override string Summary => scenario != null ? scenario.name : "этот";
+        public override string Summary => scenario != null ? scenario.name : "this one";
 
 
         protected override void Apply(ScenarioRun run)

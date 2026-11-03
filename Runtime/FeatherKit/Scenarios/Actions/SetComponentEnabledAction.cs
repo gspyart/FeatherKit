@@ -8,22 +8,22 @@ namespace FeatherKit.Scenarios
     /// Объект остаётся включённым.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Объект/Включить или выключить компонент")]
+    [ScenarioBlock("Object/Enable or Disable Component")]
     public class SetComponentEnabledAction : ScenarioInstantAction
     {
-        [Tooltip("Компонент, который включается и выключается: свет, коллайдер, рендерер, скрипт. " +
-                 "Перетащите сюда сам компонент из инспектора")]
-        [ScenarioLabel("Компонент")]
+        [Tooltip("A component that can be enabled and disabled: a light, collider, renderer, script. " +
+                 "Drag the component itself here from the Inspector")]
+        [ScenarioLabel("Component")]
         [SerializeField] private Component component;
 
 
-        [ScenarioLabel("Действие")]
+        [ScenarioLabel("Action")]
         [SerializeField] private ScenarioSwitch change;
 
 
         public override string Summary => component != null
-            ? $"{change.Describe()} {component.GetType().Name} на {component.name}"
-            : "компонент не выбран";
+            ? $"{change.Describe()} {component.GetType().Name} on {component.name}"
+            : "no component selected";
 
 
         protected override void Apply(ScenarioRun run)

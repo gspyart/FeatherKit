@@ -6,8 +6,8 @@ using UnityEngine;
 namespace FeatherKit.EditorTools
 {
     /// <summary>
-    /// Разделы сценария «Когда», «Если», «Что сделать» — одни и те же в инспекторе и в окне сценариев.
-    /// - в игре: что сейчас идёт, подсветка шага, кнопки «Запустить» и «Остановить»
+    /// Разделы сценария «When», «If», «Do» — одни и те же в инспекторе и в окне сценариев.
+    /// - в игре: что сейчас идёт, подсветка шага, кнопки «Run» и «Stop»
     /// - предупреждает, если событию триггера не хватает коллайдера на объекте
     /// - в окне над каждым разделом: копировать, вставить, свернуть и развернуть всё
     /// </summary>
@@ -30,13 +30,12 @@ namespace FeatherKit.EditorTools
             scenario = (Scenario)serializedObject.targetObject;
 
             eventsList = new ScenarioBlockList(serializedObject.FindProperty("events"), typeof(ScenarioEvent),
-                "Нет событий — сценарий запустится только из другого сценария, кнопки или Timeline");
+                "No events — the scenario only runs from another scenario, a button or Timeline");
 
             conditionsList = new ScenarioBlockList(serializedObject.FindProperty("conditions"), typeof(ScenarioCondition),
-                "Без условий — запускается всегда");
+                "No conditions — always runs");
 
-            actionsList = new ScenarioBlockList(serializedObject.FindProperty("actions"), typeof(ScenarioAction),
-                "Нет шагов", () => Application.isPlaying && scenario != null ? scenario.CurrentActionIndex : -1);
+            actionsList = new ScenarioBlockList(serializedObject.FindProperty("actions"), typeof(ScenarioAction), "No steps");
 
             conditionsMode = serializedObject.FindProperty("conditionsMode");
             runsOnce = serializedObject.FindProperty("runsOnce");
@@ -49,28 +48,28 @@ namespace FeatherKit.EditorTools
 
             DrawRunState();
 
-            InspectorSection.Draw("scenario.events", "Когда", 0, () =>
+            InspectorSection.Draw("scenario.events", "When", 0, () =>
             {
                 DrawListTools(eventsList);
                 eventsList.Draw();
                 DrawMissingTriggerWarning();
             });
 
-            InspectorSection.Draw("scenario.conditions", "Если", 1, () =>
+            InspectorSection.Draw("scenario.conditions", "If", 1, () =>
             {
                 DrawListTools(conditionsList);
-                EditorGUILayout.PropertyField(conditionsMode, new GUIContent("Нужно", "Сколько условий должно сойтись для запуска"));
+                EditorGUILayout.PropertyField(conditionsMode, new GUIContent("Required", "How many conditions must be met to run"));
                 conditionsList.Draw();
             });
 
-            InspectorSection.Draw("scenario.actions", "Что сделать", 2, () =>
+            InspectorSection.Draw("scenario.actions", "Do", 2, () =>
             {
                 DrawListTools(actionsList);
                 actionsList.Draw();
             });
 
             EditorGUILayout.Space(4);
-            EditorGUILayout.PropertyField(runsOnce, new GUIContent("Только один раз", runsOnce.tooltip));
+            EditorGUILayout.PropertyField(runsOnce, new GUIContent("Run Once", runsOnce.tooltip));
 
             serializedObject.ApplyModifiedProperties();
         }
@@ -84,19 +83,19 @@ namespace FeatherKit.EditorTools
             {
                 GUILayout.FlexibleSpace();
 
-                if (ListToolButton("Копировать всё"))
+                if (ListToolButton("Copy All"))
                     blockList.CopyAll();
 
                 using (new EditorGUI.DisabledScope(!blockList.CanPaste))
                 {
-                    if (ListToolButton($"Вставить ({ScenarioBlockClipboard.Count})"))
+                    if (ListToolButton($"Paste ({ScenarioBlockClipboard.Count})"))
                         blockList.PasteAtEnd();
                 }
 
-                if (ListToolButton("Свернуть всё"))
+                if (ListToolButton("Collapse All"))
                     blockList.SetAllExpanded(false);
 
-                if (ListToolButton("Развернуть всё"))
+                if (ListToolButton("Expand All"))
                     blockList.SetAllExpanded(true);
             }
         }
@@ -114,20 +113,20 @@ namespace FeatherKit.EditorTools
             if (!Application.isPlaying || scenario == null)
                 return;
 
-            var state = scenario.IsRunning
-                ? $"Идёт шаг {scenario.CurrentActionIndex + 1}"
-                : scenario.HasRun ? "Ждёт события · уже срабатывал" : "Ждёт события";
+            var state = !scenario.IsRunning
+                ? scenario.HasRun ? "Waiting for an event · already ran" : "Waiting for an event"
+                : scenario.CurrentActionIndex >= 0 ? $"Running step {scenario.CurrentActionIndex + 1}" : "Finishing background steps";
 
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.LabelField(state, EditorStyles.boldLabel);
 
-                if (GUILayout.Button("Запустить", GUILayout.Width(80)) && !scenario.TryRun())
-                    ShowNotification("Не запустился: уже идёт, уже был или условия не сошлись");
+                if (GUILayout.Button("Run", GUILayout.Width(80)) && !scenario.TryRun())
+                    ShowNotification("Did not start: already running, already ran or conditions not met");
 
                 using (new EditorGUI.DisabledScope(!scenario.IsRunning))
                 {
-                    if (GUILayout.Button("Остановить", GUILayout.Width(80)))
+                    if (GUILayout.Button("Stop", GUILayout.Width(80)))
                         scenario.Stop();
                 }
             }
@@ -150,9 +149,9 @@ namespace FeatherKit.EditorTools
                 || scenario.GetComponents<Collider>().Any(collider => collider.isTrigger))
                 return;
 
-            EditorGUILayout.HelpBox("Событию триггера нужен коллайдер с галкой Is Trigger на этом же объекте.", MessageType.Warning);
+            EditorGUILayout.HelpBox("A trigger event needs a collider with Is Trigger checked on this same object.", MessageType.Warning);
 
-            if (GUILayout.Button("Добавить триггер-коробку"))
+            if (GUILayout.Button("Add Trigger Box"))
             {
                 var box = Undo.AddComponent<BoxCollider>(scenario.gameObject);
                 box.isTrigger = true;

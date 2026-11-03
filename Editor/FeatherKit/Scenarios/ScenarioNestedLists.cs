@@ -9,7 +9,7 @@ using UnityEngine;
 namespace FeatherKit.EditorTools
 {
     /// <summary>
-    /// Вложенные столбики блоков — ветки «то / иначе», тело повтора, группа условий — в цветной скобке, как C-блок в Scratch.
+    /// Вложенные столбики блоков — ветки «Then / Else», тело повтора, группа условий — в цветной скобке, как C-блок в Scratch.
     /// Хранит готовые списки на время жизни SerializedObject: перестраивать их каждую отрисовку дорого
     /// и сбрасывало бы выделение.
     /// </summary>
@@ -78,14 +78,14 @@ namespace FeatherKit.EditorTools
         }
 
         /// <summary>
-        /// Подпись столбика: элемент списка веток — «Ветка 1» вместо «Element 0»,
+        /// Подпись столбика: элемент списка веток — «Branch 1» вместо «Element 0»,
         /// поле — из ScenarioLabelAttribute, иначе как передал Unity.
         /// </summary>
         public static GUIContent ReadableLabelOf(GUIContent label, FieldInfo field)
         {
             if (label.text.StartsWith(UnityElementLabelPrefix) &&
                 int.TryParse(label.text.Substring(UnityElementLabelPrefix.Length), out var index))
-                return new GUIContent($"Ветка {index + 1}", label.tooltip);
+                return new GUIContent($"Branch {index + 1}", label.tooltip);
 
             var text = field?.GetCustomAttribute<ScenarioLabelAttribute>()?.Text;
 
@@ -109,7 +109,7 @@ namespace FeatherKit.EditorTools
 
         private static ScenarioBlockList ListOf(SerializedProperty property)
         {
-            return ScenarioNestedLists.ListOf(property.FindPropertyRelative("actions"), typeof(ScenarioAction), "Нет шагов");
+            return ScenarioNestedLists.ListOf(property.FindPropertyRelative("actions"), typeof(ScenarioAction), "No steps");
         }
     }
 
@@ -131,12 +131,12 @@ namespace FeatherKit.EditorTools
         private static ScenarioBlockList ListOf(SerializedProperty property)
         {
             return ScenarioNestedLists.ListOf(property.FindPropertyRelative("conditions"), typeof(ScenarioCondition),
-                "Без условий — выполнено всегда");
+                "No conditions — always met");
         }
     }
 
 
-    /// <summary>Ветка «случайно одно из»: строка «Ветка N — вес», под ней её шаги в скобке.</summary>
+    /// <summary>Ветка «Random One Of»: строка «Branch N — Weight», под ней её шаги в скобке.</summary>
     [CustomPropertyDrawer(typeof(WeightedActionBranch))]
     internal class WeightedActionBranchDrawer : PropertyDrawer
     {
@@ -155,13 +155,13 @@ namespace FeatherKit.EditorTools
             var branchLabel = ScenarioNestedLists.ReadableLabelOf(label, null);
             var weight = property.FindPropertyRelative("weight");
 
-            EditorGUI.PropertyField(weightRect, weight, new GUIContent($"{branchLabel.text} — вес", weight.tooltip));
+            EditorGUI.PropertyField(weightRect, weight, new GUIContent($"{branchLabel.text} — Weight", weight.tooltip));
 
             var actions = property.FindPropertyRelative("actions");
             var actionsRect = new Rect(position.x, weightRect.yMax + Spacing, position.width,
                 EditorGUI.GetPropertyHeight(actions, true));
 
-            EditorGUI.PropertyField(actionsRect, actions, new GUIContent("Шаги"), true);
+            EditorGUI.PropertyField(actionsRect, actions, new GUIContent("Steps"), true);
         }
     }
 }

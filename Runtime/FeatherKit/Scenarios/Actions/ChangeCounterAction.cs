@@ -5,29 +5,29 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Изменить счётчик: прибавить (отрицательное — отнять) или задать значение.</summary>
     [Serializable]
-    [ScenarioBlock("Переменные/Изменить счётчик")]
+    [ScenarioBlock("Variables/Change Counter")]
     public class ChangeCounterAction : ScenarioInstantAction
     {
-        [ScenarioLabel("Счётчик")]
+        [ScenarioLabel("Counter")]
         [SerializeField] private ScenarioCounter counter;
 
-        [ScenarioLabel("Действие")]
+        [ScenarioLabel("Action")]
         [SerializeField] private CounterChange change;
 
-        [Tooltip("Сколько прибавить или какое значение задать")]
-        [ScenarioLabel("Число")]
+        [Tooltip("How much to add, or which value to set")]
+        [ScenarioLabel("Number")]
         [SerializeField] private int amount = 1;
 
 
         public override string Summary => counter == null
-            ? "счётчик не выбран"
+            ? "no counter selected"
             : change == CounterChange.Add ? $"{counter.name} {amount:+0;-0;+0}" : $"{counter.name} = {amount}";
 
 
         protected override void Apply(ScenarioRun run)
         {
             if (counter == null)
-                throw new InvalidOperationException("Счётчик не выбран");
+                throw new InvalidOperationException("No counter selected");
 
             counter.Value = change == CounterChange.Add ? counter.Value + amount : amount;
         }
@@ -36,7 +36,7 @@ namespace FeatherKit.Scenarios
 
     public enum CounterChange
     {
-        [InspectorName("Прибавить")] Add,
-        [InspectorName("Задать")] Set
+        [InspectorName("Add")] Add,
+        [InspectorName("Set")] Set
     }
 }

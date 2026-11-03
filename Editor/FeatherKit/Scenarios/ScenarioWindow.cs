@@ -7,7 +7,7 @@ namespace FeatherKit.EditorTools
 {
     /// <summary>
     /// Окно сценариев: слева все сценарии сцены, справа выбранный на всю ширину, снизу журнал запусков.
-    /// - следит за выделением в иерархии; «Закрепить» оставляет текущий сценарий
+    /// - следит за выделением в иерархии; «Lock» оставляет текущий сценарий
     /// - разделы рисует тот же ScenarioSectionsDrawer, что и инспектор, — правки видны в обоих
     /// </summary>
     public class ScenarioWindow : EditorWindow
@@ -37,7 +37,7 @@ namespace FeatherKit.EditorTools
 
         // ── Открыть и выбрать ────────────────────────────────────────────
 
-        [MenuItem("FeatherKit/Сценарии")]
+        [MenuItem("FeatherKit/Scenarios")]
         public static void OpenFromMenu()
         {
             Open(null);
@@ -46,7 +46,7 @@ namespace FeatherKit.EditorTools
         public static void Open(Scenario scenario)
         {
             var window = GetWindow<ScenarioWindow>();
-            window.titleContent = new GUIContent("Сценарии");
+            window.titleContent = new GUIContent("Scenarios");
 
             if (scenario != null)
                 window.Select(scenario);
@@ -102,15 +102,15 @@ namespace FeatherKit.EditorTools
         {
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
-                var createRect = GUILayoutUtility.GetRect(new GUIContent("+ Сценарий"), EditorStyles.toolbarDropDown);
+                var createRect = GUILayoutUtility.GetRect(new GUIContent("+ Scenario"), EditorStyles.toolbarDropDown);
 
-                if (GUI.Button(createRect, "+ Сценарий", EditorStyles.toolbarDropDown))
+                if (GUI.Button(createRect, "+ Scenario", EditorStyles.toolbarDropDown))
                     sceneList.ShowCreateMenu(createRect);
 
                 GUILayout.FlexibleSpace();
 
-                showsLog = GUILayout.Toggle(showsLog, "Журнал", EditorStyles.toolbarButton);
-                isLocked = GUILayout.Toggle(isLocked, new GUIContent("Закрепить", "Не переключаться на сценарий, выделенный в иерархии"),
+                showsLog = GUILayout.Toggle(showsLog, "Log", EditorStyles.toolbarButton);
+                isLocked = GUILayout.Toggle(isLocked, new GUIContent("Lock", "Don't switch to the scenario selected in the Hierarchy"),
                     EditorStyles.toolbarButton);
             }
         }
@@ -120,7 +120,7 @@ namespace FeatherKit.EditorTools
             if (selected == null)
             {
                 GUILayout.FlexibleSpace();
-                EditorGUILayout.LabelField("Выберите сценарий слева\nили объект со сценарием в иерархии",
+                EditorGUILayout.LabelField("Select a scenario on the left\nor an object with a scenario in the Hierarchy",
                     EditorStyles.centeredGreyMiniLabel, GUILayout.Height(40));
                 GUILayout.FlexibleSpace();
                 return;
@@ -130,7 +130,7 @@ namespace FeatherKit.EditorTools
             {
                 EditorGUILayout.LabelField(selected.name, EditorStyles.largeLabel);
 
-                if (GUILayout.Button("Выделить в сцене", GUILayout.Width(130)))
+                if (GUILayout.Button("Select in Scene", GUILayout.Width(130)))
                 {
                     Selection.activeGameObject = selected.gameObject;
                     EditorGUIUtility.PingObject(selected.gameObject);

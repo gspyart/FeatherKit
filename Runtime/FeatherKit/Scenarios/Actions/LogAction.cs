@@ -6,22 +6,22 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Строка в консоль — проверить, что сценарий дошёл до этого места. В релизе молчит.</summary>
     [Serializable]
-    [ScenarioBlock("Отладка/Записать в лог")]
+    [ScenarioBlock("Debug/Write to Log")]
     public class LogAction : ScenarioInstantAction
     {
-        [ScenarioLabel("Текст")]
+        [ScenarioLabel("Text")]
         [SerializeField] private string message;
 
 
-        public override string Summary => string.IsNullOrEmpty(message) ? "пусто" : message;
+        public override string Summary => string.IsNullOrEmpty(message) ? "empty" : message;
 
 
         protected override void Apply(ScenarioRun run)
         {
-            var instigator = run.Instigator != null ? run.Instigator.name : "никто";
+            var instigator = run.Instigator != null ? run.Instigator.name : "nobody";
 
             FLog.Info(run.Scenario, (run.Scenario.name + ": ", FLogColor.Muted), (message, FLogColor.Value),
-                ($"  (вызвал: {instigator})", FLogColor.Muted));
+                ($"  (called by: {instigator})", FLogColor.Muted));
         }
     }
 }

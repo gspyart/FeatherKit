@@ -6,53 +6,44 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>
     /// Перенести объект к точке — сразу или плавно за заданное время, по желанию с её поворотом.
-    /// Для игрока — «Игрок/Телепорт игрока»: перемещение игрока само обновляет физику и камеру.
+    /// Для игрока — «Player/Teleport Player»: перемещение игрока само обновляет физику и камеру.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Трансформ/Переместить к точке")]
-    public class MoveToPointAction : ScenarioAction
+    [ScenarioBlock("Transform/Move to Point")]
+    public class MoveToPointAction : ScenarioLongAction
     {
-        [Tooltip("Что двигать")]
-        [ScenarioLabel("Что двигать")]
+        [Tooltip("Which object to move")]
+        [ScenarioLabel("What to Move")]
         [SerializeField] private ScenarioTarget target = new ScenarioTarget();
 
-        [Tooltip("Куда: позиция и, если отмечено, поворот этой точки")]
-        [ScenarioLabel("Точка")]
+        [Tooltip("Where to: the position and, if checked, the rotation of this point")]
+        [ScenarioLabel("Point")]
         [SerializeField] private Transform point;
 
-        [Tooltip("Повернуть объект так же, как повёрнута точка")]
-        [ScenarioLabel("С поворотом точки")]
+        [Tooltip("Rotate the object the same way as the point")]
+        [ScenarioLabel("Match Point Rotation")]
         [SerializeField] private bool copiesRotation = true;
 
-        [Tooltip("За сколько секунд доехать. 0 — сразу")]
+        [Tooltip("How many seconds to get there. 0 — instantly")]
         [Min(0f)]
-        [ScenarioLabel("Секунд")]
+        [ScenarioLabel("Seconds")]
         [SerializeField] private float duration;
 
-        [Tooltip("Как разгоняется и тормозит: по горизонтали — время, по вертикали — пройденная доля пути")]
-        [ScenarioLabel("Разгон и торможение")]
+        [Tooltip("How it speeds up and slows down: horizontal — time, vertical — share of the way covered")]
+        [ScenarioLabel("Easing")]
         [SerializeField] private AnimationCurve easing = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
 
-        [Tooltip("Следующий шаг начнётся, когда объект доедет")]
-        [ScenarioLabel("Ждать конца")]
-        [SerializeField] private bool waitsForEnd = true;
 
-
-        public override string Summary => $"{target.Summary} → {(point != null ? point.name : "точка не выбрана")}"
-                                          + (duration > 0f ? $" · {duration:0.##} с" : "");
+        public override string Summary => $"{target.Summary} → {(point != null ? point.name : "no point selected")}"
+                                          + (duration > 0f ? $" · {duration:0.##} s" : "");
 
 
         public override IEnumerator Perform(ScenarioRun run)
         {
             if (point == null)
-                throw new InvalidOperationException("Точка не выбрана");
+                throw new InvalidOperationException("No point selected");
 
-            var moved = target.ResolveRequired(run).transform;
-
-            if (waitsForEnd)
-                yield return Move(moved);
-            else
-                RunAside(Move(moved));
+            yield return Move(target.ResolveRequired(run).transform);
         }
 
         private IEnumerator Move(Transform moved)

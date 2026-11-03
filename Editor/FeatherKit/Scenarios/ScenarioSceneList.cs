@@ -75,7 +75,7 @@ namespace FeatherKit.EditorTools
                 DrawRow(scenario, scenario == selected);
 
             if (shown.Count == 0)
-                EditorGUILayout.LabelField(scenarios.Count == 0 ? "Сценариев нет" : "Ничего не найдено",
+                EditorGUILayout.LabelField(scenarios.Count == 0 ? "No scenarios" : "Nothing found",
                     EditorStyles.centeredGreyMiniLabel);
 
             EditorGUILayout.EndScrollView();
@@ -116,7 +116,8 @@ namespace FeatherKit.EditorTools
             if (!Application.isPlaying)
                 return;
 
-            var text = scenario.IsRunning ? $"▶ шаг {scenario.CurrentActionIndex + 1}" : scenario.HasRun ? "✓ был" : "";
+            var text = !scenario.IsRunning ? scenario.HasRun ? "✓ done" : ""
+                : scenario.CurrentActionIndex >= 0 ? $"▶ step {scenario.CurrentActionIndex + 1}" : "▶ background";
 
             if (text.Length == 0)
                 return;
@@ -144,7 +145,7 @@ namespace FeatherKit.EditorTools
 
             var text = string.Join(", ", titles);
 
-            return text.Length > 0 ? text : "без событий";
+            return text.Length > 0 ? text : "no events";
         }
 
 
@@ -188,13 +189,13 @@ namespace FeatherKit.EditorTools
             var selectedObject = Selection.activeGameObject;
             var canAddToSelected = selectedObject != null && !EditorUtility.IsPersistent(selectedObject);
 
-            menu.AddItem(new GUIContent("Новый объект со сценарием"), false, CreateScenarioObject);
+            menu.AddItem(new GUIContent("New Object with Scenario"), false, CreateScenarioObject);
 
             if (canAddToSelected)
-                menu.AddItem(new GUIContent($"На выделенном объекте ({selectedObject.name})"), false,
+                menu.AddItem(new GUIContent($"On Selected Object ({selectedObject.name})"), false,
                     () => Pick(Undo.AddComponent<Scenario>(selectedObject)));
             else
-                menu.AddDisabledItem(new GUIContent("На выделенном объекте"));
+                menu.AddDisabledItem(new GUIContent("On Selected Object"));
 
             menu.DropDown(buttonRect);
         }
@@ -212,7 +213,7 @@ namespace FeatherKit.EditorTools
             else if (SceneView.lastActiveSceneView != null)
                 scenarioObject.transform.position = SceneView.lastActiveSceneView.pivot;
 
-            Undo.RegisterCreatedObjectUndo(scenarioObject, "Новый сценарий");
+            Undo.RegisterCreatedObjectUndo(scenarioObject, "New Scenario");
             Pick(Undo.AddComponent<Scenario>(scenarioObject));
         }
 

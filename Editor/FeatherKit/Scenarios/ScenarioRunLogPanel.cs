@@ -42,12 +42,12 @@ namespace FeatherKit.EditorTools
         {
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
-                GUILayout.Label("Журнал запусков", EditorStyles.boldLabel);
+                GUILayout.Label("Run Log", EditorStyles.boldLabel);
                 GUILayout.FlexibleSpace();
 
-                showsOnlySelected = GUILayout.Toggle(showsOnlySelected, "Только выбранный", EditorStyles.toolbarButton);
+                showsOnlySelected = GUILayout.Toggle(showsOnlySelected, "Selected Only", EditorStyles.toolbarButton);
 
-                if (GUILayout.Button("Очистить", EditorStyles.toolbarButton))
+                if (GUILayout.Button("Clear", EditorStyles.toolbarButton))
                     ScenarioRunLog.Clear();
             }
         }
@@ -69,16 +69,16 @@ namespace FeatherKit.EditorTools
             }
 
             if (shownCount == 0)
-                EditorGUILayout.LabelField(Application.isPlaying ? "Пока ничего не запускалось" : "Журнал пишется в игре",
+                EditorGUILayout.LabelField(Application.isPlaying ? "Nothing has run yet" : "The log is recorded in Play Mode",
                     EditorStyles.centeredGreyMiniLabel);
         }
 
         private void DrawEntry(ScenarioRunLogEntry entry)
         {
             var record = entry.Record;
-            var scenarioName = record.Scenario != null ? record.Scenario.name : "(удалён)";
+            var scenarioName = record.Scenario != null ? record.Scenario.name : "(deleted)";
             var repeat = entry.RepeatCount > 1 ? $"  ×{entry.RepeatCount}" : "";
-            var instigator = record.InstigatorName != null ? $"  · вызвал {record.InstigatorName}" : "";
+            var instigator = record.InstigatorName != null ? $"  · called by {record.InstigatorName}" : "";
             var text = $"{record.EndTime,7:0.00}   {scenarioName} — {OutcomeTextOf(record)}{repeat}{instigator}";
 
             var previousColor = GUI.contentColor;
@@ -94,10 +94,12 @@ namespace FeatherKit.EditorTools
         {
             return record.Outcome switch
             {
-                ScenarioRunOutcome.Finished => $"отработал за {record.EndTime - record.StartTime:0.##} с",
-                ScenarioRunOutcome.Stopped => "остановлен",
-                ScenarioRunOutcome.Failed => $"оборван на шаге {record.FailedActionIndex + 1}: {record.FailureMessage}",
-                _ => "условия не сошлись"
+                ScenarioRunOutcome.Finished => $"finished in {record.EndTime - record.StartTime:0.##} s",
+                ScenarioRunOutcome.Stopped => "stopped",
+                ScenarioRunOutcome.Failed => record.FailedActionIndex >= 0
+                    ? $"failed at step {record.FailedActionIndex + 1}: {record.FailureMessage}"
+                    : $"failed in a background step: {record.FailureMessage}",
+                _ => "conditions not met"
             };
         }
 

@@ -5,15 +5,15 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Включить или выключить объект целиком, со всеми детьми.</summary>
     [Serializable]
-    [ScenarioBlock("Объект/Включить или выключить объект")]
+    [ScenarioBlock("Object/Activate or Deactivate Object")]
     public class SetObjectActiveAction : ScenarioInstantAction
     {
-        [Tooltip("Какой объект включить или выключить")]
-        [ScenarioLabel("Объект")]
+        [Tooltip("Which object to activate or deactivate")]
+        [ScenarioLabel("Object")]
         [SerializeField] private ScenarioTarget target = new ScenarioTarget();
 
 
-        [ScenarioLabel("Действие")]
+        [ScenarioLabel("Action")]
         [SerializeField] private ScenarioSwitch change;
 
 

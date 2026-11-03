@@ -8,15 +8,17 @@ using UnityEngine;
 namespace FeatherKit.EditorTools
 {
     /// <summary>
-    /// Один столбик блоков: «Когда», «Если», «Что сделать» или вложенный внутри другого блока.
+    /// Один столбик блоков: «When», «If», «Do» или вложенный внутри другого блока.
     /// - блок — цветная плашка категории с подписью настроек, раскрывается в свои поля
     /// - «+» — выбор блока с поиском, перетаскивание меняет порядок
     /// - ПКМ по заголовку: копировать, вставить, дублировать, удалить; весь список — копировать и свернуть
     /// - потерянный блок (класс переименован или удалён) — красная строка вместо полей
+    /// - в игре подсвечен каждый идущий шаг: основной, вложенный и фоновый
     /// </summary>
     internal class ScenarioBlockList
     {
         private const string InvertedFieldName = "isInverted";
+        private const string WaitsForEndFieldName = "waitsForEnd";
         private const float VerticalPadding = 3f;
         private const float FieldSpacing = 2f;
         private const float FoldoutIndent = 12f;
@@ -29,14 +31,11 @@ namespace FeatherKit.EditorTools
 
         private readonly ReorderableList list;
         private readonly Type blockBaseType;
-        private readonly Func<int> runningBlockIndex;
 
 
-        public ScenarioBlockList(SerializedProperty blocks, Type blockBaseType, string emptyText,
-            Func<int> runningBlockIndex = null)
+        public ScenarioBlockList(SerializedProperty blocks, Type blockBaseType, string emptyText)
         {
             this.blockBaseType = blockBaseType;
-            this.runningBlockIndex = runningBlockIndex;
 
             list = new ReorderableList(blocks.serializedObject, blocks,
                 draggable: true, displayHeader: false, displayAddButton: true, displayRemoveButton: true)
@@ -143,7 +142,7 @@ namespace FeatherKit.EditorTools
                 foldoutRect.width -= InvertToggleWidth;
 
                 var toggleRect = new Rect(rect.xMax - InvertToggleWidth, rect.y, InvertToggleWidth, rect.height);
-                inverted.boolValue = EditorGUI.ToggleLeft(toggleRect, "НЕ", inverted.boolValue);
+                inverted.boolValue = EditorGUI.ToggleLeft(toggleRect, "NOT", inverted.boolValue);
             }
 
             var title = HeaderTextOf(block, inverted != null && inverted.boolValue);
@@ -160,30 +159,36 @@ namespace FeatherKit.EditorTools
         {
             var title = ScenarioBlockCatalog.TitleOf(block.GetType());
             var summary = SummaryOf(block);
-            var prefix = isInverted ? "НЕ " : "";
+            var prefix = isInverted ? "NOT " : "";
 
             return string.IsNullOrEmpty(summary)
                 ? $"<b>{prefix}{title}</b>"
                 : $"<b>{prefix}{title}</b>   <color=#9a9a9a>{summary}</color>";
         }
 
+        // Фоновый шаг меняет порядок всего сценария — пометка видна и у свёрнутого блока.
         private static string SummaryOf(object block)
         {
-            return block switch
+            var summary = block switch
             {
                 ScenarioEvent scenarioEvent => scenarioEvent.Summary,
                 ScenarioCondition condition => condition.Summary,
                 ScenarioAction action => action.Summary,
                 _ => null
             };
+
+            if (block is not ScenarioAction { WaitsForEnd: false })
+                return summary;
+
+            return string.IsNullOrEmpty(summary) ? "in background" : summary + " · in background";
         }
 
         private static void DrawLostBlock(Rect rect, SerializedProperty element)
         {
             var typeName = element.managedReferenceFullTypename;
             var text = string.IsNullOrEmpty(typeName)
-                ? "Пустой блок — удалите его кнопкой «−»"
-                : $"Блок потерян: класс {typeName} переименован или удалён. Удалите его кнопкой «−»";
+                ? "Empty block — remove it with the “−” button"
+                : $"Block lost: class {typeName} was renamed or removed. Remove it with the “−” button";
 
             var previousColor = GUI.contentColor;
             GUI.contentColor = LostBlockColor;
@@ -207,23 +212,28 @@ namespace FeatherKit.EditorTools
             return height;
         }
 
-        // Галка «НЕ» — в заголовке, среди полей её не повторяем.
+        // Галка «NOT» — в заголовке, среди полей её не повторяем.
+        // «Wait Until Done» — последней: она про порядок шагов, а не про сам блок, хотя в коде её поле идёт первым.
         private static IEnumerable<SerializedProperty> FieldsOf(SerializedProperty element)
         {
             var field = element.Copy();
             var end = element.GetEndProperty();
+            SerializedProperty waitsForEnd = null;
 
-            if (!field.NextVisible(true))
-                yield break;
+            var hasField = field.NextVisible(true);
 
-            while (field.depth > element.depth && !SerializedProperty.EqualContents(field, end))
+            while (hasField && field.depth > element.depth && !SerializedProperty.EqualContents(field, end))
             {
-                if (field.name != InvertedFieldName)
+                if (field.name == WaitsForEndFieldName)
+                    waitsForEnd = field.Copy();
+                else if (field.name != InvertedFieldName)
                     yield return field.Copy();
 
-                if (!field.NextVisible(false))
-                    yield break;
+                hasField = field.NextVisible(false);
             }
+
+            if (waitsForEnd != null)
+                yield return waitsForEnd;
         }
 
         private void DrawBlockBackground(Rect rect, int index, bool isActive, bool isFocused)
@@ -238,8 +248,17 @@ namespace FeatherKit.EditorTools
 
             ScenarioBlockStyle.DrawBlockBackground(rect, ScenarioBlockStyle.ColorOf(block.GetType()), isActive);
 
-            if (runningBlockIndex != null && index == runningBlockIndex())
+            if (IsPerforming(block))
                 EditorGUI.DrawRect(rect, RunningBlockColor);
+        }
+
+        // Блок из инспектора — тот же объект, что исполняет сценарий: идущий шаг узнаём по ссылке.
+        private bool IsPerforming(object block)
+        {
+            return Application.isPlaying
+                   && block is ScenarioAction action
+                   && Blocks.serializedObject.targetObject is Scenario scenario
+                   && scenario.IsPerforming(action);
         }
 
 
@@ -267,17 +286,17 @@ namespace FeatherKit.EditorTools
         {
             var menu = new GenericMenu();
 
-            menu.AddItem(new GUIContent("Копировать"), false,
+            menu.AddItem(new GUIContent("Copy"), false,
                 () => ScenarioBlockClipboard.Copy(new[] { Blocks.GetArrayElementAtIndex(index).managedReferenceValue }));
 
             if (CanPaste)
-                menu.AddItem(new GUIContent($"Вставить после ({ScenarioBlockClipboard.Count})"), false, () => PasteAt(index + 1));
+                menu.AddItem(new GUIContent($"Paste After ({ScenarioBlockClipboard.Count})"), false, () => PasteAt(index + 1));
             else
-                menu.AddDisabledItem(new GUIContent("Вставить после"));
+                menu.AddDisabledItem(new GUIContent("Paste After"));
 
-            menu.AddItem(new GUIContent("Дублировать"), false, () => DuplicateBlock(index));
+            menu.AddItem(new GUIContent("Duplicate"), false, () => DuplicateBlock(index));
             menu.AddSeparator("");
-            menu.AddItem(new GUIContent("Удалить"), false, () => RemoveBlock(index));
+            menu.AddItem(new GUIContent("Delete"), false, () => RemoveBlock(index));
 
             menu.ShowAsContext();
         }

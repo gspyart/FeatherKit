@@ -3,16 +3,16 @@ using UnityEngine;
 
 namespace FeatherKit.Scenarios
 {
-    /// <summary>Флаг включён. С галкой «НЕ» — выключен.</summary>
+    /// <summary>Флаг включён. С галкой «NOT» — выключен.</summary>
     [Serializable]
-    [ScenarioBlock("Переменные/Флаг включён")]
+    [ScenarioBlock("Variables/Flag Is On")]
     public class FlagCondition : ScenarioCondition
     {
-        [ScenarioLabel("Флаг")]
+        [ScenarioLabel("Flag")]
         [SerializeField] private ScenarioFlag flag;
 
 
-        public override string Summary => flag != null ? flag.name : "флаг не выбран";
+        public override string Summary => flag != null ? flag.name : "no flag selected";
 
 
         protected override bool Check(ScenarioRun run)

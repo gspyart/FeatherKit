@@ -8,10 +8,10 @@ namespace FeatherKit.Scenarios
     /// когда готового блока нет. Переименованный метод тут теряется молча: частое — в свой блок.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Код/Вызвать методы (UnityEvent)")]
+    [ScenarioBlock("Code/Call Methods (UnityEvent)")]
     public class UnityEventAction : ScenarioInstantAction
     {
-        [ScenarioLabel("Вызовы")]
+        [ScenarioLabel("Calls")]
         [UnityEngine.SerializeField] private UnityEvent calls = new UnityEvent();
 
 
@@ -21,7 +21,7 @@ namespace FeatherKit.Scenarios
             {
                 var count = calls.GetPersistentEventCount();
 
-                return count == 0 ? "пусто" : $"вызовов: {count}";
+                return count == 0 ? "empty" : $"calls: {count}";
             }
         }
 

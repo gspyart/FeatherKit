@@ -1,14 +1,14 @@
 using System;
 using System.Collections;
 using UnityEngine;
-using AppContext = FeatherKit.Contexts.AppContext;
 
 namespace FeatherKit.Scenarios
 {
     /// <summary>
-    /// «Что сделать» сценария: один шаг. Может идти несколько кадров —
+    /// «Do» сценария: один шаг. Может идти несколько кадров —
     /// следующий шаг начнётся, когда этот закончится.
-    /// Шагу без ожидания проще наследовать ScenarioInstantAction.
+    /// Шагу без ожидания проще наследовать ScenarioInstantAction,
+    /// долгому шагу, который можно пустить фоном, — ScenarioLongAction.
     /// </summary>
     [Serializable]
     public abstract class ScenarioAction
@@ -16,15 +16,27 @@ namespace FeatherKit.Scenarios
         /// <summary>Короткая подпись настроек для заголовка блока в инспекторе. Null — без неё.</summary>
         public virtual string Summary => null;
 
+        /// <summary>Следующий шаг ждёт конца этого. Не ждать умеет только ScenarioLongAction.</summary>
+        public virtual bool WaitsForEnd => true;
+
 
         public abstract IEnumerator Perform(ScenarioRun run);
+    }
 
 
-        /// <summary>Пустить долгий шаг идти самого, не дожидаясь: сценарий сразу берёт следующий.</summary>
-        protected static void RunAside(IEnumerator routine)
-        {
-            AppContext.Current.Coroutines.Run(ScenarioSteps.Flatten(routine));
-        }
+    /// <summary>
+    /// Долгий шаг с галкой «Wait Until Done»: снята — шаг уходит в фон, а сценарий сразу берёт следующий.
+    /// Сам шаг всегда идёт до конца; ждать его или нет, решает сценарий, а не блок.
+    /// </summary>
+    [Serializable]
+    public abstract class ScenarioLongAction : ScenarioAction
+    {
+        [Tooltip("The next step starts when this one is done. Unchecked — the step runs in the background and the scenario goes on at once")]
+        [ScenarioLabel("Wait Until Done")]
+        [SerializeField] private bool waitsForEnd = true;
+
+
+        public override bool WaitsForEnd => waitsForEnd;
     }
 
 
@@ -46,9 +58,9 @@ namespace FeatherKit.Scenarios
     /// <summary>Что сделать с тем, что включается и выключается.</summary>
     public enum ScenarioSwitch
     {
-        [InspectorName("Включить")] TurnOn,
-        [InspectorName("Выключить")] TurnOff,
-        [InspectorName("Переключить")] Toggle
+        [InspectorName("Turn On")] TurnOn,
+        [InspectorName("Turn Off")] TurnOff,
+        [InspectorName("Toggle")] Toggle
     }
 
 
@@ -68,9 +80,9 @@ namespace FeatherKit.Scenarios
         {
             return change switch
             {
-                ScenarioSwitch.TurnOn => "включить",
-                ScenarioSwitch.TurnOff => "выключить",
-                _ => "переключить"
+                ScenarioSwitch.TurnOn => "turn on",
+                ScenarioSwitch.TurnOff => "turn off",
+                _ => "toggle"
             };
         }
     }

@@ -29,9 +29,9 @@ namespace FeatherKit.EditorTools
         public static string KindTitleOf(Type blockBaseType)
         {
             if (blockBaseType == typeof(ScenarioEvent))
-                return "Когда";
+                return "When";
 
-            return blockBaseType == typeof(ScenarioCondition) ? "Если" : "Что сделать";
+            return blockBaseType == typeof(ScenarioCondition) ? "If" : "Do";
         }
 
 

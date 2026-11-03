@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FeatherKit.EditorTools
 {
     /// <summary>
-    /// Инспектор сценария: описание, кнопка «Открыть в окне» и разделы из ScenarioSectionsDrawer.
+    /// Инспектор сценария: описание, кнопка «Open in Scenarios Window» и разделы из ScenarioSectionsDrawer.
     /// Тесно — то же самое шире и со списком всех сценариев в окне FeatherKit → Сценарии.
     /// </summary>
     [CustomEditor(typeof(Scenario))]
@@ -24,7 +24,7 @@ namespace FeatherKit.EditorTools
         {
             DrawDescription();
 
-            if (GUILayout.Button("Открыть в окне сценариев"))
+            if (GUILayout.Button("Open in Scenarios Window"))
                 ScenarioWindow.Open((Scenario)target);
 
             sections.Draw();

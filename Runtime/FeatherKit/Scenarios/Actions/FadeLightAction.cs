@@ -10,41 +10,28 @@ namespace FeatherKit.Scenarios
     /// Работает с Realtime- и Mixed-светом: запечённый в карту света от этого не изменится.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Свет/Плавная яркость")]
-    public class FadeLightAction : ScenarioAction
+    [ScenarioBlock("Light/Fade Intensity")]
+    public class FadeLightAction : ScenarioLongAction
     {
-        [Tooltip("Какие лампы")]
-        [ScenarioLabel("Лампы")]
+        [Tooltip("Which lights")]
+        [ScenarioLabel("Lights")]
         [SerializeField] private List<Light> lights = new List<Light>();
 
-        [Tooltip("Какой станет яркость (Intensity). 0 — погаснуть")]
+        [Tooltip("Target brightness (Intensity). 0 — turn off")]
         [Min(0f)]
-        [ScenarioLabel("Яркость")]
+        [ScenarioLabel("Intensity")]
         [SerializeField] private float intensity;
 
-        [Tooltip("За сколько секунд. 0 — сразу")]
+        [Tooltip("Over how many seconds. 0 — instantly")]
         [Min(0f)]
-        [ScenarioLabel("Секунд")]
+        [ScenarioLabel("Seconds")]
         [SerializeField] private float duration = 1f;
 
-        [Tooltip("Следующий шаг начнётся, когда яркость дойдёт до заданной")]
-        [ScenarioLabel("Ждать конца")]
-        [SerializeField] private bool waitsForEnd;
 
-
-        public override string Summary => $"{lights.Count} шт → {intensity:0.##} за {duration:0.##} с"
-                                          + (waitsForEnd ? " · ждать конца" : "");
+        public override string Summary => $"{lights.Count} pcs → {intensity:0.##} over {duration:0.##} s";
 
 
         public override IEnumerator Perform(ScenarioRun run)
-        {
-            if (waitsForEnd)
-                yield return Fade();
-            else
-                RunAside(Fade());
-        }
-
-        private IEnumerator Fade()
         {
             var startIntensities = new float[lights.Count];
 

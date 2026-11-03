@@ -9,7 +9,7 @@ namespace FeatherKit.Scenarios
     [CreateAssetMenu(menuName = "FeatherKit/Scenarios/Signal", fileName = "Signal_")]
     public class ScenarioSignal : ScriptableObject
     {
-        [Tooltip("Что значит сигнал и кто его посылает — для себя, в игре не используется")]
+        [Tooltip("What the signal means and who sends it — a note for yourself, not used in the game")]
         [TextArea]
         [SerializeField] private string note;
     }

@@ -7,20 +7,15 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Проиграть Timeline с начала — для постановочных сцен.</summary>
     [Serializable]
-    [ScenarioBlock("Анимация/Проиграть Timeline")]
-    public class PlayTimelineAction : ScenarioAction
+    [ScenarioBlock("Animation/Play Timeline")]
+    public class PlayTimelineAction : ScenarioLongAction
     {
-        [Tooltip("Чей PlayableDirector. Пусто — на объекте сценария")]
+        [Tooltip("Whose PlayableDirector. Empty — the one on the scenario object")]
         [ScenarioLabel("Timeline")]
         [SerializeField] private PlayableDirector director;
 
-        [Tooltip("Следующий шаг начнётся, когда Timeline доиграет")]
-        [ScenarioLabel("Ждать конца")]
-        [SerializeField] private bool waitsForEnd = true;
 
-
-        public override string Summary => (director != null ? director.name : "этот объект")
-                                          + (waitsForEnd ? " · ждать конца" : "");
+        public override string Summary => director != null ? director.name : "this object";
 
 
         public override IEnumerator Perform(ScenarioRun run)
@@ -28,13 +23,10 @@ namespace FeatherKit.Scenarios
             var targetDirector = run.ComponentOrOwners(director);
 
             if (targetDirector == null)
-                throw new InvalidOperationException("PlayableDirector не найден");
+                throw new InvalidOperationException("PlayableDirector not found");
 
             targetDirector.time = 0;
             targetDirector.Play();
-
-            if (!waitsForEnd)
-                yield break;
 
             // По времени, а не только по состоянию: Timeline с Wrap Mode «Hold» не останавливается никогда.
             while (targetDirector != null

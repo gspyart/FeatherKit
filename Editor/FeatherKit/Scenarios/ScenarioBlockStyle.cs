@@ -9,8 +9,8 @@ namespace FeatherKit.EditorTools
 {
     /// <summary>
     /// Вид блоков сценария как в Scratch: цвет по категории, вложенный столбик — в цветной скобке.
-    /// - цвет категории — по первой части пути блока: «Звук/…», «Управление/…»
-    /// - русская подпись поля из ScenarioLabelAttribute
+    /// - цвет категории — по первой части пути блока: «Sound/…», «Control/…»
+    /// - подпись поля из ScenarioLabelAttribute
     /// </summary>
     internal static class ScenarioBlockStyle
     {
@@ -25,18 +25,18 @@ namespace FeatherKit.EditorTools
         // Цвета — как у похожих категорий Scratch, чтобы читались привычно.
         private static readonly Dictionary<string, Color> ColorsByCategory = new Dictionary<string, Color>
         {
-            { "Управление", Hex(0xFFAB19) },
-            { "Логика", Hex(0x59C059) },
-            { "Переменные", Hex(0xFF8C1A) },
-            { "Сигналы", Hex(0xFFD500) },
-            { "Триггер", Hex(0xFFBF00) },
-            { "Объект", Hex(0x5CB1D6) },
-            { "Трансформ", Hex(0x4C97FF) },
-            { "Свет", Hex(0xE6D02E) },
-            { "Звук", Hex(0xCF63CF) },
-            { "Анимация", Hex(0x9966FF) },
-            { "Игрок", Hex(0x0FBD8C) },
-            { "Сценарий", Hex(0xFF6680) }
+            { "Control", Hex(0xFFAB19) },
+            { "Logic", Hex(0x59C059) },
+            { "Variables", Hex(0xFF8C1A) },
+            { "Signals", Hex(0xFFD500) },
+            { "Trigger", Hex(0xFFBF00) },
+            { "Object", Hex(0x5CB1D6) },
+            { "Transform", Hex(0x4C97FF) },
+            { "Light", Hex(0xE6D02E) },
+            { "Sound", Hex(0xCF63CF) },
+            { "Animation", Hex(0x9966FF) },
+            { "Player", Hex(0x0FBD8C) },
+            { "Scenario", Hex(0xFF6680) }
         };
 
         private static readonly Dictionary<(Type, string), GUIContent> LabelsByField = new Dictionary<(Type, string), GUIContent>();

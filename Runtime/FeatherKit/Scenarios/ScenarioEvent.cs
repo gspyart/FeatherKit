@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FeatherKit.Scenarios
 {
     /// <summary>
-    /// «Когда» сценария: следит за чем-то одним и запускает сценарий.
+    /// «When» сценария: следит за чем-то одним и запускает сценарий.
     /// Наследник подписывается в OnAttached, отписывается в OnReleased и зовёт Fire.
     /// </summary>
     [Serializable]

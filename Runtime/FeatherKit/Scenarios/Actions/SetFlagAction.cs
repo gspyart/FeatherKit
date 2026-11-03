@@ -5,24 +5,24 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Поставить флаг сценариев: включить, выключить или переключить.</summary>
     [Serializable]
-    [ScenarioBlock("Переменные/Изменить флаг")]
+    [ScenarioBlock("Variables/Change Flag")]
     public class SetFlagAction : ScenarioInstantAction
     {
-        [ScenarioLabel("Флаг")]
+        [ScenarioLabel("Flag")]
         [SerializeField] private ScenarioFlag flag;
 
 
-        [ScenarioLabel("Действие")]
+        [ScenarioLabel("Action")]
         [SerializeField] private ScenarioSwitch change;
 
 
-        public override string Summary => flag != null ? $"{change.Describe()} {flag.name}" : "флаг не выбран";
+        public override string Summary => flag != null ? $"{change.Describe()} {flag.name}" : "no flag selected";
 
 
         protected override void Apply(ScenarioRun run)
         {
             if (flag == null)
-                throw new InvalidOperationException("Флаг не выбран");
+                throw new InvalidOperationException("No flag selected");
 
             flag.Value = change.StateAfter(flag.Value);
         }

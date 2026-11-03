@@ -13,7 +13,7 @@ namespace FeatherKit.Scenarios
         public static bool IsEnabled(Component component)
         {
             if (component == null)
-                throw new InvalidOperationException("Компонент не выбран");
+                throw new InvalidOperationException("No component selected");
 
             return component switch
             {
@@ -27,7 +27,7 @@ namespace FeatherKit.Scenarios
         public static void SetEnabled(Component component, bool isEnabled)
         {
             if (component == null)
-                throw new InvalidOperationException("Компонент не выбран");
+                throw new InvalidOperationException("No component selected");
 
             switch (component)
             {
@@ -51,7 +51,7 @@ namespace FeatherKit.Scenarios
 
         private static Exception NotSwitchable(Component component)
         {
-            return new InvalidOperationException($"{component.GetType().Name} нельзя включить или выключить");
+            return new InvalidOperationException($"{component.GetType().Name} can't be enabled or disabled");
         }
     }
 }

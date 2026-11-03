@@ -9,32 +9,27 @@ namespace FeatherKit.Scenarios
     /// <summary>
     /// Неисправная лампа: компоненты рывками гаснут и загораются, потом остаются как задано.
     /// Все мигают вместе — свет, луч и светящийся плафон одной лампы не расходятся.
-    /// Без «ждать конца» мигание идёт само, а сценарий сразу берёт следующий шаг.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Свет/Мигание")]
-    public class FlickerAction : ScenarioAction
+    [ScenarioBlock("Light/Flicker")]
+    public class FlickerAction : ScenarioLongAction
     {
-        [Tooltip("Что мигает: свет, рендерер плафона или луча, любой включаемый компонент. Перетащите сами компоненты")]
-        [ScenarioLabel("Что мигает")]
+        [Tooltip("What flickers: a light, a lamp shade or beam renderer, any component that can be switched on and off. Drag the components themselves")]
+        [ScenarioLabel("What Flickers")]
         [SerializeField] private List<Component> components = new List<Component>();
 
-        [Tooltip("Сколько секунд мигать")]
+        [Tooltip("How many seconds to flicker")]
         [Min(0f)]
-        [ScenarioLabel("Секунд")]
+        [ScenarioLabel("Seconds")]
         [SerializeField] private float duration = 1.5f;
 
-        [Tooltip("Сколько длится одна вспышка или провал, секунды")]
-        [ScenarioLabel("Вспышка, с")]
+        [Tooltip("How long one flash or dip lasts, seconds")]
+        [ScenarioLabel("Flash, s")]
         [SerializeField] private RandomRange flashLength = new RandomRange(0.03f, 0.18f, 0.35f);
 
-        [Tooltip("Чем закончить: погаснуть, загореться или вернуть как было")]
-        [ScenarioLabel("В конце")]
+        [Tooltip("How to end: turn off, turn on or restore as before")]
+        [ScenarioLabel("At the End")]
         [SerializeField] private FlickerEnding ending;
-
-        [Tooltip("Следующий шаг начнётся, когда мигание закончится")]
-        [ScenarioLabel("Ждать конца")]
-        [SerializeField] private bool waitsForEnd;
 
 
         public override string Summary
@@ -43,25 +38,17 @@ namespace FeatherKit.Scenarios
             {
                 var end = ending switch
                 {
-                    FlickerEnding.TurnOff => "погаснуть",
-                    FlickerEnding.TurnOn => "загореться",
-                    _ => "как было"
+                    FlickerEnding.TurnOff => "turn off",
+                    FlickerEnding.TurnOn => "turn on",
+                    _ => "as before"
                 };
 
-                return $"{components.Count} шт · {duration:0.##} с → {end}" + (waitsForEnd ? " · ждать конца" : "");
+                return $"{components.Count} pcs · {duration:0.##} s → {end}";
             }
         }
 
 
         public override IEnumerator Perform(ScenarioRun run)
-        {
-            if (waitsForEnd)
-                yield return Flicker();
-            else
-                RunAside(Flicker());
-        }
-
-        private IEnumerator Flicker()
         {
             var initialStates = new bool[components.Count];
 
@@ -101,8 +88,8 @@ namespace FeatherKit.Scenarios
 
     public enum FlickerEnding
     {
-        [InspectorName("Погаснуть")] TurnOff,
-        [InspectorName("Загореться")] TurnOn,
-        [InspectorName("Как было")] AsBefore
+        [InspectorName("Turn Off")] TurnOff,
+        [InspectorName("Turn On")] TurnOn,
+        [InspectorName("As Before")] AsBefore
     }
 }

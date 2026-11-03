@@ -8,14 +8,14 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Случайно одна из веток — с весами: ветка с весом 2 выпадает вдвое чаще ветки с весом 1.</summary>
     [Serializable]
-    [ScenarioBlock("Управление/Случайно одно из")]
-    public class RandomBranchAction : ScenarioAction
+    [ScenarioBlock("Control/Random One Of")]
+    public class RandomBranchAction : ScenarioLongAction
     {
-        [ScenarioLabel("Ветки")]
+        [ScenarioLabel("Branches")]
         [SerializeField] private List<WeightedActionBranch> branches = new List<WeightedActionBranch>();
 
 
-        public override string Summary => $"веток {branches.Count}";
+        public override string Summary => $"branches {branches.Count}";
 
 
         public override IEnumerator Perform(ScenarioRun run)
@@ -48,17 +48,17 @@ namespace FeatherKit.Scenarios
     }
 
 
-    /// <summary>Ветка «случайно одно из»: её шаги и насколько часто она выпадает.</summary>
+    /// <summary>Ветка «Random One Of»: её шаги и насколько часто она выпадает.</summary>
     [Serializable]
     public class WeightedActionBranch
     {
-        [Tooltip("Насколько часто выпадает относительно других веток. 0 — никогда")]
+        [Tooltip("How often it comes up relative to the other branches. 0 — never")]
         [Min(0f)]
-        [ScenarioLabel("Вес")]
+        [ScenarioLabel("Weight")]
         [SerializeField] private float weight = 1f;
 
 
-        [ScenarioLabel("Шаги")]
+        [ScenarioLabel("Steps")]
         [SerializeField] private ScenarioActionList actions = new ScenarioActionList();
 
 

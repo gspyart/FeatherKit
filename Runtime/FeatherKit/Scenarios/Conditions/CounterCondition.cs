@@ -5,20 +5,20 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Сравнить счётчик с числом: «рычагов ≥ 3».</summary>
     [Serializable]
-    [ScenarioBlock("Переменные/Сравнить счётчик")]
+    [ScenarioBlock("Variables/Compare Counter")]
     public class CounterCondition : ScenarioCondition
     {
-        [ScenarioLabel("Счётчик")]
+        [ScenarioLabel("Counter")]
         [SerializeField] private ScenarioCounter counter;
 
-        [ScenarioLabel("Сравнение")]
+        [ScenarioLabel("Comparison")]
         [SerializeField] private ScenarioComparison comparison = ScenarioComparison.GreaterOrEqual;
 
-        [ScenarioLabel("Число")]
+        [ScenarioLabel("Number")]
         [SerializeField] private int value = 1;
 
 
-        public override string Summary => counter != null ? $"{counter.name} {comparison.Symbol()} {value}" : "счётчик не выбран";
+        public override string Summary => counter != null ? $"{counter.name} {comparison.Symbol()} {value}" : "no counter selected";
 
 
         protected override bool Check(ScenarioRun run)

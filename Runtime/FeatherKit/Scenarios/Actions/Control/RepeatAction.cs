@@ -5,29 +5,29 @@ using UnityEngine;
 namespace FeatherKit.Scenarios
 {
     /// <summary>
-    /// Повторить шаги N раз или без конца — и только пока сходятся условия «пока».
+    /// Повторить шаги N раз или без конца — и только пока сходятся условия «While».
     /// Без конца — не чаще раза в кадр, иначе мгновенные шаги подвесили бы игру.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Управление/Повторить")]
-    public class RepeatAction : ScenarioAction
+    [ScenarioBlock("Control/Repeat")]
+    public class RepeatAction : ScenarioLongAction
     {
-        [Tooltip("Сколько раз. 0 — без конца, пока сценарий не остановят или не разойдутся условия «пока»")]
+        [Tooltip("How many times. 0 — endlessly, until the scenario is stopped or the “while” conditions stop being met")]
         [Min(0)]
-        [ScenarioLabel("Сколько раз")]
+        [ScenarioLabel("Times")]
         [SerializeField] private int times = 3;
 
-        [Tooltip("Повторять, только пока условия сходятся. Пусто — без условий")]
-        [ScenarioLabel("Пока")]
+        [Tooltip("Repeat only while the conditions are met. Empty — no conditions")]
+        [ScenarioLabel("While")]
         [SerializeField] private ScenarioConditionList whileConditions = new ScenarioConditionList();
 
 
-        [ScenarioLabel("Шаги")]
+        [ScenarioLabel("Steps")]
         [SerializeField] private ScenarioActionList actions = new ScenarioActionList();
 
 
-        public override string Summary => (times > 0 ? $"{times} раз" : "без конца")
-                                          + (whileConditions.Count > 0 ? $" · пока условий {whileConditions.Count}" : "");
+        public override string Summary => (times > 0 ? $"{times} times" : "endlessly")
+                                          + (whileConditions.Count > 0 ? $" · while conditions {whileConditions.Count}" : "");
 
 
         public override IEnumerator Perform(ScenarioRun run)

@@ -4,24 +4,24 @@ using UnityEngine;
 
 namespace FeatherKit.Scenarios
 {
-    /// <summary>Развилка: условия сошлись — шаги «то», нет — шаги «иначе». Условия проверяются в момент развилки.</summary>
+    /// <summary>Развилка: условия сошлись — шаги «Then», нет — шаги «Else». Условия проверяются в момент развилки.</summary>
     [Serializable]
-    [ScenarioBlock("Управление/Если — иначе")]
-    public class IfAction : ScenarioAction
+    [ScenarioBlock("Control/If — Else")]
+    public class IfAction : ScenarioLongAction
     {
-        [ScenarioLabel("Если")]
+        [ScenarioLabel("If")]
         [SerializeField] private ScenarioConditionList conditions = new ScenarioConditionList();
 
-        [Tooltip("Шаги, если условия сошлись")]
-        [ScenarioLabel("То")]
+        [Tooltip("Steps if the conditions are met")]
+        [ScenarioLabel("Then")]
         [SerializeField] private ScenarioActionList then = new ScenarioActionList();
 
-        [Tooltip("Шаги, если не сошлись. Можно оставить пустым")]
-        [ScenarioLabel("Иначе")]
+        [Tooltip("Steps if they are not met. Can be left empty")]
+        [ScenarioLabel("Else")]
         [SerializeField] private ScenarioActionList otherwise = new ScenarioActionList();
 
 
-        public override string Summary => $"условий {conditions.Count} · то {then.Count} · иначе {otherwise.Count}";
+        public override string Summary => $"conditions {conditions.Count} · then {then.Count} · else {otherwise.Count}";
 
 
         public override IEnumerator Perform(ScenarioRun run)

@@ -2,73 +2,61 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using AppContext = FeatherKit.Contexts.AppContext;
 
 namespace FeatherKit.Scenarios
 {
     /// <summary>
-    /// Ветки идут одновременно: звук, мигание и силуэт разом. Следующий шаг — когда закончатся все.
+    /// Ветки идут одновременно: звук, мигание и силуэт разом.
+    /// Следующий шаг — когда закончатся все ветки или первая из них; тогда остальные обрываются.
     /// Ошибка в любой ветке обрывает сценарий, как ошибка обычного шага.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Управление/Одновременно")]
-    public class ParallelAction : ScenarioAction
+    [ScenarioBlock("Control/In Parallel")]
+    public class ParallelAction : ScenarioLongAction
     {
-        [ScenarioLabel("Ветки")]
+        [Tooltip("When the next step starts: after all branches are done, or after the first one — the rest are cut off")]
+        [ScenarioLabel("Continue When")]
+        [SerializeField] private ParallelCompletion completion;
+
+        [ScenarioLabel("Branches")]
         [SerializeField] private List<ScenarioActionList> branches = new List<ScenarioActionList>();
 
 
-        public override string Summary => $"веток {branches.Count}";
+        public override string Summary => $"branches {branches.Count}"
+                                          + (completion == ParallelCompletion.FirstBranch ? " · until the first one" : "");
 
 
         public override IEnumerator Perform(ScenarioRun run)
         {
-            var progress = new ParallelBranchesProgress { RunningCount = branches.Count };
+            if (branches.Count == 0)
+                yield break;
+
+            var startedBranches = new List<ScenarioBranch>(branches.Count);
 
             foreach (var branch in branches)
-                AppContext.Current.Coroutines.Run(PerformBranch(branch, run, progress));
+                startedBranches.Add(run.StartBranch(branch.Perform(run)));
 
-            while (progress.RunningCount > 0 && progress.Failure == null && !run.IsStopped)
+            while (!IsComplete(startedBranches))
                 yield return null;
 
-            if (progress.Failure != null)
-                throw new InvalidOperationException("Ветка «одновременно» оборвалась: " + progress.Failure.Message, progress.Failure);
+            // Дошедшим до конца Stop ничего не делает — обрываются только отставшие.
+            foreach (var branch in startedBranches)
+                branch.Stop();
         }
 
-        // Ветка идёт отдельной корутиной, поэтому ошибку ловит сама и отдаёт блоку через progress.
-        private static IEnumerator PerformBranch(ScenarioActionList branch, ScenarioRun run, ParallelBranchesProgress progress)
+        private bool IsComplete(List<ScenarioBranch> startedBranches)
         {
-            var steps = ScenarioSteps.Flatten(branch.Perform(run));
-
-            while (!run.IsStopped && progress.Failure == null)
-            {
-                bool hasNextStep;
-
-                try
-                {
-                    hasNextStep = steps.MoveNext();
-                }
-                catch (Exception exception)
-                {
-                    progress.Failure = exception;
-                    break;
-                }
-
-                if (!hasNextStep)
-                    break;
-
-                yield return steps.Current;
-            }
-
-            progress.RunningCount--;
+            return completion == ParallelCompletion.FirstBranch
+                ? startedBranches.Exists(branch => branch.IsFinished)
+                : startedBranches.TrueForAll(branch => branch.IsFinished);
         }
+    }
 
 
-        /// <summary>Сколько веток ещё идёт и чем оборвалась первая упавшая.</summary>
-        private class ParallelBranchesProgress
-        {
-            public int RunningCount;
-            public Exception Failure;
-        }
+    /// <summary>Когда «In Parallel» отпускает сценарий дальше.</summary>
+    public enum ParallelCompletion
+    {
+        [InspectorName("All Branches Are Done")] AllBranches,
+        [InspectorName("First Branch Is Done")] FirstBranch
     }
 }

@@ -5,20 +5,20 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Флаг стал нужным значением — кем бы он ни был поставлен.</summary>
     [Serializable]
-    [ScenarioBlock("Переменные/Флаг изменился")]
+    [ScenarioBlock("Variables/Flag Changed")]
     public class FlagChangedEvent : ScenarioEvent
     {
-        [ScenarioLabel("Флаг")]
+        [ScenarioLabel("Flag")]
         [SerializeField] private ScenarioFlag flag;
 
-        [Tooltip("Срабатывать, когда флаг стал включён; без галки — когда стал выключен")]
-        [ScenarioLabel("Стал включён")]
+        [Tooltip("Fire when the flag turns on; unchecked — when it turns off")]
+        [ScenarioLabel("Turned On")]
         [SerializeField] private bool turnedOn = true;
 
 
         public override string Summary => flag != null
-            ? $"{flag.name} → {(turnedOn ? "вкл" : "выкл")}"
-            : "флаг не выбран";
+            ? $"{flag.name} → {(turnedOn ? "on" : "off")}"
+            : "no flag selected";
 
 
         protected override void OnAttached()

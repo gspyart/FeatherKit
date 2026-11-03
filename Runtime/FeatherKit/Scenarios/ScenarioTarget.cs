@@ -14,15 +14,15 @@ namespace FeatherKit.Scenarios
         [SerializeField] private GameObject specificObject;
 
 
-        /// <summary>Игрок той сцены, где стоит сценарий. Задаёт игра; не задан — цель «Игрок» пуста.</summary>
+        /// <summary>Игрок той сцены, где стоит сценарий. Задаёт игра; не задан — цель «Player» пуста.</summary>
         public static Func<Component, GameObject> PlayerFinder { get; set; }
 
         public string Summary => kind switch
         {
-            ScenarioTargetKind.Self => "этот объект",
-            ScenarioTargetKind.Instigator => "кто вызвал",
-            ScenarioTargetKind.Player => "игрок",
-            _ => specificObject != null ? specificObject.name : "объект не выбран"
+            ScenarioTargetKind.Self => "this object",
+            ScenarioTargetKind.Instigator => "caller",
+            ScenarioTargetKind.Player => "player",
+            _ => specificObject != null ? specificObject.name : "no object selected"
         };
 
 
@@ -43,7 +43,7 @@ namespace FeatherKit.Scenarios
             var target = Resolve(run);
 
             if (target == null)
-                throw new InvalidOperationException($"Цель «{Summary}» не найдена");
+                throw new InvalidOperationException($"Target “{Summary}” not found");
 
             return target;
         }
@@ -52,9 +52,9 @@ namespace FeatherKit.Scenarios
 
     public enum ScenarioTargetKind
     {
-        [InspectorName("Этот объект")] Self,
-        [InspectorName("Кто вызвал")] Instigator,
-        [InspectorName("Игрок")] Player,
-        [InspectorName("Объект")] Specific
+        [InspectorName("This Object")] Self,
+        [InspectorName("Caller")] Instigator,
+        [InspectorName("Player")] Player,
+        [InspectorName("Object")] Specific
     }
 }

@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FeatherKit.Scenarios
 {
     /// <summary>
-    /// Вложенный набор условий внутри блока: «все из» или «хотя бы одно из».
+    /// Вложенный набор условий внутри блока: «all of» или «at least one of».
     /// Из таких наборов, вложенных друг в друга, собирается любая логика вида (a или b) и (b или c).
     /// </summary>
     [Serializable]
@@ -26,7 +26,7 @@ namespace FeatherKit.Scenarios
         }
 
 
-        /// <summary>Пустой набор выполнен всегда — и в режиме «все», и в режиме «хотя бы одно».</summary>
+        /// <summary>Пустой набор выполнен всегда — и в режиме «All Conditions», и в режиме «At Least One».</summary>
         public static bool AreMet(IReadOnlyList<ScenarioCondition> conditions, ScenarioConditionsMode mode, ScenarioRun run)
         {
             var hasConditions = false;

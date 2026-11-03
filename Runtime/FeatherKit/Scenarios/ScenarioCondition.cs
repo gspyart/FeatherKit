@@ -4,13 +4,13 @@ using UnityEngine;
 namespace FeatherKit.Scenarios
 {
     /// <summary>
-    /// «Если» сценария: одна проверка «да или нет» в момент запуска.
-    /// Галка «НЕ» у каждого условия переворачивает ответ.
+    /// «If» сценария: одна проверка «да или нет» в момент запуска.
+    /// Галка «NOT» у каждого условия переворачивает ответ.
     /// </summary>
     [Serializable]
     public abstract class ScenarioCondition
     {
-        [Tooltip("Наоборот: условие выполнено, когда проверка НЕ проходит")]
+        [Tooltip("Inverted: the condition is met when the check does NOT pass")]
         [SerializeField] private bool isInverted;
 
 
@@ -32,7 +32,7 @@ namespace FeatherKit.Scenarios
 
     public enum ScenarioConditionsMode
     {
-        [InspectorName("Все условия")] All,
-        [InspectorName("Хотя бы одно")] Any
+        [InspectorName("All Conditions")] All,
+        [InspectorName("At Least One")] Any
     }
 }

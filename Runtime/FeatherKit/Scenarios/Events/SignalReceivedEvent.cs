@@ -3,16 +3,16 @@ using UnityEngine;
 
 namespace FeatherKit.Scenarios
 {
-    /// <summary>Кто-то послал сигнал. «Кто вызвал» — тот же, что у пославшего сценария.</summary>
+    /// <summary>Кто-то послал сигнал. «Caller» — тот же, что у пославшего сценария.</summary>
     [Serializable]
-    [ScenarioBlock("Сигналы/Сигнал получен")]
+    [ScenarioBlock("Signals/Signal Received")]
     public class SignalReceivedEvent : ScenarioEvent
     {
-        [ScenarioLabel("Сигнал")]
+        [ScenarioLabel("Signal")]
         [SerializeField] private ScenarioSignal signal;
 
 
-        public override string Summary => signal != null ? signal.name : "сигнал не выбран";
+        public override string Summary => signal != null ? signal.name : "no signal selected";
 
 
         protected override void OnAttached()

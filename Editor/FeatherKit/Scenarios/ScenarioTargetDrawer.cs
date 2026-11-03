@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace FeatherKit.EditorTools
 {
-    /// <summary>Цель блока в одну строку: выбор «этот объект / кто вызвал / игрок / объект», у «объекта» — поле справа.</summary>
+    /// <summary>Цель блока в одну строку: выбор «This Object / Caller / Player / Object», у «объекта» — поле справа.</summary>
     [CustomPropertyDrawer(typeof(ScenarioTarget))]
     internal class ScenarioTargetDrawer : PropertyDrawer
     {

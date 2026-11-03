@@ -12,11 +12,12 @@ namespace FeatherKit.Scenarios
     /// <summary>
     /// Сценарий без кода: когда что-то случилось и условия сошлись — выполнить шаги по очереди.
     /// - слушает свои события, пока включён; запуск поверх идущего пропускается
+    /// - запуск идёт, пока идут и основные шаги, и фоновые — пущенные без «Wait Until Done»
     /// - шаги идут на общем раннере корутин: выключение объекта их не обрывает, удаление — обрывает
     /// - пересылает блокам свои Unity-сообщения: старт, вход в триггер и выход из него
     /// - сообщает, чем кончилась каждая попытка запуска, — для журнала в редакторе
     /// </summary>
-    [FDescription("Сценарий без кода: «Когда» что-то случилось и «Если» условия сошлись — выполнить шаги «Что сделать» по очереди. Блоки добавляются кнопкой «+».")]
+    [FDescription("A scenario without code: “When” something happens and the “If” conditions are met — run the “Do” steps in order. Add blocks with the “+” button.")]
     public class Scenario : MonoBehaviour
     {
         [SerializeReference] private List<ScenarioEvent> events = new List<ScenarioEvent>();
@@ -26,7 +27,7 @@ namespace FeatherKit.Scenarios
 
         [SerializeReference] private List<ScenarioAction> actions = new List<ScenarioAction>();
 
-        [Tooltip("Сработать только один раз; дальше события молчат")]
+        [Tooltip("Run only once; after that, events are ignored")]
         [SerializeField] private bool runsOnce;
 
         private bool isRunning;
@@ -53,7 +54,7 @@ namespace FeatherKit.Scenarios
 
         public bool HasRun => hasRun;
 
-        /// <summary>Номер идущего шага; -1 — сценарий стоит. Для подсветки в инспекторе.</summary>
+        /// <summary>Номер идущего основного шага; -1 — сценарий стоит или доигрывают только фоновые шаги.</summary>
         public int CurrentActionIndex { get; private set; } = -1;
 
         public IReadOnlyList<ScenarioEvent> Events => events;
@@ -79,7 +80,7 @@ namespace FeatherKit.Scenarios
 
             if (coroutines == null)
             {
-                FLog.Error(this, ("Сценарий не запустился: нет AppContext — ", FLogColor.Bad), (name, FLogColor.Value));
+                FLog.Error(this, ("Scenario did not start: no AppContext — ", FLogColor.Bad), (name, FLogColor.Value));
                 return false;
             }
 
@@ -89,7 +90,7 @@ namespace FeatherKit.Scenarios
             currentRun = run;
             runStartTime = Time.time;
 
-            runToken = coroutines.Run(PerformActions(run, runNumber));
+            runToken = coroutines.Run(PerformRun(run, runNumber));
 
             return true;
         }
@@ -99,51 +100,65 @@ namespace FeatherKit.Scenarios
             return ScenarioConditionList.AreMet(conditions, conditionsMode, run);
         }
 
+        // Основные шаги — своей веткой; запуск кончается, когда кончились все его ветки или одна упала.
         // Номер запуска нужен, чтобы оборванная корутина не затёрла состояние следующего запуска.
-        private IEnumerator PerformActions(ScenarioRun run, int number)
+        private IEnumerator PerformRun(ScenarioRun run, int number)
         {
-            for (var index = 0; index < actions.Count && number == runNumber; index++)
-            {
-                var action = actions[index];
+            run.StartBranch(PerformActions(run));
 
-                if (action == null)
+            while (number == runNumber && run.Failure == null && run.HasRunningBranches)
+                yield return null;
+
+            if (number != runNumber)
+                yield break;
+
+            if (run.Failure == null)
+            {
+                FinishRun(number, ScenarioRunOutcome.Finished);
+                yield break;
+            }
+
+            var failedIndex = FailedActionIndexOf(run);
+
+            run.Stop();
+            ReportFailedAction(run, failedIndex);
+            FinishRun(number, ScenarioRunOutcome.Failed, failedIndex, run.Failure.Message);
+        }
+
+        private IEnumerator PerformActions(ScenarioRun run)
+        {
+            for (var index = 0; index < actions.Count; index++)
+            {
+                if (run.IsStopped)
+                    yield break;
+
+                if (actions[index] == null)
                     continue;
 
                 CurrentActionIndex = index;
-                var steps = ScenarioSteps.Flatten(action.Perform(run));
-
-                while (number == runNumber)
-                {
-                    bool hasNextStep;
-
-                    try
-                    {
-                        hasNextStep = steps.MoveNext();
-                    }
-                    catch (Exception exception)
-                    {
-                        ReportFailedAction(index, action, exception);
-                        FinishRun(number, ScenarioRunOutcome.Failed, index, exception.Message);
-                        yield break;
-                    }
-
-                    if (!hasNextStep)
-                        break;
-
-                    yield return steps.Current;
-                }
+                yield return run.PerformStep(actions[index]);
             }
 
-            FinishRun(number, ScenarioRunOutcome.Finished);
+            CurrentActionIndex = -1;
         }
 
-        private void ReportFailedAction(int index, ScenarioAction action, Exception exception)
+        // Упал основной шаг или вложенный в него — номер идущего основного шага.
+        // Упал фоновый — его номер, если он сам основной шаг; вложенный фоновый номера не имеет.
+        private int FailedActionIndexOf(ScenarioRun run)
         {
-            FLog.Error(this, ("Сценарий ", FLogColor.Bad), (name, FLogColor.Value),
-                ($" оборван на шаге {index + 1} ({action.GetType().Name}): ", FLogColor.Bad),
-                (exception.Message, FLogColor.Muted));
+            return run.HasFailedInBackground ? actions.IndexOf(run.FailedAction) : CurrentActionIndex;
+        }
 
-            Debug.LogException(exception, this);
+        private void ReportFailedAction(ScenarioRun run, int failedIndex)
+        {
+            var stepText = failedIndex >= 0 ? $" at step {failedIndex + 1}" : run.HasFailedInBackground ? " in a background step" : "";
+            var blockText = run.FailedAction != null ? $" ({run.FailedAction.GetType().Name})" : "";
+
+            FLog.Error(this, ("Scenario ", FLogColor.Bad), (name, FLogColor.Value),
+                ($" failed{stepText}{blockText}: ", FLogColor.Bad),
+                (run.Failure.Message, FLogColor.Muted));
+
+            Debug.LogException(run.Failure, this);
         }
 
         private void FinishRun(int number, ScenarioRunOutcome outcome, int failedActionIndex = -1, string failureMessage = null)
@@ -177,7 +192,10 @@ namespace FeatherKit.Scenarios
         }
 
 
-        /// <summary>Оборвать идущие шаги. Шаг, начатый на других объектах (звук, Timeline), доигрывает сам.</summary>
+        /// <summary>
+        /// Оборвать идущие шаги, фоновые тоже. Начатое шагами на других объектах —
+        /// звук, Timeline, другой сценарий — доигрывает само.
+        /// </summary>
         public void Stop()
         {
             if (!isRunning)
@@ -186,10 +204,17 @@ namespace FeatherKit.Scenarios
             runNumber++;
             isRunning = false;
             CurrentActionIndex = -1;
-            currentRun.IsStopped = true;
 
+            currentRun.Stop();
             runToken.Stop();
             Report(currentRun, runStartTime, ScenarioRunOutcome.Stopped);
+        }
+
+
+        /// <summary>Шаг сейчас идёт — основной, вложенный или фоновый. Для подсветки в инспекторе.</summary>
+        public bool IsPerforming(ScenarioAction action)
+        {
+            return isRunning && currentRun.IsPerforming(action);
         }
 
 

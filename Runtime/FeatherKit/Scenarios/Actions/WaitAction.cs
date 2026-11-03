@@ -6,16 +6,16 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Пауза между шагами. Игровое время: на паузе игры ожидание тоже стоит.</summary>
     [Serializable]
-    [ScenarioBlock("Управление/Подождать")]
+    [ScenarioBlock("Control/Wait")]
     public class WaitAction : ScenarioAction
     {
-        [Tooltip("Сколько секунд ждать")]
+        [Tooltip("How many seconds to wait")]
         [Min(0f)]
-        [ScenarioLabel("Секунд")]
+        [ScenarioLabel("Seconds")]
         [SerializeField] private float seconds = 1f;
 
 
-        public override string Summary => $"{seconds:0.##} с";
+        public override string Summary => $"{seconds:0.##} s";
 
 
         public override IEnumerator Perform(ScenarioRun run)

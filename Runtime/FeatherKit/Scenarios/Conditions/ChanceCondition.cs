@@ -5,12 +5,12 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Случайно, с заданным шансом: при каждой проверке бросок заново.</summary>
     [Serializable]
-    [ScenarioBlock("Логика/Шанс")]
+    [ScenarioBlock("Logic/Chance")]
     public class ChanceCondition : ScenarioCondition
     {
-        [Tooltip("Шанс в процентах: 0 — никогда, 100 — всегда")]
+        [Tooltip("Chance in percent: 0 — never, 100 — always")]
         [Range(0f, 100f)]
-        [ScenarioLabel("Шанс, %")]
+        [ScenarioLabel("Chance, %")]
         [SerializeField] private float percent = 50f;
 
 

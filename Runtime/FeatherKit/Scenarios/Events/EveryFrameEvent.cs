@@ -11,18 +11,18 @@ namespace FeatherKit.Scenarios
     /// Обычно в паре с условиями: сработает в тот кадр, когда они сойдутся. Идущий сценарий не перезапускается.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Объект/Каждый кадр")]
+    [ScenarioBlock("Object/Every Frame")]
     public class EveryFrameEvent : ScenarioEvent
     {
-        [Tooltip("Как часто, секунды игрового времени. 0 — каждый кадр")]
+        [Tooltip("How often, in seconds of game time. 0 — every frame")]
         [Min(0f)]
-        [ScenarioLabel("Интервал, с")]
+        [ScenarioLabel("Interval, s")]
         [SerializeField] private float interval;
 
         [NonSerialized] private CoroutineToken ticking;
 
 
-        public override string Summary => interval > 0f ? $"раз в {interval:0.##} с" : "каждый кадр";
+        public override string Summary => interval > 0f ? $"every {interval:0.##} s" : "every frame";
 
 
         protected override void OnAttached()

@@ -30,7 +30,7 @@ namespace FeatherKit.Scenarios
 
         public ScenarioRunOutcome Outcome { get; }
 
-        /// <summary>Номер шага, на котором сценарий оборвался с ошибкой; -1 — не обрывался.</summary>
+        /// <summary>Номер шага, на котором сценарий оборвался с ошибкой; -1 — не обрывался или упал вложенный фоновый шаг.</summary>
         public int FailedActionIndex { get; }
 
         public string FailureMessage { get; }

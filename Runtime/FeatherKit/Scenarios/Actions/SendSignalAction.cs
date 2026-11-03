@@ -3,22 +3,22 @@ using UnityEngine;
 
 namespace FeatherKit.Scenarios
 {
-    /// <summary>Послать сигнал всем сценариям, которые его ждут. «Кто вызвал» передаётся им дальше.</summary>
+    /// <summary>Послать сигнал всем сценариям, которые его ждут. «Caller» передаётся им дальше.</summary>
     [Serializable]
-    [ScenarioBlock("Сигналы/Послать сигнал")]
+    [ScenarioBlock("Signals/Send Signal")]
     public class SendSignalAction : ScenarioInstantAction
     {
-        [ScenarioLabel("Сигнал")]
+        [ScenarioLabel("Signal")]
         [SerializeField] private ScenarioSignal signal;
 
 
-        public override string Summary => signal != null ? signal.name : "сигнал не выбран";
+        public override string Summary => signal != null ? signal.name : "no signal selected";
 
 
         protected override void Apply(ScenarioRun run)
         {
             if (signal == null)
-                throw new InvalidOperationException("Сигнал не выбран");
+                throw new InvalidOperationException("No signal selected");
 
             ScenarioSignals.Send(signal, run.Instigator);
         }

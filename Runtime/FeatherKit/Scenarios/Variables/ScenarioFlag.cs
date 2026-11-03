@@ -9,7 +9,7 @@ namespace FeatherKit.Scenarios
     [CreateAssetMenu(menuName = "FeatherKit/Scenarios/Flag", fileName = "Flag_")]
     public class ScenarioFlag : ScriptableObject
     {
-        [Tooltip("С каким значением флаг начинает игру")]
+        [Tooltip("The flag's value at the start of the game")]
         [SerializeField] private bool initialValue;
 
 

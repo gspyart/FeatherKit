@@ -6,18 +6,18 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Вход в триггер или выход из него для объектов с нужным тегом; без тега — для любых.</summary>
     [Serializable]
-    [ScenarioBlock("Триггер/Объект с тегом в триггере")]
+    [ScenarioBlock("Trigger/Tagged Object in Trigger")]
     [MovedFrom(false, sourceClassName: "TaggedZoneEvent")]
     public class TaggedTriggerEvent : TriggerEvent
     {
-        [Tooltip("Тег гостя. Пусто — любой объект. Смотрится у объекта с Rigidbody, а без него — у самого коллайдера")]
-        [ScenarioLabel("Тег гостя")]
+        [Tooltip("The visitor's tag. Empty — any object. Checked on the object with the Rigidbody, or on the collider itself if there is none")]
+        [ScenarioLabel("Visitor Tag")]
         [SerializeField] private string visitorTag;
 
 
         public override string Summary => string.IsNullOrEmpty(visitorTag)
-            ? base.Summary + " · кто угодно"
-            : base.Summary + " · тег " + visitorTag;
+            ? base.Summary + " · anyone"
+            : base.Summary + " · tag " + visitorTag;
 
 
         protected override bool IsVisitor(Collider other, out GameObject visitor)

@@ -6,19 +6,19 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Ждать, пока условия сойдутся: игрок посмотрел, флаг включился. Проверка каждый кадр.</summary>
     [Serializable]
-    [ScenarioBlock("Управление/Ждать, пока")]
+    [ScenarioBlock("Control/Wait Until")]
     public class WaitUntilAction : ScenarioAction
     {
-        [ScenarioLabel("Условия")]
+        [ScenarioLabel("Conditions")]
         [SerializeField] private ScenarioConditionList conditions = new ScenarioConditionList();
 
-        [Tooltip("Дольше не ждать, секунды: истекло — сценарий идёт дальше. 0 — ждать сколько угодно")]
+        [Tooltip("Don't wait longer than this, seconds: when it runs out, the scenario moves on. 0 — wait as long as it takes")]
         [Min(0f)]
-        [ScenarioLabel("Не дольше, с")]
+        [ScenarioLabel("Timeout, s")]
         [SerializeField] private float timeout;
 
 
-        public override string Summary => $"условий {conditions.Count}" + (timeout > 0f ? $" · не дольше {timeout:0.##} с" : "");
+        public override string Summary => $"conditions {conditions.Count}" + (timeout > 0f ? $" · timeout {timeout:0.##} s" : "");
 
 
         public override IEnumerator Perform(ScenarioRun run)

@@ -9,7 +9,7 @@ namespace FeatherKit.Scenarios
     [CreateAssetMenu(menuName = "FeatherKit/Scenarios/Counter", fileName = "Counter_")]
     public class ScenarioCounter : ScriptableObject
     {
-        [Tooltip("С каким значением счётчик начинает игру")]
+        [Tooltip("The counter's value at the start of the game")]
         [SerializeField] private int initialValue;
 
 

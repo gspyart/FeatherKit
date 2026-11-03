@@ -6,8 +6,8 @@ using UnityEngine;
 namespace FeatherKit.Scenarios
 {
     /// <summary>
-    /// Вложенный столбик шагов внутри блока: ветки «то» и «иначе», тело повтора, ветка «одновременно».
-    /// Шаги идут по очереди; остановленный сценарий не начинает следующий шаг.
+    /// Вложенный столбик шагов внутри блока: ветки «Then» и «Else», тело повтора, ветка «In Parallel».
+    /// Шаги идут по очереди, фоновые — не дожидаясь; остановленный сценарий не начинает следующий шаг.
     /// </summary>
     [Serializable]
     public class ScenarioActionList
@@ -26,7 +26,7 @@ namespace FeatherKit.Scenarios
                     yield break;
 
                 if (actions[index] != null)
-                    yield return actions[index].Perform(run);
+                    yield return run.PerformStep(actions[index]);
             }
         }
     }

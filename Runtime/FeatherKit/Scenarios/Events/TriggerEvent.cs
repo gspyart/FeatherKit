@@ -10,14 +10,14 @@ namespace FeatherKit.Scenarios
     /// <summary>
     /// Кто-то вошёл в триггер на объекте сценария, вышел из него или находится внутри.
     /// - гость считается один раз, сколько бы коллайдеров у него ни было
-    /// - «пока внутри» — запуск каждый кадр: условия вроде «смотрит на точку» ловятся, когда сойдутся
+    /// - «Stay» — запуск каждый кадр: условия вроде «Player Looks at Point» ловятся, когда сойдутся
     /// - кто считается гостем, решает наследник
     /// </summary>
     [Serializable]
     public abstract class TriggerEvent : ScenarioEvent
     {
-        [Tooltip("Когда срабатывать: при входе в триггер, при выходе или каждый кадр, пока гость внутри")]
-        [ScenarioLabel("Когда")]
+        [Tooltip("When to fire: on entering the trigger, on leaving it or every frame while the visitor is inside")]
+        [ScenarioLabel("When")]
         [SerializeField] private TriggerCrossing crossing;
 
         // Сколько коллайдеров каждого гостя сейчас внутри.
@@ -28,9 +28,9 @@ namespace FeatherKit.Scenarios
 
         public override string Summary => crossing switch
         {
-            TriggerCrossing.Entered => "вход",
-            TriggerCrossing.Exited => "выход",
-            _ => "пока внутри"
+            TriggerCrossing.Entered => "enter",
+            TriggerCrossing.Exited => "exit",
+            _ => "stay"
         };
 
 
@@ -117,15 +117,15 @@ namespace FeatherKit.Scenarios
         }
 
 
-        /// <summary>Этот коллайдер — часть гостя? Гость — объект, который получат шаги как «кто вызвал».</summary>
+        /// <summary>Этот коллайдер — часть гостя? Гость — объект, который получат шаги как «Caller».</summary>
         protected abstract bool IsVisitor(Collider other, out GameObject visitor);
     }
 
 
     public enum TriggerCrossing
     {
-        [InspectorName("Вход")] Entered,
-        [InspectorName("Выход")] Exited,
-        [InspectorName("Пока внутри — каждый кадр")] Staying
+        [InspectorName("Enter")] Entered,
+        [InspectorName("Exit")] Exited,
+        [InspectorName("Stay — Every Frame")] Staying
     }
 }
