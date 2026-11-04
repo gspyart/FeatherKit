@@ -43,7 +43,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var hit = LiveBuilderSceneHit.Find(HandleUtility.GUIPointToWorldRay(current.mousePosition));
 
-            if (hit.HasBoxSurface && !hit.IsHoleCutterInFront && !hit.IsPathOwnerCloser && BoxModelSelectionModeSetting.IsSelectingFaces
+            if (hit.HasBoxSurface && !hit.IsGeometryCutterInFront && !hit.IsPathOwnerCloser && BoxModelSelectionModeSetting.IsSelectingFaces
                 && tool.CanEditFaces)
             {
                 if (!BoxModelPartFace.TryFindUnder(hit.BoxSurface, out var piece))
@@ -89,8 +89,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Что под мышью выделилось бы: резчик дыры, стена или здание, коробка или комната с лестницей, создавшая грань, иначе объект из коробок.
         private static GameObject ClickedObject(LiveBuilderSceneHit hit)
         {
-            if (hit.IsHoleCutterInFront)
-                return hit.HoleCutter.gameObject;
+            if (hit.IsGeometryCutterInFront)
+                return hit.GeometryCutter.gameObject;
 
             if (hit.IsPathOwnerCloser)
                 return hit.PathOwner.gameObject;

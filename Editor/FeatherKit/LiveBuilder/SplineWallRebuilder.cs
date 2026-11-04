@@ -113,8 +113,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Где линия стены проходит внутри коробки (в плане) — там проём на высоту коробки. По отрезку на каждый кусок пути.
         private static void AddCutBoxHoles(Component owner, BoxModel model, SplineWallPath path, MillimeterBox box, List<SplineWallHole> holes)
         {
-            var boxMin = (Vector3)box.Min / MillimeterBox.MillimetersPerMeter;
-            var boxMax = (Vector3)box.Max / MillimeterBox.MillimetersPerMeter;
+            var boxMin = box.MinInMeters;
+            var boxMax = box.MaxInMeters;
             var wallToModel = model.transform.worldToLocalMatrix * owner.transform.localToWorldMatrix;
             var modelToWall = wallToModel.inverse;
 

@@ -49,7 +49,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 Handles.DrawLine(corner, handlePosition, 2f);
 
                 if (radius > 0f || GUIUtility.hotControl == control || HandleUtility.nearestControl == control)
-                    BoxModelSceneText.DrawLabel(handlePosition, "R " + BoxModelSceneText.FormatMeters(radius) + " м");
+                    LiveBuilderSceneText.DrawLabel(handlePosition, "R " + LiveBuilderSceneText.FormatMeters(radius) + " м");
             }
 
             Handles.color = HandleColor;

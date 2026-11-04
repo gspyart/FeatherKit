@@ -36,7 +36,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var names = new List<string> { "Без типа — свои числа" };
 
             foreach (var type in types)
-                names.Add(type.name + " · " + BoxModelSceneText.FormatMeters(type.Thickness) + " м");
+                names.Add(type.name + " · " + LiveBuilderSceneText.FormatMeters(type.Thickness) + " м");
 
             names.Add("Новый тип…");
 

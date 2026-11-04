@@ -179,7 +179,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 var firstFloor = nearestPath.BaseHeightAt(0f) + building.FloorTopHeight;
                 var localHeight = wall.transform.InverseTransformPoint(worldPoint).y - firstFloor;
-                var windowStorey = LiveBuilderStoreys.CurrentStorey - LiveBuilderBuildingContext.BaseStoreyOf(building);
+                var windowStorey = LiveBuilderStoreys.CurrentStorey - SplineBuildingLevelAlignment.BaseStoreyOf(building);
                 var storey = windowStorey >= 0 && windowStorey < building.StoreyCount
                     ? windowStorey
                     : Mathf.Clamp(Mathf.FloorToInt(localHeight / building.StoreyHeight + 0.001f), 0, building.StoreyCount - 1);
@@ -206,7 +206,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Левый край проёма вдоль стены: там, где середина под мышью, или по сетке — по настройке «Место».
         private static float LeftEdgeAlong(float edgeUnderMouse, int gridAxis)
         {
-            return LiveBuilderCutterSettings.IsSnappedToGrid ? BoxModelGrid.Snap(edgeUnderMouse, gridAxis) : edgeUnderMouse;
+            return LiveBuilderCutterSettings.IsSnappedToGrid ? LiveBuilderGrid.Snap(edgeUnderMouse, gridAxis) : edgeUnderMouse;
         }
 
         // Низ проёма без этажей здания: середина по высоте под мышью или низ по сетке — по настройке «Место»; не ниже пола.
@@ -215,7 +215,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var bottom = heightUnderMouse - openingHeight / 2f;
 
             if (LiveBuilderCutterSettings.IsSnappedToGrid)
-                bottom = BoxModelGrid.Snap(bottom, 1);
+                bottom = LiveBuilderGrid.Snap(bottom, 1);
 
             return Mathf.Max(bottom, floor);
         }
@@ -350,8 +350,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     DrawOutline(Matrix4x4.TRS(new Vector3((cutMin.x + cutMax.x) / 2f, cutMin.y, (cutMin.z + cutMax.z) / 2f),
                         Quaternion.LookRotation(wallAxis == 0 ? Vector3.right : Vector3.forward, Vector3.up), Vector3.one), new Vector2(width, size.y), size[wallAxis]);
 
-                BoxModelSceneText.DrawLabel(cutMax, BoxModelSceneText.FormatMeters(width) + " × " + BoxModelSceneText.FormatMeters(size.y) +
-                                                    " м, толщина " + BoxModelSceneText.FormatMeters(size[wallAxis]) + " м");
+                LiveBuilderSceneText.DrawLabel(cutMax, LiveBuilderSceneText.FormatMeters(width) + " × " + LiveBuilderSceneText.FormatMeters(size.y) +
+                                                       " м, толщина " + LiveBuilderSceneText.FormatMeters(size[wallAxis]) + " м");
             }
         }
 
@@ -371,8 +371,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     DrawOutline(Matrix4x4.identity, frameSize, cutterDepth);
 
                 if (copy == 0)
-                    BoxModelSceneText.DrawLabel(copyToWorld.MultiplyPoint3x4(new Vector3(size.Width / 2f, size.Height, 0f)),
-                        BoxModelSceneText.FormatMeters(size.Width) + " × " + BoxModelSceneText.FormatMeters(size.Height) + " м" +
+                    LiveBuilderSceneText.DrawLabel(copyToWorld.MultiplyPoint3x4(new Vector3(size.Width / 2f, size.Height, 0f)),
+                        LiveBuilderSceneText.FormatMeters(size.Width) + " × " + LiveBuilderSceneText.FormatMeters(size.Height) + " м" +
                         (CopiesForTarget > 1 ? ", × " + CopiesForTarget + " этажа" : ""));
             }
         }

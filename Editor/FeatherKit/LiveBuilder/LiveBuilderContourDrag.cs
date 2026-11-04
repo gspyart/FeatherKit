@@ -190,10 +190,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var frame = SnapFrameOf(owner);
             var framePoint = frame != null ? frame.InverseTransformPoint(worldPoint) : worldPoint;
 
-            framePoint = BoxModelGrid.Snap(framePoint);
+            framePoint = LiveBuilderGrid.Snap(framePoint);
 
             if (building != null)
-                framePoint = LiveBuilderBuildingContext.SnapToWalls(building, framePoint);
+                framePoint = SplineBuildingWallSnapping.SnapToWalls(building, framePoint);
 
             return frame != null ? frame.TransformPoint(framePoint) : framePoint;
         }

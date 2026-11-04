@@ -48,7 +48,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private float StairsHeight => isChoosingHeight ? chosenHeight : StoreyStairsHeight;
 
         public string Hint => isChoosingHeight
-            ? "Мышь вверх-вниз — высота: " + BoxModelSceneText.FormatMeters(chosenHeight) + " м (этаж — " + BoxModelSceneText.FormatMeters(StoreyStairsHeight) +
+            ? "Мышь вверх-вниз — высота: " + LiveBuilderSceneText.FormatMeters(chosenHeight) + " м (этаж — " + LiveBuilderSceneText.FormatMeters(StoreyStairsHeight) +
               "). Клик или Enter — готово, Tab — повернуть, Esc — отмена"
             : "Вверх — " + DirectionName(CurrentDirection) + ". Тяни прямоугольник — длина и ширина лестницы. Tab — повернуть. Отпусти — дальше высота. Esc — отмена";
 
@@ -279,9 +279,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 DrawUpArrow(min, size, runAxis, direction);
 
                 var stepCount = StepCountFor(height);
-                BoxModelSceneText.DrawLabel(top, stepCount + " ступеней по " + BoxModelSceneText.FormatMeters(StepDepthFor(height, length)) + " м, " +
-                                                 BoxModelSceneText.FormatMeters(length) + " × " +
-                                                 BoxModelSceneText.FormatMeters(width) + " м, вверх на " + BoxModelSceneText.FormatMeters(height) + " м · Tab — повернуть");
+                LiveBuilderSceneText.DrawLabel(top, stepCount + " ступеней по " + LiveBuilderSceneText.FormatMeters(StepDepthFor(height, length)) + " м, " +
+                                                    LiveBuilderSceneText.FormatMeters(length) + " × " +
+                                                    LiveBuilderSceneText.FormatMeters(width) + " м, вверх на " + LiveBuilderSceneText.FormatMeters(height) + " м · Tab — повернуть");
             }
         }
 

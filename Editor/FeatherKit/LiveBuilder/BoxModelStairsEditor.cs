@@ -71,7 +71,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var length = EditorGUILayout.FloatField(new GUIContent("Length", "Длина марша, м. Ступеней — от высоты, глубина ступени подгоняется под длину"),
                 stairs.Length);
 
-            GUILayout.Label(stairs.StepCount + " ступеней по " + BoxModelSceneText.FormatMeters(stairs.StepDepth) + " м", EditorStyles.miniLabel);
+            GUILayout.Label(stairs.StepCount + " ступеней по " + LiveBuilderSceneText.FormatMeters(stairs.StepDepth) + " м", EditorStyles.miniLabel);
 
             if (Mathf.Approximately(length, stairs.Length))
                 return;

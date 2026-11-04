@@ -126,8 +126,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 points[index] = rectangle.PointAt(bottomCenter + outline[index % outline.Count]);
 
             Handles.DrawAAPolyLine(3f, points);
-            BoxModelSceneText.DrawLabel(rectangle.PointAt(min + size), BoxModelSceneText.FormatMeters(size.x) + " × " + BoxModelSceneText.FormatMeters(size.y) + " м · " +
-                                                                        (LiveBuilderCutterSettings.IsThrough ? "насквозь" : "ниша " + BoxModelSceneText.FormatMeters(LiveBuilderCutterSettings.NicheDepth) + " м"));
+            LiveBuilderSceneText.DrawLabel(rectangle.PointAt(min + size), LiveBuilderSceneText.FormatMeters(size.x) + " × " + LiveBuilderSceneText.FormatMeters(size.y) + " м · " +
+                                                                          (LiveBuilderCutterSettings.IsThrough ? "насквозь" : "ниша " + LiveBuilderSceneText.FormatMeters(LiveBuilderCutterSettings.NicheDepth) + " м"));
         }
 
         // Контур будущего выреза той формы, что выбрана, — тем же кодом, что у самого выреза.

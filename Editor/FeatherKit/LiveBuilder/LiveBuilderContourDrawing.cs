@@ -141,7 +141,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 var curve = spline.GetCurve(wrapped);
                 var middle = owner.transform.TransformPoint((Vector3)CurveUtility.EvaluatePosition(curve, 0.5f));
-                BoxModelSceneText.DrawLabel(middle, BoxModelSceneText.FormatMeters(CurveUtility.ApproximateLength(curve)) + " м");
+                LiveBuilderSceneText.DrawLabel(middle, LiveBuilderSceneText.FormatMeters(CurveUtility.ApproximateLength(curve)) + " м");
             }
         }
     }

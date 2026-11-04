@@ -5,7 +5,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Что под мышью — один разбор луча на все инструменты Live Builder: грань объекта из коробок (<see cref="BoxModelPicker"/>),
     /// ближайший видимый коллайдер и, если это стена по линии или здание, они сами (<see cref="LiveBuilderPathOwners"/>),
-    /// резчик дыры под лучом — вырез или вырезающая коробка в здании (<see cref="HoleCutterPicker"/>). И кто из них ближе к камере.
+    /// резчик дыры под лучом — вырез или вырезающая коробка в здании (<see cref="GeometryCutterPicker"/>). И кто из них ближе к камере.
     /// Спрятанное разрезом над этажом не ловится.
     /// </summary>
     public readonly struct LiveBuilderSceneHit
@@ -15,15 +15,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         private LiveBuilderSceneHit(bool hasBoxSurface, BoxModelSurfaceHit boxSurface, bool hasVisibleHit, RaycastHit visibleHit,
-            Component pathOwner, bool hasHoleCutter, HoleCutterRayHit holeCutterHit)
+            Component pathOwner, bool hasGeometryCutter, GeometryCutterRayHit geometryCutterHit)
         {
             HasBoxSurface = hasBoxSurface;
             BoxSurface = boxSurface;
             HasVisibleHit = hasVisibleHit;
             VisibleHit = visibleHit;
             PathOwner = pathOwner;
-            HasHoleCutter = hasHoleCutter;
-            HoleCutterHit = holeCutterHit;
+            HasGeometryCutter = hasGeometryCutter;
+            GeometryCutterHit = geometryCutterHit;
         }
 
 
@@ -38,33 +38,33 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public Component PathOwner { get; }
 
         // Резчик дыры, в чью коробку входит луч, и где луч его пересекает.
-        public bool HasHoleCutter { get; }
-        public HoleCutterRayHit HoleCutterHit { get; }
+        public bool HasGeometryCutter { get; }
+        public GeometryCutterRayHit GeometryCutterHit { get; }
 
         // Резчик под лучом. Нет — null.
-        public Component HoleCutter => HasHoleCutter ? HoleCutterHit.Cutter : null;
+        public Component GeometryCutter => HasGeometryCutter ? GeometryCutterHit.Cutter : null;
 
         // Стена по линии или здание ближе грани объекта из коробок.
         public bool IsPathOwnerCloser => PathOwner != null && (!HasBoxSurface || VisibleHit.distance < BoxSurface.Distance - Tolerance);
 
-        // Видна дыра резчика: клик по ней или её откосу — он (<see cref="HoleCutterRayHit.IsVisibleBefore"/>).
+        // Видна дыра резчика: клик по ней или её откосу — он (<see cref="GeometryCutterRayHit.IsVisibleBefore"/>).
         // Ближе всего — геометрия самого объекта, на котором стоит вырез (балкон, прорезающий дверь в стене), — она, а не вырез:
         // свой объект вырез не режет, и его грани выделяются как обычно.
-        public bool IsHoleCutterInFront
+        public bool IsGeometryCutterInFront
         {
             get
             {
-                if (!HasHoleCutter)
+                if (!HasGeometryCutter)
                     return false;
 
                 var nearest = Mathf.Min(HasBoxSurface ? BoxSurface.Distance : float.MaxValue, HasVisibleHit ? VisibleHit.distance : float.MaxValue);
-                return !IsHoleCutterOwnGeometryAt(nearest) && HoleCutterHit.IsVisibleBefore(nearest);
+                return !IsGeometryCutterOwnGeometryAt(nearest) && GeometryCutterHit.IsVisibleBefore(nearest);
             }
         }
 
-        private bool IsHoleCutterOwnGeometryAt(float distance)
+        private bool IsGeometryCutterOwnGeometryAt(float distance)
         {
-            var cutterTransform = HoleCutter.transform;
+            var cutterTransform = GeometryCutter.transform;
             var isOwnBoxSurface = HasBoxSurface && BoxSurface.Distance < distance + Tolerance && BoxSurface.Model.transform.IsChildOf(cutterTransform);
             var isOwnCollider = HasVisibleHit && VisibleHit.distance < distance + Tolerance && VisibleHit.collider.transform.IsChildOf(cutterTransform);
             return isOwnBoxSurface || isOwnCollider;
@@ -77,9 +77,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var hasBoxSurface = BoxModelPicker.TryPickSurface(worldRay, out var boxSurface);
             var hasVisibleHit = BoxModelPicker.TryRaycastVisible(worldRay, float.MaxValue, out var visibleHit);
             var pathOwner = hasVisibleHit ? LiveBuilderPathOwners.OwnerOf(visibleHit.collider) : null;
-            var hasHoleCutter = HoleCutterPicker.TryPick(worldRay, out var holeCutterHit);
+            var hasGeometryCutter = GeometryCutterPicker.TryPick(worldRay, out var geometryCutterHit);
 
-            return new LiveBuilderSceneHit(hasBoxSurface, boxSurface, hasVisibleHit, visibleHit, pathOwner, hasHoleCutter, holeCutterHit);
+            return new LiveBuilderSceneHit(hasBoxSurface, boxSurface, hasVisibleHit, visibleHit, pathOwner, hasGeometryCutter, geometryCutterHit);
         }
     }
 }

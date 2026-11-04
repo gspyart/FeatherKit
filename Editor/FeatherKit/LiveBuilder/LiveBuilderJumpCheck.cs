@@ -149,7 +149,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static string Format(float meters)
         {
-            return BoxModelSceneText.FormatMeters(meters);
+            return LiveBuilderSceneText.FormatMeters(meters);
         }
     }
 }

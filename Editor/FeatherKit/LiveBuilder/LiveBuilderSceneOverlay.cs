@@ -17,10 +17,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public override void OnGUI()
         {
-            if (!BoxModelActions.IsToolActive)
+            if (!LiveBuilderActivation.IsToolActive)
             {
                 if (GUILayout.Button(new GUIContent("Live Builder (B)", "Включить инструмент сборки уровня")))
-                    BoxModelActions.SetToolActive(true);
+                    LiveBuilderActivation.SetToolActive(true);
 
                 return;
             }
@@ -63,7 +63,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (GUILayout.Button(new GUIContent("◀", "Этаж ниже (PageDown)"), EditorStyles.miniButtonLeft, GUILayout.Width(22f)))
                 LiveBuilderStoreys.CurrentStorey--;
 
-            GUILayout.Label(new GUIContent("Этаж " + LiveBuilderStoreys.CurrentStorey, "Пол " + BoxModelSceneText.FormatMeters(LiveBuilderStoreys.CurrentFloorHeight) + " м"),
+            GUILayout.Label(new GUIContent("Этаж " + LiveBuilderStoreys.CurrentStorey, "Пол " + LiveBuilderSceneText.FormatMeters(LiveBuilderStoreys.CurrentFloorHeight) + " м"),
                 EditorStyles.miniLabel, GUILayout.ExpandWidth(false));
 
             if (GUILayout.Button(new GUIContent("▶", "Этаж выше (PageUp)"), EditorStyles.miniButtonRight, GUILayout.Width(22f)))
@@ -72,20 +72,20 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Всё, комнаты (разрез на 3 м над полом этажа), стены вниз (на 1 м). Только в окне сцены.
-        // Виды — общие с окном (<see cref="LiveBuilderGlobalZone"/>); своя высота среза — не горит ни одна кнопка.
+        // Виды — общие с окном (<see cref="LiveBuilderViewPresets"/>); своя высота среза — не горит ни одна кнопка.
         private static void DrawVisibility()
         {
-            DrawViewButton(LiveBuilderGlobalZone.ViewAll, new GUIContent("Всё", "Всё как есть"), EditorStyles.miniButtonLeft);
-            DrawViewButton(LiveBuilderGlobalZone.ViewRooms, new GUIContent("Комнаты", "Выше 3 м над полом этажа спрятано"), EditorStyles.miniButtonMid);
-            DrawViewButton(LiveBuilderGlobalZone.ViewWallsDown, new GUIContent("Стены вниз", "Выше 1 м над полом этажа спрятано"), EditorStyles.miniButtonRight);
+            DrawViewButton(LiveBuilderViewPresets.ViewAll, new GUIContent("Всё", "Всё как есть"), EditorStyles.miniButtonLeft);
+            DrawViewButton(LiveBuilderViewPresets.ViewRooms, new GUIContent("Комнаты", "Выше 3 м над полом этажа спрятано"), EditorStyles.miniButtonMid);
+            DrawViewButton(LiveBuilderViewPresets.ViewWallsDown, new GUIContent("Стены вниз", "Выше 1 м над полом этажа спрятано"), EditorStyles.miniButtonRight);
         }
 
         private static void DrawViewButton(int preset, GUIContent content, GUIStyle style)
         {
-            var isCurrent = LiveBuilderGlobalZone.CurrentViewPreset() == preset;
+            var isCurrent = LiveBuilderViewPresets.Current() == preset;
 
             if (GUILayout.Toggle(isCurrent, content, style) && !isCurrent)
-                LiveBuilderGlobalZone.ApplyViewPreset(preset);
+                LiveBuilderViewPresets.Apply(preset);
         }
     }
 }

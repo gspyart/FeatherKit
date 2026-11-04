@@ -62,7 +62,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 RunStep(SplineBuildingLinkSync.SyncAll);
                 RunStep(SplineWallBuildingAnchors.SyncAll);
-                RunStep(HoleCutterLineSync.SyncAll);
+                RunStep(GeometryCutterLineSync.SyncAll);
                 BoxModelRebuilder.ForgetCachedResults();
                 RunStep(BoxModelRebuilder.RebuildChangedModels);
                 RunStep(SplineBuildingRebuilder.RebuildChangedBuildings);

@@ -6,7 +6,7 @@ using UnityEngine.Splines;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Общее у сверок перед пересборкой — привязки к этажам (<see cref="SplineBuildingLinkSync"/>), места на линии (<see cref="HoleCutterLineSync"/>),
+    /// Общее у сверок перед пересборкой — привязки к этажам (<see cref="SplineBuildingLinkSync"/>), места на линии (<see cref="GeometryCutterLineSync"/>),
     /// точек перегородок на стенах здания (<see cref="SplineWallBuildingAnchors"/>):
     /// - правка без Undo: сверка повторит её сама после любого Ctrl+Z; у экземпляра префаба — записана как его правка, иначе потеряется
     /// - подпись линии: поменялась хоть одна точка — другое число, так видно, что линию двигали

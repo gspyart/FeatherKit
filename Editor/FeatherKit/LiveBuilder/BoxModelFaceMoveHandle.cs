@@ -81,7 +81,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return;
             }
 
-            var min = BoxModelRebuilder.LocalMinOf(model, partFace.Part);
+            var min = BoxModelShapeCollector.LocalMinOf(model, partFace.Part.transform);
             var max = min + partFace.Part.Size;
             var axis = BoxFaces.Axis(partFace.Face);
             var axisU = BoxFaces.SurfaceAxisU(partFace.Face);
@@ -122,14 +122,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var worldOffset = handlePosition - dragStartPosition;
 
             // Куски: на сколько стрелки ушли поперёк куска, наружу — плюс.
-            BoxModelFacePiecePushPull.Drag(faces, piece => BoxModelGrid.Snap(
+            BoxModelFacePiecePushPull.Drag(faces, piece => LiveBuilderGrid.Snap(
                 piece.Model.transform.InverseTransformVector(worldOffset)[piece.Piece.Axis], piece.Piece.Axis) * piece.Piece.OutwardSign);
 
             // Цельные грани: с Ctrl стоят, а от каждой растёт новая коробка.
             var wholeFaces = WholeFacesOf(faces);
 
             if (!BoxModelPartExtrusion.TryExtrudeFaces(wholeFaces, worldOffset, EditorGUI.actionKey))
-                MoveFaces(wholeFaces, partFace => BoxModelGrid.Snap(partFace.Model.transform.InverseTransformVector(worldOffset)[BoxFaces.Axis(partFace.Face)],
+                MoveFaces(wholeFaces, partFace => LiveBuilderGrid.Snap(partFace.Model.transform.InverseTransformVector(worldOffset)[BoxFaces.Axis(partFace.Face)],
                     BoxFaces.Axis(partFace.Face)));
         }
 
@@ -143,7 +143,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (!isDragging)
             {
-                var min = BoxModelRebuilder.LocalMinOf(grabbed.Model, grabbed.Part);
+                var min = BoxModelShapeCollector.LocalMinOf(grabbed.Model, grabbed.Part.transform);
                 dragStartFaceCoordinate = isPositive ? min[axis] + grabbed.Part.Size[axis] : min[axis];
                 BeginDrag(faces, Vector3.zero);
             }
@@ -151,7 +151,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var outward = (faceCoordinate - dragStartFaceCoordinate) * (isPositive ? 1f : -1f);
 
             if (!BoxModelPartExtrusion.TryExtrudeFacesOutward(faces, outward, isExtruding))
-                MoveFaces(faces, partFace => BoxModelGrid.Snap(outward, BoxFaces.Axis(partFace.Face)) * (BoxFaces.IsPositive(partFace.Face) ? 1f : -1f));
+                MoveFaces(faces, partFace => LiveBuilderGrid.Snap(outward, BoxFaces.Axis(partFace.Face)) * (BoxFaces.IsPositive(partFace.Face) ? 1f : -1f));
         }
 
         // Отпустили — следующее перетаскивание начнётся заново от того, где грани сейчас.
@@ -172,7 +172,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             foreach (var partFace in faces)
             {
-                var min = BoxModelRebuilder.LocalMinOf(partFace.Model, partFace.Part);
+                var min = BoxModelShapeCollector.LocalMinOf(partFace.Model, partFace.Part.transform);
                 BoxesAtDragStart[partFace.Part] = (min, min + partFace.Part.Size);
             }
         }
@@ -218,7 +218,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             for (var axis = 0; axis < 3; axis++)
             {
-                var step = BoxModelGrid.StepOn(axis);
+                var step = LiveBuilderGrid.StepOn(axis);
 
                 if (movedSides[axis] == 0 || max[axis] - min[axis] >= step)
                     continue;
@@ -229,7 +229,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     min[axis] = max[axis] - step;
                 else
                 {
-                    min[axis] = BoxModelGrid.Snap((min[axis] + max[axis] - step) / 2f, axis);
+                    min[axis] = LiveBuilderGrid.Snap((min[axis] + max[axis] - step) / 2f, axis);
                     max[axis] = min[axis] + step;
                 }
             }
@@ -238,7 +238,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static void Resize(BoxModelPart part, Vector3 localMin, Vector3 localMax)
         {
             var model = part.GetComponentInParent<BoxModel>();
-            var currentMin = BoxModelRebuilder.LocalMinOf(model, part);
+            var currentMin = BoxModelShapeCollector.LocalMinOf(model, part.transform);
 
             if (currentMin == localMin && part.Size == localMax - localMin)
                 return;
@@ -263,7 +263,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     continue;
                 }
 
-                var min = BoxModelRebuilder.LocalMinOf(partFace.Model, partFace.Part);
+                var min = BoxModelShapeCollector.LocalMinOf(partFace.Model, partFace.Part.transform);
                 var center = min + partFace.Part.Size / 2f;
                 var axis = BoxFaces.Axis(partFace.Face);
                 center[axis] = BoxFaces.IsPositive(partFace.Face) ? min[axis] + partFace.Part.Size[axis] : min[axis];

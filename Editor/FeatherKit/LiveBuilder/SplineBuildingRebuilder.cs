@@ -12,15 +12,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// когда изменились контур, числа или вырезающие коробки объекта вокруг — все части, а когда только вырезы — лишь те части, что они режут. Как у стен по линии: по «подписи»,
     /// меши — файлами рядом со сценой, экземпляр префаба без своих правок берёт меши префаба, общий меш копий не перезаписывается. Вырезающие коробки переводит в дыры перекрытий — прямоугольники в плане здания.
     /// Когда проверять — решает общая очередь <see cref="LiveBuilderRebuildQueue"/>: здания — после объектов из коробок.
+    /// Объекты частей в иерархии — найти, создать, убрать — <see cref="SplineBuildingParts"/>.
     /// </summary>
     public static class SplineBuildingRebuilder
     {
         // Версия раскладки: поменялась — все здания пересобираются, даже если их числа те же. 2 — на точке опоры, 3 — по частям, 4 — прямые откосы и торцы дыр;
         // 6 — развёртка верха стен по плану.
         private const int LayoutVersion = 6;
-
-        // Имя группы этажа: «Storey 1», «Storey 2»… Панель окна узнаёт по нему собранную часть здания.
-        public const string StoreyGroupPrefix = "Storey ";
 
 
         // ── Пересборка ───────────────────────────────────────────────────
@@ -36,7 +34,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                     var signature = SignatureOf(building);
 
-                    if (building.BuiltSignature != signature || !ArePartsBuilt(building) || !ArePartsCutUpToDate(building, signature))
+                    if (building.BuiltSignature != signature || !SplineBuildingParts.AreBuilt(building) || !ArePartsCutUpToDate(building, signature))
                         Rebuild(building);
                 }
                 catch (System.Exception exception)
@@ -50,14 +48,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static bool IsPrefabUpToDate(SplineBuilding instance)
         {
             var source = PrefabUtility.GetCorrespondingObjectFromSource(instance);
-            return source != null && source.BuiltSignature == SignatureOf(instance) && ArePartsBuilt(source);
+            return source != null && source.BuiltSignature == SignatureOf(instance) && SplineBuildingParts.AreBuilt(source);
         }
 
         // Чем сейчас собран префаб — если после пересборки он всё равно не сходится, второй раз его не трогаем.
         private static string PrefabStateOf(SplineBuilding instance)
         {
             var source = PrefabUtility.GetCorrespondingObjectFromSource(instance);
-            return (source != null ? source.BuiltSignature : "") + "|" + (source != null && ArePartsBuilt(source));
+            return (source != null ? source.BuiltSignature : "") + "|" + (source != null && SplineBuildingParts.AreBuilt(source));
         }
 
         // У каждой части меш прорезан теми вырезами, что режут её сейчас.
@@ -75,7 +73,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Само здание то же, поменялись только вырезы — пересобираются лишь части, которые они задели: окно на пятом этаже не трогает первый.
         public static void Rebuild(SplineBuilding building)
         {
-            RemoveOwnMeshComponents(building);
+            SplineBuildingParts.RemoveOwnMeshComponents(building);
 
             var signature = SignatureOf(building);
             var isBuildingSame = building.BuiltSignature == signature;
@@ -88,11 +86,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             foreach (var partGeometry in parts)
             {
-                var part = FindPart(building, partGeometry.Kind, partGeometry.Storey);
+                var part = SplineBuildingParts.Find(building, partGeometry.Kind, partGeometry.Storey);
 
                 if (part == null)
                 {
-                    part = CreatePart(building, partGeometry.Kind, partGeometry.Storey);
+                    part = SplineBuildingParts.Create(building, partGeometry.Kind, partGeometry.Storey);
                     isHierarchyChanged = true;
                 }
 
@@ -107,7 +105,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     FillPart(building, part, partGeometry, materials, cutters, partSignature, uncutBounds);
             }
 
-            isHierarchyChanged |= RemoveUnusedParts(building, builtParts);
+            isHierarchyChanged |= SplineBuildingParts.RemoveUnused(building, builtParts);
 
             if (!isBuildingSame)
             {
@@ -124,7 +122,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static void FillPart(SplineBuilding building, SplineBuildingPart part, SplineBuildingPartGeometry partGeometry, Material[] materials,
             List<GeometryCutter> cutters, string partSignature, Bounds uncutBounds)
         {
-            var written = LiveBuilderMeshWriter.Write(part, building.name + " " + PartName(partGeometry.Kind, partGeometry.Storey), mesh =>
+            var written = LiveBuilderMeshWriter.Write(part, building.name + " " + SplineBuildingParts.NameOf(partGeometry.Kind, partGeometry.Storey), mesh =>
             {
                 partGeometry.Geometry.WriteTo(mesh);
                 return materials;
@@ -139,138 +137,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             LiveBuilderMeshWriter.UpdateCollider(part, building.HasCollider, written.Mesh);
-        }
-
-        // ── Части здания ─────────────────────────────────────────────────
-
-        // Все части собраны: каждая на месте и с непустым мешем, числом — сколько требуют числа здания.
-        private static bool ArePartsBuilt(SplineBuilding building)
-        {
-            var parts = building.GetComponentsInChildren<SplineBuildingPart>(true);
-            var expected = building.StoreyCount + (building.StoreyCount - 1) + (building.HasFloor ? 1 : 0) + (building.HasRoof ? 1 : 0);
-            var active = 0;
-
-            foreach (var part in parts)
-            {
-                if (!part.gameObject.activeSelf && PrefabUtility.IsPartOfPrefabInstance(part))
-                    continue;
-
-                var mesh = part.GetComponent<MeshFilter>().sharedMesh;
-
-                if (mesh == null)
-                    return false;
-
-                active++;
-            }
-
-            return active == expected;
-        }
-
-        private static SplineBuildingPart FindPart(SplineBuilding building, SplineBuildingPartKind kind, int storey)
-        {
-            foreach (var part in building.GetComponentsInChildren<SplineBuildingPart>(true))
-                if (part.Kind == kind && (kind == SplineBuildingPartKind.Roof || part.Storey == storey))
-                    return part;
-
-            return null;
-        }
-
-        // Новая часть: стены и пол этажа — в группе «Storey N», крыша — прямо в здании. Статика и слой — как у здания.
-        private static SplineBuildingPart CreatePart(SplineBuilding building, SplineBuildingPartKind kind, int storey)
-        {
-            var parent = kind == SplineBuildingPartKind.Roof ? building.transform : StoreyGroupOf(building, storey);
-            var partObject = new GameObject(PartName(kind, storey).Replace(StoreyGroupName(storey) + " ", ""));
-            partObject.transform.SetParent(parent, false);
-            partObject.layer = building.gameObject.layer;
-            GameObjectUtility.SetStaticEditorFlags(partObject, GameObjectUtility.GetStaticEditorFlags(building.gameObject));
-
-            var part = partObject.AddComponent<SplineBuildingPart>();
-            part.Kind = kind;
-            part.Storey = storey;
-            return part;
-        }
-
-        private static Transform StoreyGroupOf(SplineBuilding building, int storey)
-        {
-            var name = StoreyGroupName(storey);
-            var group = building.transform.Find(name);
-
-            if (group != null)
-                return group;
-
-            var groupObject = new GameObject(name);
-            groupObject.transform.SetParent(building.transform, false);
-            groupObject.transform.SetSiblingIndex(Mathf.Min(storey, building.transform.childCount - 1));
-            groupObject.layer = building.gameObject.layer;
-            GameObjectUtility.SetStaticEditorFlags(groupObject, GameObjectUtility.GetStaticEditorFlags(building.gameObject));
-            return groupObject.transform;
-        }
-
-        // Лишние части и опустевшие группы этажей — вон; в экземпляре префаба удалять нельзя — выключаются.
-        private static bool RemoveUnusedParts(SplineBuilding building, HashSet<SplineBuildingPart> builtParts)
-        {
-            var isChanged = false;
-
-            foreach (var part in building.GetComponentsInChildren<SplineBuildingPart>(true))
-            {
-                if (builtParts.Contains(part))
-                {
-                    if (!part.gameObject.activeSelf && PrefabUtility.IsPartOfPrefabInstance(part))
-                        part.gameObject.SetActive(true);
-
-                    continue;
-                }
-
-                RemoveObject(part.gameObject);
-                isChanged = true;
-            }
-
-            // Группа этажа уходит, только если в ней совсем ничего не осталось: положенное туда руками не теряется.
-            var emptyGroups = new List<GameObject>();
-
-            foreach (Transform child in building.transform)
-                if (child.name.StartsWith(StoreyGroupPrefix) && child.childCount == 0 && child.GetComponents<Component>().Length == 1)
-                    emptyGroups.Add(child.gameObject);
-
-            foreach (var group in emptyGroups)
-                RemoveObject(group);
-
-            return isChanged || emptyGroups.Count > 0;
-        }
-
-        private static void RemoveObject(GameObject target)
-        {
-            if (PrefabUtility.IsPartOfPrefabInstance(target))
-                target.SetActive(false);
-            else
-                Object.DestroyImmediate(target);
-        }
-
-        // Здание старого вида держало меш на себе — теперь меши у частей.
-        private static void RemoveOwnMeshComponents(SplineBuilding building)
-        {
-            if (PrefabUtility.IsPartOfPrefabInstance(building))
-                return;
-
-            if (building.TryGetComponent<MeshCollider>(out var meshCollider))
-                Object.DestroyImmediate(meshCollider);
-
-            if (building.TryGetComponent<MeshRenderer>(out var meshRenderer))
-                Object.DestroyImmediate(meshRenderer);
-
-            if (building.TryGetComponent<MeshFilter>(out var meshFilter))
-                Object.DestroyImmediate(meshFilter);
-        }
-
-        private static string StoreyGroupName(int storey)
-        {
-            return StoreyGroupPrefix + (storey + 1);
-        }
-
-        // «Storey 2 Walls», «Storey 1 Floor», «Roof» — и имя части (без этажа), и имя файла меша.
-        private static string PartName(SplineBuildingPartKind kind, int storey)
-        {
-            return kind == SplineBuildingPartKind.Roof ? "Roof" : StoreyGroupName(storey) + " " + kind;
         }
 
 
@@ -292,8 +158,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (box.Mode != BoxModelPartMode.Cut)
                     continue;
 
-                var min = (Vector3)box.Box.Min / MillimeterBox.MillimetersPerMeter;
-                var max = (Vector3)box.Box.Max / MillimeterBox.MillimetersPerMeter;
+                var min = box.Box.MinInMeters;
+                var max = box.Box.MaxInMeters;
                 var corners = new[]
                 {
                     Flat(modelToBuilding.MultiplyPoint3x4(new Vector3(min.x, min.y, min.z))),

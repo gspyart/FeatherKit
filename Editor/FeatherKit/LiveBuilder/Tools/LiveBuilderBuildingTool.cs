@@ -74,7 +74,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 LiveBuilderBuildingSettings.StoreyCount = EditorGUILayout.IntSlider(new GUIContent("Этажей", "Перекрытия между этажами ставятся сами"),
                     LiveBuilderBuildingSettings.StoreyCount, 1, SplineBuilding.MaxStoreys);
-                LiveBuilderWindowControls.Computed("Высота этажа", BoxModelSceneText.FormatMeters(LiveBuilderStoreys.StoreyHeight) + " м",
+                LiveBuilderWindowControls.Computed("Высота этажа", LiveBuilderSceneText.FormatMeters(LiveBuilderStoreys.StoreyHeight) + " м",
                     "Как у этажей уровня — в зоне «Уровень»");
             }
 

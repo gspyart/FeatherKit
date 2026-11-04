@@ -66,10 +66,10 @@ namespace FeatherKit.Tests.LiveBuilder
         {
             var wall = testScene.CreateWall(Vector3.zero, new Vector3(10f, 0f, 0f));
             var window = CreateWindow(wall, 4f, 2f, 1.5f);
-            HoleCutterLineSync.SyncAll();
+            GeometryCutterLineSync.SyncAll();
 
             LiveBuilderTestScene.MoveKnot(wall.GetComponent<SplineContainer>().Spline, 1, new Vector3(10f, 0f, 10f));
-            HoleCutterLineSync.SyncAll();
+            GeometryCutterLineSync.SyncAll();
 
             Assert.That(Vector3.Distance(window.transform.position, Origin + new Vector3(5f, 0.5f, 5f)), Is.LessThan(0.01f), "вырез — на середине нового отрезка");
             Assert.That(Vector3.Angle(window.transform.right, new Vector3(1f, 0f, 1f)), Is.LessThan(0.5f), "и повёрнут вдоль него");
@@ -104,10 +104,10 @@ namespace FeatherKit.Tests.LiveBuilder
             var wall = testScene.CreateWall(Vector3.zero, new Vector3(10f, 0f, 0f));
             var window = CreateWindow(wall, 1f, 2f, 1.5f);
             GeometryCutterHandles.MoveShapeBottom(window, GeometryCutterOutline.ShapeBottomOf(window) + new Vector3(3f, 0f, 0f));
-            HoleCutterLineSync.SyncAll();
+            GeometryCutterLineSync.SyncAll();
 
             LiveBuilderTestScene.MoveKnot(wall.GetComponent<SplineContainer>().Spline, 1, new Vector3(10f, 0f, 10f));
-            HoleCutterLineSync.SyncAll();
+            GeometryCutterLineSync.SyncAll();
 
             var holeBottom = GeometryCutterOutline.ShapeBottomOf(window);
             Assert.That(Vector3.Distance(holeBottom, Origin + new Vector3(5f, 0.5f, 5f)), Is.LessThan(0.01f), "дыра — на середине нового отрезка");
@@ -129,7 +129,7 @@ namespace FeatherKit.Tests.LiveBuilder
             array.StepsFromSize = true;
             array.Gap = new Vector3(1f, 0f, 0f);
             ArrayModifierBuilder.Rebuild(array);
-            HoleCutterLineSync.SyncAll();
+            GeometryCutterLineSync.SyncAll();
             SplineWallRebuilder.Rebuild(wall);
 
             foreach (var holeCenter in new[] { 2f, 5f, 8f })

@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using UnityEditor;
 using UnityEngine;
 using static FeatherKit.EditorTools.LiveBuilder.LiveBuilderIconRasterizer;
 
@@ -7,13 +6,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Значки настроек окна Live Builder (<see cref="LiveBuilderOptionIcon"/>): на кнопках переключателей, у подписей строк, в заголовках зон.
-    /// Рисуются кодом из линий, как значки инструментов, и запоминаются. «Добавить» и «Вырезать» — цветами каркасов в окне сцены.
+    /// Рисуются кодом из линий, как значки инструментов, и запоминаются (<see cref="LiveBuilderIconCache"/>). «Добавить» и «Вырезать» — цветами каркасов в окне сцены.
     /// </summary>
     public static class LiveBuilderOptionIcons
     {
-        private static readonly Dictionary<(LiveBuilderOptionIcon Icon, Color Color), Texture2D> Cache = new();
-
-
         // ── Значки ───────────────────────────────────────────────────────
 
         // Белый значок: цвет задают при выводе через GUI.color.
@@ -35,7 +31,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 LiveBuilderOptionIcon.BoxAdd => BoxModelPartHandles.AddColor,
                 LiveBuilderOptionIcon.BoxCut => BoxModelPartHandles.CutColor,
-                _ => EditorGUIUtility.isProSkin ? new Color(0.82f, 0.82f, 0.82f) : new Color(0.22f, 0.22f, 0.22f)
+                _ => LiveBuilderIconCache.ThemedColor
             };
         }
 
@@ -43,26 +39,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Значок в прямоугольнике окна, нужного цвета.
         public static void Draw(Rect rect, LiveBuilderOptionIcon icon, Color color)
         {
-            if (Event.current.type != EventType.Repaint)
-                return;
-
-            var previous = GUI.color;
-            GUI.color = color;
-            GUI.DrawTexture(rect, White(icon), ScaleMode.ScaleToFit);
-            GUI.color = previous;
+            LiveBuilderIconCache.Draw(rect, White(icon), color);
         }
 
 
-        // ── Кеш ──────────────────────────────────────────────────────────
-
         private static Texture2D Get(LiveBuilderOptionIcon icon, Color color)
         {
-            if (Cache.TryGetValue((icon, color), out var cached) && cached != null)
-                return cached;
-
-            var texture = Rasterize(LinesOf(icon), color);
-            Cache[(icon, color)] = texture;
-            return texture;
+            return LiveBuilderIconCache.Get(icon, color, () => LinesOf(icon));
         }
 
 

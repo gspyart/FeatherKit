@@ -20,7 +20,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// и по ним сразу встаёт стена (<see cref="SplineWall"/>), здание (<see cref="SplineBuilding"/>) или комната.
     /// Точка — угол или плавный изгиб: по переключателю в окне, Shift на клике — наоборот.
     /// Клик по первой точке — замкнуть; Enter или Esc — готово (здание и комната замыкаются сами); Ctrl+Z, пока рисуешь, — убрать последнюю точку.
-    /// Точная длина, как в SketchUp: набрал цифры — Enter ставит следующую точку на этом расстоянии в сторону мыши.
+    /// Точная длина, как в SketchUp (<see cref="LiveBuilderTypedLength"/>): набрал цифры — Enter ставит следующую точку на этом расстоянии в сторону мыши.
     /// У мыши подпись, к чему прилипло: «к стене» здания, «замкнуть» у первой точки.
     /// Готовая линия — один шаг отмены: Ctrl+Z после неё убирает всю стену, здание или комнату, без пустых объектов.
     /// Стена внутри здания (<see cref="LiveBuilderBuildingContext"/>) — перегородка: на полу его этажа, до потолка, толщиной перегородки,
@@ -28,7 +28,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Комната: в здании — замкнутая перегородка, стороны вдоль его стен не строятся; в доме из коробок — стены до его потолка;
     /// в пустоте — здание в один этаж. Куда встают её стены от линии — наружу, внутрь или по центру — по настройке «Стены» (<see cref="LiveBuilderRoomWalls"/>).
     /// Выделен объект из коробок — линия встаёт в него и его вырезающие коробки режут и её. Здание и комната в пустоте — в новом объекте из коробок:
-    /// так в них сразу работают лестницы и вырезы. Двигать точки потом — <see cref="LiveBuilderContourHandles"/>.
+    /// так в них сразу работают лестницы и вырезы (<see cref="LiveBuilderPathOwnerCreator"/>). Двигать точки потом — <see cref="LiveBuilderContourHandles"/>.
     /// </summary>
     public sealed class LiveBuilderPathGesture
     {
@@ -48,8 +48,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private BoxModel createdModel;
         private Vector3? hoveredWorldPoint;
 
-        // Набранная с клавиатуры длина следующего отрезка, м; пусто — точка по мыши.
-        private string typedLength = "";
+        // Набранная с клавиатуры длина следующего отрезка; пусто — точка по мыши.
+        private readonly LiveBuilderTypedLength typedLength = new();
 
         // К чему прилипла точка под мышью: подпись у прицела; пусто — просто по сетке.
         private string snapLabel;
@@ -80,8 +80,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public string Hint => pathOwner == null
             ? "Клик — первая точка " + ShapeName + " на полу этажа" + RoomPlaceHint + ". Shift — точка наоборот: " +
               (LiveBuilderWallSettings.IsSmooth ? "углом" : "плавно")
-            : typedLength.Length > 0
-                ? "Длина " + typedLength + " м: Enter — точка на этом расстоянии в сторону мыши, Backspace — стереть цифру, Esc — отмена длины"
+            : typedLength.IsTyping
+                ? "Длина " + typedLength.Text + " м: Enter — точка на этом расстоянии в сторону мыши, Backspace — стереть цифру, Esc — отмена длины"
                 : IsClosedShape
                     ? "Клик — следующая точка контура, цифры + Enter — точная длина. По первой точке или Enter — замкнуть и готово. Esc — тоже готово, Ctrl+Z — убрать последнюю"
                     : "Клик — следующая точка, цифры + Enter — точная длина, по первой — замкнуть. Enter или Esc — готово, Ctrl+Z — убрать последнюю";
@@ -166,18 +166,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (pathOwner == null)
                 return false;
 
-            if (TryTypeLength(key))
+            if (typedLength.TryType(key))
                 return true;
 
-            if (key is KeyCode.Return or KeyCode.KeypadEnter && typedLength.Length > 0)
+            if (key is KeyCode.Return or KeyCode.KeypadEnter && typedLength.IsTyping)
             {
                 AddKnotAtTypedLength();
                 return true;
             }
 
-            if (key == KeyCode.Escape && typedLength.Length > 0)
+            if (key == KeyCode.Escape && typedLength.IsTyping)
             {
-                typedLength = "";
+                typedLength.Clear();
                 return true;
             }
 
@@ -188,41 +188,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return true;
         }
 
-        // Цифра, точка или запятая — в длину; Backspace — стереть последнюю.
-        private bool TryTypeLength(KeyCode key)
-        {
-            var character = key switch
-            {
-                >= KeyCode.Alpha0 and <= KeyCode.Alpha9 => (char)('0' + (key - KeyCode.Alpha0)),
-                >= KeyCode.Keypad0 and <= KeyCode.Keypad9 => (char)('0' + (key - KeyCode.Keypad0)),
-                KeyCode.Period or KeyCode.Comma or KeyCode.KeypadPeriod => ',',
-                _ => '\0'
-            };
-
-            if (character == ',' && typedLength.Contains(","))
-                return true;
-
-            if (character != '\0')
-            {
-                typedLength += character;
-                return true;
-            }
-
-            if (key != KeyCode.Backspace || typedLength.Length == 0)
-                return false;
-
-            typedLength = typedLength.Substring(0, typedLength.Length - 1);
-            return true;
-        }
-
         // Следующая точка на набранной длине — от последней точки в сторону мыши, по горизонтали.
         private void AddKnotAtTypedLength()
         {
-            var isNumber = float.TryParse(typedLength.Replace(',', '.'), System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var length);
-            typedLength = "";
-
-            if (!isNumber || length <= 0.001f || hoveredWorldPoint is not { } hovered)
+            if (!typedLength.TryTake(out var length) || hoveredWorldPoint is not { } hovered)
                 return;
 
             var spline = Container.Spline;
@@ -272,7 +241,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             createdModel = null;
             interiorCreatedByGesture = null;
             buildingContext = null;
-            typedLength = "";
+            typedLength.Clear();
         }
 
 
@@ -290,91 +259,23 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 case LiveBuilderPathKind.Building:
                     Undo.SetCurrentGroupName("Draw Building");
-                    pathOwner = BeginBuilding(worldPoint);
+                    pathOwner = LiveBuilderPathOwnerCreator.CreateBuilding(worldPoint, out createdModel);
                     break;
 
                 case LiveBuilderPathKind.Room:
                     Undo.SetCurrentGroupName("Draw Room");
-                    pathOwner = BeginRoom(worldPoint, context);
+                    pathOwner = LiveBuilderPathOwnerCreator.CreateRoom(worldPoint, context, hoveredHouse, hoveredHouseCeiling, out createdModel);
                     break;
 
                 default:
                     Undo.SetCurrentGroupName("Draw Wall");
-                    pathOwner = BeginWall(worldPoint, context);
+                    pathOwner = LiveBuilderPathOwnerCreator.CreateWall(worldPoint, context);
                     break;
             }
 
             // Перегородка встаёт в группу «Interior» здания; не было её — создала эта перегородка.
             var group = pathOwner.transform.parent;
             interiorCreatedByGesture = context != null && !hadInterior && group != null && group.parent == context.Building.transform ? group : null;
-        }
-
-        // Здание — в выделенном объекте из коробок, а без него — в новом. Стоит низом ровно на том, где кликнул:
-        // точка опоры здания — низ плиты пола, пол первого этажа — на толщину плиты выше.
-        private SplineBuilding BeginBuilding(Vector3 worldPoint)
-        {
-            var parentModel = SelectedOrNewModel(worldPoint, "Building");
-            return BoxModelFactory.CreateBuilding(parentModel, worldPoint, parentModel.transform.rotation);
-        }
-
-        // Стена внутри здания — перегородка: в его объекте, до потолка этажа, толщиной перегородки, на этом или всех этажах выше.
-        // Иначе — стена по настройкам, в выделенном объекте из коробок, если он есть.
-        private static SplineWall BeginWall(Vector3 worldPoint, LiveBuilderBuildingContext context)
-        {
-            if (context != null)
-            {
-                var partition = BoxModelFactory.CreatePartition(context, worldPoint, "Partition");
-                partition.Alignment = LiveBuilderWallSettings.Alignment;
-                return partition;
-            }
-
-            var parentModel = BoxModelActions.SelectedModel();
-            var wall = BoxModelFactory.CreateWall(parentModel, worldPoint, parentModel != null ? parentModel.transform.rotation : Quaternion.identity);
-            wall.Alignment = LiveBuilderWallSettings.Alignment;
-            wall.Material = LiveBuilderWallSettings.Material;
-            wall.Thickness = LiveBuilderWallSettings.Thickness;
-            wall.WallType = LiveBuilderWallSettings.WallType;
-            wall.Height = LiveBuilderWallSettings.Height;
-            return wall;
-        }
-
-        // В здании — замкнутая перегородка-комната: стороны вдоль его стен не строятся. В доме из коробок — стены перегородки до его потолка.
-        // В пустоте — комната со стенами, полом и потолком, как у здания: стоит низом на том, где кликнул.
-        private Component BeginRoom(Vector3 worldPoint, LiveBuilderBuildingContext context)
-        {
-            if (context != null)
-            {
-                var room = BoxModelFactory.CreatePartition(context, worldPoint, "Room");
-                room.SkipsSidesAlongBuildingWalls = true;
-                return room;
-            }
-
-            if (hoveredHouse != null)
-            {
-                var walls = BoxModelFactory.CreateWall(hoveredHouse, worldPoint, hoveredHouse.transform.rotation);
-                walls.name = "Room";
-                walls.Thickness = LiveBuilderWallSettings.PartitionThickness;
-                walls.Material = LiveBuilderWallSettings.Material;
-                walls.WallType = LiveBuilderWallSettings.PartitionWallType;
-                walls.Height = hoveredHouseCeiling;
-                return walls;
-            }
-
-            var parentModel = SelectedOrNewModel(worldPoint, "Room");
-            return BoxModelFactory.CreateContourRoom(parentModel, worldPoint, parentModel.transform.rotation);
-        }
-
-        // Выделенный объект из коробок, а без него — новый: так в здании или комнате сразу работают лестницы и вырезы.
-        private BoxModel SelectedOrNewModel(Vector3 worldPoint, string name)
-        {
-            var selected = BoxModelActions.SelectedModel();
-
-            if (selected != null)
-                return selected;
-
-            createdModel = BoxModelFactory.CreateModel(worldPoint);
-            createdModel.name = name;
-            return createdModel;
         }
 
 
@@ -500,7 +401,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var cursorLabel = isClosing ? "замкнуть" : snapLabel;
 
             if (cursorLabel != null)
-                BoxModelSceneText.DrawLabel(hovered + Vector3.up * HandleUtility.GetHandleSize(hovered) * 0.25f, cursorLabel);
+                LiveBuilderSceneText.DrawLabel(hovered + Vector3.up * HandleUtility.GetHandleSize(hovered) * 0.25f, cursorLabel);
 
             if (pathOwner == null || Container.Spline.Count == 0)
                 return;
@@ -517,10 +418,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var last = pathOwner.transform.TransformPoint((Vector3)spline[spline.Count - 1].Position);
             Handles.DrawLine(last, hovered, 2f);
 
-            var lengthLabel = typedLength.Length > 0
-                ? typedLength + " м ↵"
-                : BoxModelSceneText.FormatMeters(Vector3.Distance(last, hovered)) + " м · цифры — точно";
-            BoxModelSceneText.DrawLabel((last + hovered) / 2f, lengthLabel);
+            var lengthLabel = typedLength.IsTyping
+                ? typedLength.Text + " м ↵"
+                : LiveBuilderSceneText.FormatMeters(Vector3.Distance(last, hovered)) + " м · цифры — точно";
+            LiveBuilderSceneText.DrawLabel((last + hovered) / 2f, lengthLabel);
 
             if (IsClosedShape && spline.Count >= 2)
                 Handles.DrawDottedLine(hovered, first, 4f);

@@ -21,7 +21,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             LiveBuilderInspectorLayout.Properties(serializedObject, "wallType");
 
             if (wall.WallType != null)
-                LiveBuilderInspectorLayout.DrivenValue("Thickness", BoxModelSceneText.FormatMeters(wall.Thickness) + " м", "Толщина — из типа стены", "от типа");
+                LiveBuilderInspectorLayout.DrivenValue("Thickness", LiveBuilderSceneText.FormatMeters(wall.Thickness) + " м", "Толщина — из типа стены", "от типа");
             else
                 LiveBuilderInspectorLayout.Properties(serializedObject, "thickness");
 
@@ -31,7 +31,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (isLinked)
             {
                 LiveBuilderInspectorLayout.Properties(serializedObject, "skipsSidesAlongBuildingWalls");
-                LiveBuilderInspectorLayout.DrivenValue("Height", BoxModelSceneText.FormatMeters(wall.Height) + " м", "До потолка этажа здания");
+                LiveBuilderInspectorLayout.DrivenValue("Height", LiveBuilderSceneText.FormatMeters(wall.Height) + " м", "До потолка этажа здания");
             }
             else
             {

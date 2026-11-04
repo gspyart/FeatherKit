@@ -11,7 +11,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public static class BoxModelFactory
     {
-        private const string EditorOnlyTag = "EditorOnly";
         private const string InteriorGroupName = "Interior";
 
 
@@ -73,7 +72,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Коробка в конце списка объекта — главнее всех прежних. Углы — в осях объекта, м.
         public static BoxModelPart CreatePart(BoxModel model, Vector3 localMin, Vector3 localMax, BoxModelPartMode mode)
         {
-            var partObject = new GameObject(mode == BoxModelPartMode.Add ? BoxModelRebuilder.AddPartName : BoxModelRebuilder.CutPartName) { tag = EditorOnlyTag };
+            var partObject = new GameObject(mode == BoxModelPartMode.Add ? BoxModelPieceTidying.AddPartName : BoxModelPieceTidying.CutPartName) { tag = BoxModelPieceTidying.EditorOnlyTag };
             Undo.RegisterCreatedObjectUndo(partObject, "Create Box");
 
             var partTransform = partObject.transform;
@@ -96,7 +95,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Комната в конце списка объекта: угол пола и внутренний размер — в осях объекта, м. Толщины и материалы — из настроек инструмента.
         public static BoxModelRoom CreateRoom(BoxModel model, Vector3 localMin, Vector3 size, bool hasWalls)
         {
-            var roomObject = new GameObject("Room") { tag = EditorOnlyTag };
+            var roomObject = new GameObject("Room") { tag = BoxModelPieceTidying.EditorOnlyTag };
             Undo.RegisterCreatedObjectUndo(roomObject, "Create Room");
 
             var roomTransform = roomObject.transform;
@@ -120,7 +119,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public static BoxModelStairs CreateStairs(BoxModel model, Vector3 localMin, BoxModelStairsDirection direction, float width, float height, float stepDepth,
             bool cutsAbove)
         {
-            var stairsObject = new GameObject("Stairs") { tag = EditorOnlyTag };
+            var stairsObject = new GameObject("Stairs") { tag = BoxModelPieceTidying.EditorOnlyTag };
             Undo.RegisterCreatedObjectUndo(stairsObject, "Create Stairs");
 
             var stairsTransform = stairsObject.transform;
@@ -281,7 +280,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Вырез: опора — низ посередине, в мире; в постройке, которую режет, — едет вместе с ней. Только для редактора: в игру идёт прорезанный меш.
         public static GeometryCutter CreateCutter(Transform owner, Vector3 worldBottomCenter, Quaternion worldRotation, Vector2 size, float depth)
         {
-            var cutterObject = new GameObject("Cutter") { tag = EditorOnlyTag };
+            var cutterObject = new GameObject("Cutter") { tag = BoxModelPieceTidying.EditorOnlyTag };
 
             if (owner != null)
                 cutterObject.transform.SetParent(owner, false);

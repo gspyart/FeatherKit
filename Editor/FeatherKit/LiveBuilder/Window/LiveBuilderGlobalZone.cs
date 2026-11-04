@@ -10,18 +10,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public sealed class LiveBuilderGlobalZone : LiveBuilderWindowZone
     {
-        // Виды окна сцены — общие с панелью над сценой (<see cref="LiveBuilderSceneOverlay"/>). Своя высота среза (панель «Уровень») —
-        // ViewCustom: не горит ни одна кнопка, даже «Всё», ведь срез включён.
-        public const int ViewCustom = -1;
-        public const int ViewAll = 0;
-        public const int ViewRooms = 1;
-        public const int ViewWallsDown = 2;
-
-        // Срез «Комнаты» и «Стены вниз» — на сколько выше пола этажа, м.
-        private const float RoomsSectionHeight = 3f;
-        private const float WallsDownSectionHeight = 1f;
-
-
         // ── Зона ─────────────────────────────────────────────────────────
 
         public override string Title => "Общее";
@@ -68,7 +56,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (GUILayout.Button("▶", EditorStyles.miniButtonRight, GUILayout.Width(22f)))
                     LiveBuilderStoreys.CurrentStorey++;
 
-                LiveBuilderWindowControls.ValueChip(new GUIContent("пол " + BoxModelSceneText.FormatMeters(LiveBuilderStoreys.CurrentFloorHeight) + " м",
+                LiveBuilderWindowControls.ValueChip(new GUIContent("пол " + LiveBuilderSceneText.FormatMeters(LiveBuilderStoreys.CurrentFloorHeight) + " м",
                     "Высота пола этого этажа в мире"));
             }
         }
@@ -78,15 +66,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static void DrawGrid()
         {
-            var steps = BoxModelGrid.Steps;
+            var steps = LiveBuilderGrid.Steps;
             var names = new string[steps.Length];
             var current = 0;
 
             for (var index = 0; index < steps.Length; index++)
             {
-                names[index] = BoxModelSceneText.FormatMeters(steps[index]);
+                names[index] = LiveBuilderSceneText.FormatMeters(steps[index]);
 
-                if (Mathf.Abs(steps[index] - BoxModelGrid.CurrentStep) < 0.0001f)
+                if (Mathf.Abs(steps[index] - LiveBuilderGrid.CurrentStep) < 0.0001f)
                     current = index;
             }
 
@@ -94,16 +82,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderWindowControls.IconLabel("Сетка, м", LiveBuilderOptionIcon.Grid, "Всё прилипает к клеткам этого размера. Клавиши [ и ] в окне сцены"), current, names);
 
             if (chosen != current)
-                BoxModelGrid.SetStep(steps[chosen]);
+                LiveBuilderGrid.SetStep(steps[chosen]);
         }
 
 
         // ── Вид ──────────────────────────────────────────────────────────
 
-        // Что видно в окне сцены: всё, этаж срезом на 3 м (комнаты) или на 1 м (стены вниз). Игру не меняет.
+        // Что видно в окне сцены: всё, этаж срезом на 3 м (комнаты) или на 1 м (стены вниз). Виды — общие с панелью над сценой (<see cref="LiveBuilderViewPresets"/>).
         private static void DrawSection()
         {
-            var current = CurrentViewPreset();
+            var current = LiveBuilderViewPresets.Current();
 
             var chosen = LiveBuilderWindowControls.Switch(
                 LiveBuilderWindowControls.IconLabel("Вид", LiveBuilderOptionIcon.Eye, "Всё — как есть. Комнаты — выше 3 м над полом этажа спрятано, видно стены и проёмы. " +
@@ -111,31 +99,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 current, ("Всё", LiveBuilderOptionIcon.ViewAll), ("Комнаты", LiveBuilderOptionIcon.ViewRooms), ("Стены вниз", LiveBuilderOptionIcon.ViewWallsDown));
 
             if (chosen != current && chosen >= 0)
-                ApplyViewPreset(chosen);
-        }
-
-
-        // Какой из видов сейчас: Всё, Комнаты, Стены вниз или своя высота среза.
-        public static int CurrentViewPreset()
-        {
-            if (!LiveBuilderStoreys.IsSectionEnabled)
-                return ViewAll;
-
-            var height = LiveBuilderStoreys.SectionHeightAboveFloor;
-
-            if (Mathf.Approximately(height, RoomsSectionHeight))
-                return ViewRooms;
-
-            return Mathf.Approximately(height, WallsDownSectionHeight) ? ViewWallsDown : ViewCustom;
-        }
-
-
-        public static void ApplyViewPreset(int preset)
-        {
-            if (preset == ViewRooms || preset == ViewWallsDown)
-                LiveBuilderStoreys.SectionHeightAboveFloor = preset == ViewRooms ? RoomsSectionHeight : WallsDownSectionHeight;
-
-            LiveBuilderStoreys.IsSectionEnabled = preset != ViewAll;
+                LiveBuilderViewPresets.Apply(chosen);
         }
 
 

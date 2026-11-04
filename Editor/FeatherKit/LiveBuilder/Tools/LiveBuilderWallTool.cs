@@ -82,7 +82,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     !LiveBuilderWallSettings.IsStoreyHigh, "До потолка", "Своя");
 
                 if (LiveBuilderWallSettings.IsStoreyHigh)
-                    LiveBuilderWindowControls.Computed(" ", BoxModelSceneText.FormatMeters(LiveBuilderWallSettings.Height) + " м", "Этаж минус перекрытие");
+                    LiveBuilderWindowControls.Computed(" ", LiveBuilderSceneText.FormatMeters(LiveBuilderWallSettings.Height) + " м", "Этаж минус перекрытие");
                 else
                     LiveBuilderWallSettings.CustomHeight = EditorGUILayout.FloatField(new GUIContent("Своя высота, м", "Высота стены над линией"),
                         LiveBuilderWallSettings.CustomHeight);

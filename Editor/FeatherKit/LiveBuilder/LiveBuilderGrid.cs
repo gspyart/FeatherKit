@@ -8,7 +8,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Края коробок привязываются к сетке всегда, независимо от кнопки привязки Unity.
     /// Шаг меняют кнопки окна Live Builder и клавиши [ и ] — по ряду привычных шагов.
     /// </summary>
-    public static class BoxModelGrid
+    public static class LiveBuilderGrid
     {
         // Меньше этого шаг не бывает — защита от нулевого размера клеток, м.
         private const float MinStep = 0.01f;

@@ -42,7 +42,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Для того, что повёрнуто как угодно (вырез, проём): у него нет общей сетки с миром, есть только шаг.
         public static void SnapSizesToGrid(Vector3 oldMin, Vector3 oldMax, ref Vector3 min, ref Vector3 max)
         {
-            var step = BoxModelGrid.CurrentStep;
+            var step = LiveBuilderGrid.CurrentStep;
 
             for (var axis = 0; axis < 3; axis++)
             {
@@ -104,8 +104,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var moved = Handles.Slider(control, faceCenter, direction, size, Handles.DotHandleCap, 0f);
 
             if (GUIUtility.hotControl == control && Event.current.type == EventType.Repaint)
-                BoxModelSceneText.DrawLabel(faceCenter + direction * size * 4f,
-                    (axisNames != null ? axisNames[axis] : "XYZ"[axis].ToString()) + " " + BoxModelSceneText.FormatMeters(max[axis] - min[axis]) + " м");
+                LiveBuilderSceneText.DrawLabel(faceCenter + direction * size * 4f,
+                    (axisNames != null ? axisNames[axis] : "XYZ"[axis].ToString()) + " " + LiveBuilderSceneText.FormatMeters(max[axis] - min[axis]) + " м");
 
             if (!EditorGUI.EndChangeCheck())
                 return false;

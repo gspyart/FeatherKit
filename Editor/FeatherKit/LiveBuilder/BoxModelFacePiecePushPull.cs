@@ -67,7 +67,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static BoxModelPart CreateBox(BoxModelPartFace partFace)
         {
             var source = partFace.Part;
-            var boxObject = new GameObject(BoxModelRebuilder.AddPartName) { tag = source.gameObject.tag, layer = source.gameObject.layer };
+            var boxObject = new GameObject(BoxModelPieceTidying.AddPartName) { tag = source.gameObject.tag, layer = source.gameObject.layer };
             Undo.RegisterCreatedObjectUndo(boxObject, "Push Pull Face");
 
             var boxTransform = boxObject.transform;
@@ -88,7 +88,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static void Resize(PiecePush push, float outwardOffset)
         {
             var piece = push.Piece.Piece;
-            var step = BoxModelGrid.StepOn(piece.Axis);
+            var step = LiveBuilderGrid.StepOn(piece.Axis);
             var depth = Mathf.Abs(outwardOffset);
             var isPulled = outwardOffset > 0f;
             push.HasDepth = depth >= step * 0.5f;
@@ -98,7 +98,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var mode = isPulled ? BoxModelPartMode.Add : BoxModelPartMode.Cut;
             Undo.RecordObjects(new Object[] { box, box.transform, box.gameObject }, "Push Pull Face");
             box.gameObject.SetActive(push.HasDepth);
-            box.gameObject.name = isPulled ? BoxModelRebuilder.AddPartName : BoxModelRebuilder.CutPartName;
+            box.gameObject.name = isPulled ? BoxModelPieceTidying.AddPartName : BoxModelPieceTidying.CutPartName;
             box.Mode = mode;
             box.transform.localPosition = min;
             box.Size = max - min;
@@ -157,9 +157,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var label = !push.HasDepth
                 ? "тяни — коробка, толкай — вырез"
-                : (push.Box.Mode == BoxModelPartMode.Add ? "вытянуть " : "вырезать ") + BoxModelSceneText.FormatMeters(push.Box.Size[push.Piece.Piece.Axis]) + " м";
+                : (push.Box.Mode == BoxModelPartMode.Add ? "вытянуть " : "вырезать ") + LiveBuilderSceneText.FormatMeters(push.Box.Size[push.Piece.Piece.Axis]) + " м";
 
-            BoxModelSceneText.DrawLabel(model.transform.TransformPoint(push.Piece.Piece.Center), label);
+            LiveBuilderSceneText.DrawLabel(model.transform.TransformPoint(push.Piece.Piece.Center), label);
         }
 
 

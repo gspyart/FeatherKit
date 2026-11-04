@@ -5,7 +5,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>Надписи инструмента «Live Builder» в окне сцены: размеры рядом с коробкой и строка-подсказка внизу — что делать сейчас.</summary>
     [InitializeOnLoad]
-    public static class BoxModelSceneText
+    public static class LiveBuilderSceneText
     {
         private const float HintBottomMargin = 12f;
         private const float HintSidePadding = 10f;
@@ -25,7 +25,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Подложка не сохраняется и сама не удаляется: перед перезагрузкой скриптов — удалить, иначе после каждой копится новая.
-        static BoxModelSceneText()
+        static LiveBuilderSceneText()
         {
             AssemblyReloadEvents.beforeAssemblyReload += () =>
             {

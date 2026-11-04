@@ -65,7 +65,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 }
             }
 
-            BoxModelSceneText.DrawLabel(position, "× " + repeat.Count);
+            LiveBuilderSceneText.DrawLabel(position, "× " + repeat.Count);
         }
 
         // Середина первой копии: коробки группы собраны без сдвигов повторов — ровно там, где стоят в сцене.
@@ -78,7 +78,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 var box = firstCopyBoxes[index].Box;
                 var boxBounds = new Bounds();
-                boxBounds.SetMinMax((Vector3)box.Min / MillimeterBox.MillimetersPerMeter, (Vector3)box.Max / MillimeterBox.MillimetersPerMeter);
+                boxBounds.SetMinMax(box.MinInMeters, box.MaxInMeters);
 
                 if (index == 0)
                     bounds = boxBounds;

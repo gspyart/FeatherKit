@@ -16,7 +16,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Точек стало больше или меньше — остаётся где стоял и запоминает новое место; сдвинули или повернули его самого — запоминается, куда.
     /// Высоту не трогает. Правки — без Undo, как у привязки к этажам: после любого Ctrl+Z сверка повторяет их сама.
     /// </summary>
-    public static class HoleCutterLineSync
+    public static class GeometryCutterLineSync
     {
         private const float Tolerance = 0.001f;
 

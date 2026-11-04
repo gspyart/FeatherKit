@@ -121,8 +121,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (LiveBuilderOpeningPresets.SelectedIndex != LiveBuilderOpeningPresets.CustomIndex)
                 {
                     var size = LiveBuilderOpeningPresets.Selected;
-                    LiveBuilderWindowControls.Computed("Ширина × высота", BoxModelSceneText.FormatMeters(size.Width) + " × " + BoxModelSceneText.FormatMeters(size.Height) + " м");
-                    LiveBuilderWindowControls.Computed("Низ над полом этажа", BoxModelSceneText.FormatMeters(size.Sill) + " м");
+                    LiveBuilderWindowControls.Computed("Ширина × высота", LiveBuilderSceneText.FormatMeters(size.Width) + " × " + LiveBuilderSceneText.FormatMeters(size.Height) + " м");
+                    LiveBuilderWindowControls.Computed("Низ над полом этажа", LiveBuilderSceneText.FormatMeters(size.Sill) + " м");
                     return;
                 }
 
@@ -172,7 +172,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var hit = LiveBuilderSceneHit.Find(HandleUtility.GUIPointToWorldRay(current.mousePosition));
 
-            if (hit.IsHoleCutterInFront)
+            if (hit.IsGeometryCutterInFront)
                 return false;
 
             openingPlacer.UpdateHover(hit);

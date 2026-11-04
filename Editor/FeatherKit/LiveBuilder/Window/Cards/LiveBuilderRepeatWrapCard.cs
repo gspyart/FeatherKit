@@ -56,7 +56,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Шаг повтора по размеру выделенного — с запасом в клетку сетки, чтобы копии не слиплись.
         private static float StepAround(float size)
         {
-            var grid = BoxModelGrid.CurrentStep;
+            var grid = LiveBuilderGrid.CurrentStep;
             return Mathf.Max(grid, Mathf.Ceil(size / grid) * grid + grid);
         }
     }

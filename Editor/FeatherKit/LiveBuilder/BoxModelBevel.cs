@@ -13,9 +13,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public static class BoxModelBevel
     {
-        // Клин выходит за грани наружу на столько, м: срез вровень с гранью оставил бы плёнку.
-        private const float OutsideMargin = 0.01f;
-
         // Срез меньше этого — уже не фаска, м.
         private const float MinBevel = 0.001f;
 
@@ -76,6 +73,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Фаска у объекта задана.
+        public static bool HasBevel(BoxModel model)
+        {
+            return model.BevelSize > 0f;
+        }
+
+
         // Срезать выпуклые рёбра готового меша. size — срез, м; segments — из скольких кусков.
         public static void Apply(Mesh mesh, IReadOnlyList<BoxModelSurface> surfaces, float size, int segments)
         {
@@ -99,7 +103,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var crossSection = CrossSectionOf(edge, bevel, Mathf.Max(1, segments));
                 var edgeToMesh = EdgeToMesh(edge);
                 var length = edge.AlongTo - edge.AlongFrom;
-                polygons = MeshSubtraction.SubtractNear(polygons, BoundsOf(crossSection, length, edgeToMesh),
+                polygons = MeshSubtraction.SubtractNear(polygons, BoxModelEdgeCutting.BoundsOf(crossSection, length, edgeToMesh),
                     near => MeshSubtraction.PrismPolygons(crossSection, 0f, length, edgeToMesh, MeshSubtraction.MostCommonSubmesh(near)));
             }
 
@@ -155,8 +159,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     continue;
 
                 var maxBevel = Mathf.Min(surfaceWidth, otherFaceMax - otherFaceMin) / 2f;
-                edges.Add(new BoxModelConvexEdge(faceAxis, faceSign, Meters(surface.Plane), sideAxis, sideSign, Meters(sideValue),
-                    alongAxis, Meters(from), Meters(to), Meters(maxBevel)));
+                edges.Add(new BoxModelConvexEdge(faceAxis, faceSign, MillimeterBox.ToMeters(surface.Plane), sideAxis, sideSign, MillimeterBox.ToMeters(sideValue),
+                    alongAxis, MillimeterBox.ToMeters(from), MillimeterBox.ToMeters(to), MillimeterBox.ToMeters(maxBevel)));
             }
         }
 
@@ -202,8 +206,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var crossSection = new List<Vector2>
             {
-                new(side * OutsideMargin, face * OutsideMargin),
-                new(side * OutsideMargin, -face * bevel),
+                new(side * BoxModelEdgeCutting.OutsideMargin, face * BoxModelEdgeCutting.OutsideMargin),
+                new(side * BoxModelEdgeCutting.OutsideMargin, -face * bevel),
                 new(0f, -face * bevel)
             };
 
@@ -214,7 +218,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             crossSection.Add(new Vector2(-side * bevel, 0f));
-            crossSection.Add(new Vector2(-side * bevel, face * OutsideMargin));
+            crossSection.Add(new Vector2(-side * bevel, face * BoxModelEdgeCutting.OutsideMargin));
 
             if (PlanPolygons.SignedArea(crossSection) < 0f)
                 crossSection.Reverse(1, crossSection.Count - 1);
@@ -232,38 +236,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
             origin[edge.AlongAxis] = edge.AlongFrom;
 
             var matrix = Matrix4x4.identity;
-            matrix.SetColumn(0, AxisVector(edge.SideAxis));
-            matrix.SetColumn(1, AxisVector(edge.FaceAxis));
-            matrix.SetColumn(2, AxisVector(edge.AlongAxis));
+            matrix.SetColumn(0, BoxModelEdgeCutting.AxisVector(edge.SideAxis));
+            matrix.SetColumn(1, BoxModelEdgeCutting.AxisVector(edge.FaceAxis));
+            matrix.SetColumn(2, BoxModelEdgeCutting.AxisVector(edge.AlongAxis));
             matrix.SetColumn(3, new Vector4(origin.x, origin.y, origin.z, 1f));
             return matrix;
-        }
-
-        private static Vector4 AxisVector(int axis)
-        {
-            var vector = Vector4.zero;
-            vector[axis] = 1f;
-            return vector;
-        }
-
-
-        private static Bounds BoundsOf(List<Vector2> crossSection, float length, Matrix4x4 edgeToMesh)
-        {
-            var bounds = new Bounds(edgeToMesh.MultiplyPoint3x4(crossSection[0]), Vector3.zero);
-
-            foreach (var point in crossSection)
-            {
-                bounds.Encapsulate(edgeToMesh.MultiplyPoint3x4(new Vector3(point.x, point.y, 0f)));
-                bounds.Encapsulate(edgeToMesh.MultiplyPoint3x4(new Vector3(point.x, point.y, length)));
-            }
-
-            return bounds;
-        }
-
-
-        private static float Meters(float millimeters)
-        {
-            return millimeters / MillimeterBox.MillimetersPerMeter;
         }
     }
 }

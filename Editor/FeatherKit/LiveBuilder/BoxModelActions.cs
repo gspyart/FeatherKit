@@ -1,19 +1,16 @@
 using System.Collections.Generic;
 using FeatherKit.LiveBuilder;
 using UnityEditor;
-using UnityEditor.EditorTools;
 using UnityEngine;
 
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Действия инструмента «Live Builder»: включить инструмент, новый объект, «добавить ⇄ вырезать» у выделенных коробок, заморозка.
-    /// Зовут их окно Live Builder и меню — одно место на каждое действие.
+    /// Действия над объектами из коробок: новый объект, «добавить ⇄ вырезать» у выделенных коробок, заморозка, что выделено.
+    /// Зовут их окно Live Builder и меню — одно место на каждое действие. Включить сам инструмент — <see cref="LiveBuilderActivation"/>.
     /// </summary>
     public static class BoxModelActions
     {
-        public static bool IsToolActive => ToolManager.activeToolType == typeof(LiveBuilderSceneTool);
-
         // Без ProBuilder в проекте замораживать не во что — кнопки нет.
         public static bool CanFreezeToProBuilder
         {
@@ -28,17 +25,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // ── Инструмент ───────────────────────────────────────────────────
-
-        public static void SetToolActive(bool isActive)
-        {
-            if (isActive)
-                ToolManager.SetActiveTool<LiveBuilderSceneTool>();
-            else if (IsToolActive)
-                ToolManager.RestorePreviousPersistentTool();
-        }
-
-
         // ── Объекты и коробки ────────────────────────────────────────────
 
         // Новый объект рисованием, как в ProBuilder: выделение снимается, включается инструмент, следующая нарисованная коробка — новый объект.
@@ -46,7 +32,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             Selection.activeObject = null;
             LiveBuilderBoxTool.IsNewModelRequested = true;
-            SetToolActive(true);
+            LiveBuilderActivation.SetToolActive(true);
         }
 
 

@@ -138,7 +138,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Новая коробка — копия исходной сразу за ней в иерархии: от её места зависит, что она перекрывает.
         private static FaceExtrusion Begin(BoxModel model, BoxModelPart part, int face)
         {
-            var partObject = new GameObject(part.Mode == BoxModelPartMode.Add ? BoxModelRebuilder.AddPartName : BoxModelRebuilder.CutPartName)
+            var partObject = new GameObject(part.Mode == BoxModelPartMode.Add ? BoxModelPieceTidying.AddPartName : BoxModelPieceTidying.CutPartName)
             {
                 tag = part.gameObject.tag,
                 layer = part.gameObject.layer
@@ -158,7 +158,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             while (extrudedPart.Chamfers.Count > 0)
                 extrudedPart.RemoveChamfer(extrudedPart.Chamfers[0].FirstFace, extrudedPart.Chamfers[0].SecondFace);
 
-            var sourceMin = BoxModelRebuilder.LocalMinOf(model, part);
+            var sourceMin = BoxModelShapeCollector.LocalMinOf(model, part.transform);
             var extrusion = new FaceExtrusion(model, part, extrudedPart, face, sourceMin, sourceMin + part.Size);
             Extrusions.Add(extrusion);
             return extrusion;
@@ -169,8 +169,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var axis = extrusion.Axis;
             var sign = extrusion.IsPositive ? 1f : -1f;
-            var step = BoxModelGrid.StepOn(axis);
-            var depth = (BoxModelGrid.Snap(pulledFace, axis) - extrusion.SourceFace) * sign;
+            var step = LiveBuilderGrid.StepOn(axis);
+            var depth = (LiveBuilderGrid.Snap(pulledFace, axis) - extrusion.SourceFace) * sign;
             extrusion.HasDepth = depth >= step * 0.5f;
 
             var min = extrusion.SourceMin;
@@ -261,13 +261,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (extrusion.Extruded == null || extrusion.Model == null)
                 return;
 
-            var min = BoxModelRebuilder.LocalMinOf(extrusion.Model, extrusion.Extruded);
+            var min = BoxModelShapeCollector.LocalMinOf(extrusion.Model, extrusion.Extruded.transform);
             var max = min + extrusion.Extruded.Size;
             var farFace = (min + max) / 2f;
             farFace[extrusion.Axis] = extrusion.IsPositive ? max[extrusion.Axis] : min[extrusion.Axis];
 
-            BoxModelSceneText.DrawLabel(extrusion.Model.transform.TransformPoint(farFace),
-                extrusion.HasDepth ? "выдавить " + BoxModelSceneText.FormatMeters(extrusion.Extruded.Size[extrusion.Axis]) + " м" : "тяни дальше — новая коробка");
+            LiveBuilderSceneText.DrawLabel(extrusion.Model.transform.TransformPoint(farFace),
+                extrusion.HasDepth ? "выдавить " + LiveBuilderSceneText.FormatMeters(extrusion.Extruded.Size[extrusion.Axis]) + " м" : "тяни дальше — новая коробка");
         }
 
 

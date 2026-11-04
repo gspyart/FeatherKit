@@ -62,13 +62,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             if (BoxModelPicker.TryPickSurface(worldRay, out var surfaceHit))
             {
-                point = BoxModelGrid.Snap(surfaceHit.Model.transform.TransformPoint(surfaceHit.LocalPoint));
+                point = LiveBuilderGrid.Snap(surfaceHit.Model.transform.TransformPoint(surfaceHit.LocalPoint));
                 return true;
             }
 
             if (BoxModelPicker.TryRaycastVisible(worldRay, float.MaxValue, out var hit))
             {
-                point = BoxModelGrid.Snap(hit.point);
+                point = LiveBuilderGrid.Snap(hit.point);
                 return true;
             }
 
@@ -120,9 +120,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Handles.DrawLine(a, b, 3f);
             Handles.DrawWireDisc(b, Vector3.up, HandleUtility.GetHandleSize(b) * 0.06f);
 
-            var text = "по горизонтали " + BoxModelSceneText.FormatMeters(horizontal) + " м, по высоте " + (rise < 0f ? "−" : "+") +
-                       BoxModelSceneText.FormatMeters(rise) + " м" + (verdictText.Length > 0 ? " — " + verdictText : "");
-            BoxModelSceneText.DrawLabel((a + b) / 2f, text);
+            var text = "по горизонтали " + LiveBuilderSceneText.FormatMeters(horizontal) + " м, по высоте " + (rise < 0f ? "−" : "+") +
+                       LiveBuilderSceneText.FormatMeters(rise) + " м" + (verdictText.Length > 0 ? " — " + verdictText : "");
+            LiveBuilderSceneText.DrawLabel((a + b) / 2f, text);
         }
     }
 }

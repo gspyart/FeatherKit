@@ -8,7 +8,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Вырез (<see cref="GeometryCutter"/>) в окне сцены: оранжевая рамка его формы спереди и сзади и полупрозрачная коробка — у каждой копии вверх.
     /// Выделенный — ярко; выделена стена или здание, в котором он лежит, — бледно, чтобы найти и кликнуть; иначе не рисуется — видна только дыра.
-    /// Выделить кликом по дыре помогает <see cref="HoleCutterPicker"/>.
+    /// Выделить кликом по дыре помогает <see cref="GeometryCutterPicker"/>.
     /// </summary>
     public static class GeometryCutterGizmos
     {

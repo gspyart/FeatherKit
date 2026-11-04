@@ -9,7 +9,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// тянешь — ходит только эта грань, противоположная стоит; Alt — обе сразу, Alt+Shift — все стороны вместе;
     /// у коробки Ctrl — выдавить от грани новую коробку (<see cref="BoxModelPartExtrusion"/>), Shift+клик по квадрату — набрать грань (<see cref="BoxModelFaceSelection"/>):
     /// потянул квадрат набранной — едут все набранные (<see cref="BoxModelFaceMoveHandle"/>).
-    /// Грани прилипают к сетке <see cref="BoxModelGrid"/>, всё с Undo. Переносят коробку штатным инструментом Move.
+    /// Грани прилипают к сетке <see cref="LiveBuilderGrid"/>, всё с Undo. Переносят коробку штатным инструментом Move.
     /// У лестницы ещё стрелка подъёма на полу и сколько ступеней.
     /// </summary>
     public static class BoxModelPartHandles
@@ -30,8 +30,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             using (new Handles.DrawingScope(model.transform.localToWorldMatrix))
                 foreach (var box in BoxModelRebuilder.GetSolverBoxes(model))
                 {
-                    var min = (Vector3)box.Box.Min / MillimeterBox.MillimetersPerMeter;
-                    var max = (Vector3)box.Box.Max / MillimeterBox.MillimetersPerMeter;
+                    var min = box.Box.MinInMeters;
+                    var max = box.Box.MaxInMeters;
 
                     if (LiveBuilderStoreys.IsHiddenBySection(model.transform.TransformPoint(min)))
                         continue;
@@ -164,9 +164,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 Handles.DrawAAPolyLine(4f, head + side, end, head - side);
             }
 
-            BoxModelSceneText.DrawLabel(model.transform.TransformPoint(min + size), stairs.StepCount + " ступеней · подъём " +
-                                                                                    BoxModelSceneText.FormatMeters(stairs.Height / stairs.StepCount) + " · глубина " +
-                                                                                    BoxModelSceneText.FormatMeters(stairs.StepDepth) + " м");
+            LiveBuilderSceneText.DrawLabel(model.transform.TransformPoint(min + size), stairs.StepCount + " ступеней · подъём " +
+                                                                                       LiveBuilderSceneText.FormatMeters(stairs.Height / stairs.StepCount) + " · глубина " +
+                                                                                       LiveBuilderSceneText.FormatMeters(stairs.StepDepth) + " м");
         }
 
 
@@ -206,12 +206,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             for (var axis = 0; axis < 3; axis++)
             {
-                var step = BoxModelGrid.StepOn(axis);
+                var step = LiveBuilderGrid.StepOn(axis);
                 var isMinMoved = !Mathf.Approximately(newMin[axis], oldMin[axis]);
                 var isMaxMoved = !Mathf.Approximately(newMax[axis], oldMax[axis]);
 
-                newMin[axis] = isMinMoved ? BoxModelGrid.Snap(newMin[axis], axis) : oldMin[axis];
-                newMax[axis] = isMaxMoved ? BoxModelGrid.Snap(newMax[axis], axis) : oldMax[axis];
+                newMin[axis] = isMinMoved ? LiveBuilderGrid.Snap(newMin[axis], axis) : oldMin[axis];
+                newMax[axis] = isMaxMoved ? LiveBuilderGrid.Snap(newMax[axis], axis) : oldMax[axis];
 
                 if (newMax[axis] - newMin[axis] >= step)
                     continue;

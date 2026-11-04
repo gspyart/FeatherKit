@@ -3,29 +3,19 @@ using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Пересобирает меш объектов из коробок, когда изменились коробки: правка, перенос, порядок в списке, повторы, лестницы, Ctrl+Z.
     /// Когда проверять — решает общая очередь <see cref="LiveBuilderRebuildQueue"/>.
-    /// Сравнивает «подпись» коробок расчёта с той, по которой собран меш, и число вершин меша — лишних пересборок нет,
+    /// Сравнивает «подпись» коробок расчёта (<see cref="BoxModelSignature"/>) с той, по которой собран меш, и число вершин меша — лишних пересборок нет,
     /// а отставший от сцены файл меша догоняется при открытии сцены. Хранит наружные поверхности и коробки расчёта для выбора кликом.
     /// Фаска рёбер (<see cref="BoxModelBevel"/>) — часть сборки: после поверхностей, до вырезов.
     /// Общий меш копий и префабов не перезаписывает — экземпляры префабов разбирает <see cref="BoxModelPrefabInstances"/>.
     /// </summary>
-    [InitializeOnLoad]
     public static class BoxModelRebuilder
     {
-        public const string AddPartName = "Add Box";
-        public const string CutPartName = "Cut Box";
-
-        private const string EditorOnlyTag = "EditorOnly";
-
-        // Поменял, что входит в подпись, — подними: все объекты пересоберутся один раз.
-        private const int SignatureVersion = 2;
-
         private static readonly Dictionary<EntityId, BoxModelBuildResult> BuildResultsByModel = new();
 
         // При каком номере правки посчитан результат объекта. Пока номер тот же — сцена не менялась, считать заново незачем:
@@ -35,13 +25,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // Меши, чьи вершины уже сверены с коробками: номер меша → подпись, число вершин и габарит на момент сверки.
         private static readonly Dictionary<EntityId, string> VerifiedMeshes = new();
-
-
-        static BoxModelRebuilder()
-        {
-            EditorSceneManager.sceneSaving += OnSceneSaving;
-            PrefabStage.prefabSaving += OnPrefabSaving;
-        }
 
 
         // ── Пересборка ───────────────────────────────────────────────────
@@ -58,7 +41,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     if (BoxModelPrefabInstances.TryUsePrefabGeometry(model, () => IsPrefabMeshUpToDate(model), () => PrefabStateOf(model)))
                         continue;
 
-                    TidyPieces(model);
+                    BoxModelPieceTidying.Tidy(model);
 
                     if (!IsMeshUpToDate(model, model.GetComponent<MeshFilter>().sharedMesh))
                         Rebuild(model);
@@ -202,7 +185,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var ramps = new List<BoxModelRampShape>();
             var boxes = BoxModelShapeCollector.Collect(model, ramps);
-            var signature = SignatureOf(model, boxes, ramps);
+            var signature = BoxModelSignature.Of(model, boxes, ramps);
 
             var surfaces = hasCached && cached.Signature == signature
                 ? cached.Surfaces
@@ -252,166 +235,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Угол коробки с наименьшими координатами в осях объекта, м.
-        public static Vector3 LocalMinOf(BoxModel model, BoxModelPart part)
-        {
-            return model.transform.InverseTransformPoint(part.transform.position);
-        }
-
-
-        // Коробки, комнаты, лестницы и группы повтора не поворачиваются и не масштабируются; всё, кроме групп, в сборку не попадает.
-        private static void TidyPieces(BoxModel model)
-        {
-            foreach (var part in CollectParts(model))
-            {
-                TidyTransform(part.transform);
-                MarkEditorOnly(part.gameObject);
-                RenameByMode(part);
-            }
-
-            foreach (var stairs in model.GetComponentsInChildren<BoxModelStairs>(false))
-            {
-                TidyTransform(stairs.transform);
-                MarkEditorOnly(stairs.gameObject);
-            }
-
-            foreach (var room in model.GetComponentsInChildren<BoxModelRoom>(false))
-            {
-                TidyTransform(room.transform);
-                MarkEditorOnly(room.gameObject);
-            }
-
-            foreach (var repeat in model.GetComponentsInChildren<BoxModelRepeat>(false))
-                TidyTransform(repeat.transform);
-        }
-
-        private static void TidyTransform(Transform pieceTransform)
-        {
-            if (pieceTransform.localRotation != Quaternion.identity)
-                pieceTransform.localRotation = Quaternion.identity;
-
-            if (pieceTransform.localScale != Vector3.one)
-                pieceTransform.localScale = Vector3.one;
-        }
-
-        private static void MarkEditorOnly(GameObject piece)
-        {
-            if (!piece.CompareTag(EditorOnlyTag))
-                piece.tag = EditorOnlyTag;
-        }
-
-        // Имя по умолчанию следует за режимом: «Add Box (1)», переключённая на вырезание, становится «Cut Box (1)». Свои имена не трогаем.
-        private static void RenameByMode(BoxModelPart part)
-        {
-            var wrongPrefix = part.Mode == BoxModelPartMode.Add ? CutPartName : AddPartName;
-            var rightPrefix = part.Mode == BoxModelPartMode.Add ? AddPartName : CutPartName;
-
-            if (part.name.StartsWith(wrongPrefix))
-                part.name = rightPrefix + part.name.Substring(wrongPrefix.Length);
-        }
-
-
-        // Всё, от чего зависит меш: коробки расчёта по порядку, их место, режим и материалы, скаты, материал объекта, фаска.
-        // Хеш, одинаковый на любом запуске и машине (<see cref="LiveBuilderStableHash"/>).
-        private static string SignatureOf(BoxModel model, List<BoxModelSolverBox> boxes, List<BoxModelRampShape> ramps)
-        {
-            var hash = new Hash128();
-            hash.Append(SignatureVersion);
-            hash.Append(BoxModelSideMaterials.KeyOf(model.DefaultMaterial));
-            hash.Append(model.HasCollider ? 1 : 0);
-            hash.Append(boxes.Count);
-
-            foreach (var box in boxes)
-            {
-                var min = box.Box.Min;
-                var max = box.Box.Max;
-                hash.Append((int)box.Mode);
-                hash.Append(ref min);
-                hash.Append(ref max);
-                hash.Append(box.Materials.Key);
-                hash.Append(box.Chamfers.Count);
-
-                foreach (var chamfer in box.Chamfers)
-                {
-                    hash.Append((int)chamfer.FirstFace);
-                    hash.Append((int)chamfer.SecondFace);
-                    hash.Append(chamfer.SizeOnFirstFace);
-                    hash.Append(chamfer.SizeOnSecondFace);
-                }
-            }
-
-            foreach (var ramp in ramps)
-            {
-                var low = MillimeterBox.ToMillimeters(ramp.Corners[0]);
-                var high = MillimeterBox.ToMillimeters(ramp.Corners[6]);
-                hash.Append(ref low);
-                hash.Append(ref high);
-            }
-
-            if (HasBevel(model))
-            {
-                hash.Append(model.BevelSize);
-                hash.Append(model.BevelSegments);
-            }
-
-            return hash.ToString();
-        }
-
-
-        private static bool HasBevel(BoxModel model)
-        {
-            return model.BevelSize > 0f;
-        }
-
         // Меш срезан после поверхностей — фаской или скосами рёбер: по вершинам его с коробками уже не сверить.
         private static bool IsCutAfterSurfaces(BoxModel model, BoxModelBuildResult result)
         {
-            return HasBevel(model) || result.Boxes.Exists(box => box.Chamfers.Count > 0);
+            return BoxModelBevel.HasBevel(model) || result.Boxes.Exists(box => box.Chamfers.Count > 0);
         }
 
 
         private static BoxModel[] FindModels()
         {
             return StageUtility.GetCurrentStageHandle().FindComponentsOfType<BoxModel>();
-        }
-
-
-        // ── События редактора ────────────────────────────────────────────
-
-        // Меш пишется на диск вместе со сценой — иначе сцена сохранена, а файл меша остался старым.
-        private static void OnSceneSaving(Scene scene, string path)
-        {
-            foreach (var root in scene.GetRootGameObjects())
-                SaveMeshFiles(root);
-        }
-
-        // То же для префаба.
-        private static void OnPrefabSaving(GameObject prefabRoot)
-        {
-            SaveMeshFiles(prefabRoot);
-        }
-
-        // Меши объектов, стен и зданий под root — на диск. Зовут сохранение сцены, префаба и пересборка префаба.
-        public static void SaveMeshFiles(GameObject root)
-        {
-            foreach (var model in root.GetComponentsInChildren<BoxModel>(true))
-                SaveMeshFile(model.GetComponent<MeshFilter>().sharedMesh);
-
-            foreach (var wall in root.GetComponentsInChildren<SplineWall>(true))
-                SaveMeshFile(wall.GetComponent<MeshFilter>().sharedMesh);
-
-            foreach (var part in root.GetComponentsInChildren<SplineBuildingPart>(true))
-                SaveMeshFile(part.GetComponent<MeshFilter>().sharedMesh);
-        }
-
-        // Только свои файлы: чужой меш (модель, ProBuilder) не разворачиваем и не пишем.
-        private static void SaveMeshFile(Mesh mesh)
-        {
-            if (!BoxModelMeshStorage.IsBoxModelMeshFile(mesh))
-                return;
-
-            BoxModelMeshStorage.AddLightmapUVs(mesh);
-            AssetDatabase.SaveAssetIfDirty(mesh);
         }
     }
 

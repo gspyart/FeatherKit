@@ -20,7 +20,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var building = selected.GetComponentInParent<SplineBuilding>();
             var isGenerated = selected.GetComponent<SplineBuildingPart>() != null
-                || building != null && selected.transform.parent == building.transform && selected.name.StartsWith(SplineBuildingRebuilder.StoreyGroupPrefix);
+                || building != null && selected.transform.parent == building.transform && selected.name.StartsWith(SplineBuildingParts.StoreyGroupPrefix);
 
             if (building == null || !isGenerated)
                 return false;

@@ -43,7 +43,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public static Color AccentColor => EditorGUIUtility.isProSkin ? new Color(0.35f, 0.6f, 1f) : new Color(0.1f, 0.38f, 0.82f);
 
-        public static Color IconColor => EditorGUIUtility.isProSkin ? new Color(0.78f, 0.78f, 0.78f) : new Color(0.25f, 0.25f, 0.25f);
 
         private static Color CardColor => EditorGUIUtility.isProSkin ? new Color(0.25f, 0.25f, 0.25f) : new Color(0.84f, 0.84f, 0.84f);
 
@@ -281,7 +280,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (Event.current.type == EventType.Repaint)
             {
-                LiveBuilderOptionIcons.Draw(new Rect(rect.x, rect.y + 2f, 12f, 12f), LiveBuilderOptionIcon.Info, isHovered ? IconColor : MutedTextColor);
+                LiveBuilderOptionIcons.Draw(new Rect(rect.x, rect.y + 2f, 12f, 12f), LiveBuilderOptionIcon.Info, isHovered ? LiveBuilderIconCache.ThemedColor : MutedTextColor);
                 ExplanationLinkStyle.Draw(new Rect(rect.x + IconSize + 2f, rect.y, rect.width - IconSize - 2f, rect.height), content, isHovered, false, false, false);
             }
 
@@ -328,7 +327,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var iconSize = Mathf.Min(20f, rect.height - 22f);
             var iconRect = new Rect(rect.center.x - iconSize / 2f, rect.y + 7f, iconSize, iconSize);
-            LiveBuilderToolIcons.Draw(iconRect, tool, isSelected ? Color.white : isHovered ? IconColor : DimIconColor);
+            LiveBuilderToolIcons.Draw(iconRect, tool, isSelected ? Color.white : isHovered ? LiveBuilderIconCache.ThemedColor : DimIconColor);
 
             var labelStyle = isSelected ? SelectedTileLabelStyle : TileLabelStyle;
             labelStyle.Draw(new Rect(rect.x + 2f, rect.yMax - 17f, rect.width - 4f, 14f), tool.DisplayName, false, false, false, false);

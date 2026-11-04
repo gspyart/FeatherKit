@@ -113,7 +113,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderRoomSettings.SlabThickness = EditorGUILayout.FloatField(
                     new GUIContent("Толщина перекрытия, м", "Пол и потолок. Высота комнаты — этаж минус перекрытие"), LiveBuilderRoomSettings.SlabThickness);
 
-                LiveBuilderWindowControls.Computed("Высота комнаты", BoxModelSceneText.FormatMeters(LiveBuilderRoomSettings.ClearHeight) + " м", "Этаж минус перекрытие");
+                LiveBuilderWindowControls.Computed("Высота комнаты", LiveBuilderSceneText.FormatMeters(LiveBuilderRoomSettings.ClearHeight) + " м", "Этаж минус перекрытие");
                 LiveBuilderToolSettingsFields.DrawPartitionThickness();
             }
 

@@ -148,7 +148,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     AddObject(targets, tool, pathOwner.gameObject, physicsHit.distance);
             }
 
-            if (HoleCutterPicker.TryPick(worldRay, out var cutterHit))
+            if (GeometryCutterPicker.TryPick(worldRay, out var cutterHit))
                 AddObject(targets, tool, cutterHit.Cutter.gameObject, cutterHit.EntryDistance);
 
             targets.Sort((first, second) => first.Distance.CompareTo(second.Distance));

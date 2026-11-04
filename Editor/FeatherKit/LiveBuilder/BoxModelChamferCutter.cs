@@ -12,10 +12,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public static class BoxModelChamferCutter
     {
-        // Призма выходит за грани наружу на столько, м: срез вровень с гранью оставил бы плёнку.
-        private const float OutsideMargin = 0.01f;
-
-
         public static void Apply(Mesh mesh, IReadOnlyList<BoxModelSolverBox> boxes)
         {
             if (mesh.vertexCount == 0 || !HasAnyChamfer(boxes))
@@ -28,8 +24,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (box.Mode != BoxModelPartMode.Add)
                     continue;
 
-                var min = (Vector3)box.Box.Min / MillimeterBox.MillimetersPerMeter;
-                var max = (Vector3)box.Box.Max / MillimeterBox.MillimetersPerMeter;
+                var min = box.Box.MinInMeters;
+                var max = box.Box.MaxInMeters;
 
                 foreach (var chamfer in box.Chamfers)
                     polygons = Cut(polygons, chamfer, min, max);
@@ -69,7 +65,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var edgeToMesh = EdgeToMesh(chamfer, firstAxis, secondAxis, alongAxis, min, max);
             var length = size[alongAxis];
 
-            return MeshSubtraction.SubtractNear(polygons, BoundsOf(crossSection, length, edgeToMesh),
+            return MeshSubtraction.SubtractNear(polygons, BoxModelEdgeCutting.BoundsOf(crossSection, length, edgeToMesh),
                 near => MeshSubtraction.PrismPolygons(crossSection, 0f, length, edgeToMesh, MeshSubtraction.MostCommonSubmesh(near)));
         }
 
@@ -81,16 +77,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var onFirst = new Vector2(-secondSign * sizeOnFirst, 0f);
             var onSecond = new Vector2(0f, -firstSign * sizeOnSecond);
             var cutDirection = (onFirst - onSecond).normalized;
-            var onFirstExtended = onFirst + cutDirection * OutsideMargin;
-            var onSecondExtended = onSecond - cutDirection * OutsideMargin;
+            var onFirstExtended = onFirst + cutDirection * BoxModelEdgeCutting.OutsideMargin;
+            var onSecondExtended = onSecond - cutDirection * BoxModelEdgeCutting.OutsideMargin;
 
             var crossSection = new List<Vector2>
             {
-                new(secondSign * OutsideMargin, firstSign * OutsideMargin),
-                new(secondSign * OutsideMargin, onSecondExtended.y),
+                new(secondSign * BoxModelEdgeCutting.OutsideMargin, firstSign * BoxModelEdgeCutting.OutsideMargin),
+                new(secondSign * BoxModelEdgeCutting.OutsideMargin, onSecondExtended.y),
                 onSecondExtended,
                 onFirstExtended,
-                new(onFirstExtended.x, firstSign * OutsideMargin)
+                new(onFirstExtended.x, firstSign * BoxModelEdgeCutting.OutsideMargin)
             };
 
             if (PlanPolygons.SignedArea(crossSection) < 0f)
@@ -108,9 +104,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
             origin[firstAxis] = BoxFaces.IsPositive(chamfer.FirstFace) ? max[firstAxis] : min[firstAxis];
             origin[secondAxis] = BoxFaces.IsPositive(chamfer.SecondFace) ? max[secondAxis] : min[secondAxis];
 
-            var x = AxisVector(secondAxis);
-            var y = AxisVector(firstAxis);
-            var along = AxisVector(alongAxis);
+            var x = BoxModelEdgeCutting.AxisVector(secondAxis);
+            var y = BoxModelEdgeCutting.AxisVector(firstAxis);
+            var along = BoxModelEdgeCutting.AxisVector(alongAxis);
             var isMirrored = Vector3.Dot(Vector3.Cross(x, y), along) < 0f;
 
             if (isMirrored)
@@ -125,27 +121,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
             matrix.SetColumn(2, along);
             matrix.SetColumn(3, new Vector4(origin.x, origin.y, origin.z, 1f));
             return matrix;
-        }
-
-        private static Vector3 AxisVector(int axis)
-        {
-            var vector = Vector3.zero;
-            vector[axis] = 1f;
-            return vector;
-        }
-
-
-        private static Bounds BoundsOf(List<Vector2> crossSection, float length, Matrix4x4 edgeToMesh)
-        {
-            var bounds = new Bounds(edgeToMesh.MultiplyPoint3x4(crossSection[0]), Vector3.zero);
-
-            foreach (var point in crossSection)
-            {
-                bounds.Encapsulate(edgeToMesh.MultiplyPoint3x4(new Vector3(point.x, point.y, 0f)));
-                bounds.Encapsulate(edgeToMesh.MultiplyPoint3x4(new Vector3(point.x, point.y, length)));
-            }
-
-            return bounds;
         }
     }
 }

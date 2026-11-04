@@ -11,13 +11,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// (этажи уровня и здания — одни и те же: здание стоит низом на этаже уровня, его этажи идут с тем же шагом). Отсюда пол этажа,
     /// сколько до потолка и сколько этажей выше. Стена, комната, лестница и проём сами берут высоты здания,
     /// а «только этот этаж / этот и все выше» решает, встанет ли новое на одном этаже или на всех выше разом.
+    /// Прилипание к стенам здания — <see cref="SplineBuildingWallSnapping"/>, здание и этажи уровня — <see cref="SplineBuildingLevelAlignment"/>.
     /// </summary>
     public sealed class LiveBuilderBuildingContext
     {
         private const string AllStoreysSessionKey = "FeatherKit.LiveBuilder.IsOnAllStoreys";
-
-        // Насколько точка может не дойти до стены здания и всё равно к ней прилипнуть — доля шага сетки.
-        private const float ContourSnapFraction = 0.6f;
 
 
         private LiveBuilderBuildingContext(SplineBuilding building, int storey)
@@ -52,9 +50,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Объект из коробок, в котором стоит здание: в него идут перегородки и лестницы — его вырезы режут и здание.
         public BoxModel Model => SplineWallRebuilder.OuterModelOf(Building);
 
-        // От пола до потолка этажа, м.
-        public float ClearHeight => Building.StoreyHeight - Building.SlabThickness;
-
         // Сколько этажей с этого и выше, считая этот.
         public int StoreysAbove => Building.StoreyCount - Storey;
 
@@ -62,7 +57,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public int CopyCount => IsOnAllStoreys ? StoreysAbove : 1;
 
         // Высота пола этого этажа над контуром здания, в его осях, м.
-        public float FloorTopLocal => BaseHeightOf(Building) + Building.FloorTopHeight + Storey * Building.StoreyHeight;
+        public float FloorTopLocal => SplineBuildingLevelAlignment.BaseHeightOf(Building) + Building.FloorTopHeight + Storey * Building.StoreyHeight;
 
         // Пол этого этажа как плоскость рисования — в осях здания.
         public BoxModelDrawPlane FloorPlane => new(Model, Building.transform.localToWorldMatrix, 1, FloorTopLocal, 1f);
@@ -80,7 +75,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (building == null)
                 return false;
 
-            var storey = LiveBuilderStoreys.CurrentStorey - BaseStoreyOf(building);
+            var storey = LiveBuilderStoreys.CurrentStorey - SplineBuildingLevelAlignment.BaseStoreyOf(building);
 
             if (storey < 0 || storey >= building.StoreyCount)
                 return false;
@@ -129,7 +124,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     continue;
 
                 var localPoint = building.transform.InverseTransformPoint(worldPoint);
-                var baseHeight = BaseHeightOf(building);
+                var baseHeight = SplineBuildingLevelAlignment.BaseHeightOf(building);
 
                 if (localPoint.y < baseHeight - 0.01f || localPoint.y > baseHeight + building.TotalHeight + 0.01f)
                     continue;
@@ -140,38 +135,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             return null;
-        }
-
-
-        // Этаж уровня, на котором стоит низ здания.
-        public static int BaseStoreyOf(SplineBuilding building)
-        {
-            return Mathf.RoundToInt((BottomWorldHeightOf(building) - LiveBuilderStoreys.GroundLevel) / LiveBuilderStoreys.StoreyHeight);
-        }
-
-
-        // Здание стоит низом ровно на этаже уровня и с тем же шагом — его этажи совпадают с этажами окна.
-        public static bool IsAlignedToLevel(SplineBuilding building)
-        {
-            var levelFloor = LiveBuilderStoreys.GroundLevel + BaseStoreyOf(building) * LiveBuilderStoreys.StoreyHeight;
-            return Mathf.Abs(BottomWorldHeightOf(building) - levelFloor) < 0.005f && Mathf.Abs(building.StoreyHeight - LiveBuilderStoreys.StoreyHeight) < 0.005f;
-        }
-
-
-        // Поставить здание низом на ближайший этаж уровня и взять высоту этажа из окна. С Undo.
-        public static void AlignToLevel(SplineBuilding building)
-        {
-            Undo.RecordObjects(new Object[] { building, building.transform }, "Align Building To Storeys");
-            building.StoreyHeight = LiveBuilderStoreys.StoreyHeight;
-
-            var levelFloor = LiveBuilderStoreys.GroundLevel + BaseStoreyOf(building) * LiveBuilderStoreys.StoreyHeight;
-            building.transform.position += Vector3.up * (levelFloor - BottomWorldHeightOf(building));
-        }
-
-        // Низ здания в мире, м: низ плиты пола, а без пола — низ стен; на высоте контура.
-        private static float BottomWorldHeightOf(SplineBuilding building)
-        {
-            return building.transform.TransformPoint(new Vector3(0f, BaseHeightOf(building), 0f)).y;
         }
 
 
@@ -199,59 +162,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Рядом сразу две стены здания (угол) — прилипает к обеим, ровно в угол.
         public Vector3 SnapToWalls(Vector3 localPoint)
         {
-            return SnapToWalls(Building, localPoint);
-        }
-
-        // То же для любого здания — например, когда тянешь точку уже поставленной перегородки.
-        public static Vector3 SnapToWalls(SplineBuilding building, Vector3 localPoint)
-        {
-            var maxDistance = BoxModelGrid.CurrentStep * ContourSnapFraction;
-            var point = new Vector2(localPoint.x, localPoint.z);
-            var nearEdges = new List<(Vector2 Start, Vector2 End, float Distance)>();
-
-            foreach (var contour in SplineBuildingMeshBuilder.InnerContoursOf(building))
-                for (var index = 0; index < contour.Count; index++)
-                {
-                    var start = contour[index];
-                    var end = contour[(index + 1) % contour.Count];
-                    var distance = Vector2.Distance(point, PlanPolygons.ClosestOnSegment(point, start, end));
-
-                    if (distance < maxDistance)
-                        nearEdges.Add((start, end, distance));
-                }
-
-            if (nearEdges.Count == 0)
-                return localPoint;
-
-            nearEdges.Sort((first, second) => first.Distance.CompareTo(second.Distance));
-            var nearest = nearEdges[0];
-            var snapped = PlanPolygons.ClosestOnSegment(point, nearest.Start, nearest.End);
-
-            foreach (var other in nearEdges)
-                if (TryIntersectLines(nearest.Start, nearest.End, other.Start, other.End, out var corner) && Vector2.Distance(point, corner) < maxDistance * 1.5f)
-                {
-                    snapped = corner;
-                    break;
-                }
-
-            return new Vector3(snapped.x, localPoint.y, snapped.y);
-        }
-
-        // Пересечение двух прямых; почти параллельные — не пересекаются.
-        private static bool TryIntersectLines(Vector2 firstStart, Vector2 firstEnd, Vector2 secondStart, Vector2 secondEnd, out Vector2 intersection)
-        {
-            var first = firstEnd - firstStart;
-            var second = secondEnd - secondStart;
-            var cross = first.x * second.y - first.y * second.x;
-            intersection = default;
-
-            if (Mathf.Abs(cross) < 0.01f * first.magnitude * second.magnitude)
-                return false;
-
-            var offset = secondStart - firstStart;
-            var along = (offset.x * second.y - offset.y * second.x) / cross;
-            intersection = firstStart + first * along;
-            return true;
+            return SplineBuildingWallSnapping.SnapToWalls(Building, localPoint);
         }
 
 
@@ -259,15 +170,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public float DistanceToWalls(Vector2 point)
         {
             return PlanPolygons.DistanceToContours(point, InnerContours());
-        }
-
-
-        // ── Помощники ────────────────────────────────────────────────────
-
-        private static float BaseHeightOf(SplineBuilding building)
-        {
-            var paths = SplineWallPath.FromContainer(building.GetComponent<SplineContainer>(), building.CurveStep);
-            return paths.Count > 0 ? paths[0].BaseHeightAt(0f) : 0f;
         }
     }
 }

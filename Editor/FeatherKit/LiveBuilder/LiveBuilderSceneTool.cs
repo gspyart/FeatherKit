@@ -136,7 +136,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     DrawHover(controlId);
                     tool.DrawPreview();
                     PublishHint(CurrentHint());
-                    BoxModelSceneText.DrawHint(sceneView, CurrentHintText);
+                    LiveBuilderSceneText.DrawHint(sceneView, CurrentHintText);
                     break;
             }
         }
@@ -256,11 +256,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
             switch (current.keyCode)
             {
                 case KeyCode.LeftBracket:
-                    BoxModelGrid.ChangeStep(false);
+                    LiveBuilderGrid.ChangeStep(false);
                     break;
 
                 case KeyCode.RightBracket:
-                    BoxModelGrid.ChangeStep(true);
+                    LiveBuilderGrid.ChangeStep(true);
                     break;
 
                 case KeyCode.PageUp:
@@ -330,7 +330,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             if (hoveredSnapPoint is { } snapPoint && tool.DrawsSnapCursor)
-                BoxModelSnapCursor.Draw(snapPoint.Plane, snapPoint.Point);
+                LiveBuilderSnapCursor.Draw(snapPoint.Plane, snapPoint.Point);
         }
 
         private static void DrawSurfaceHighlight(BoxModelSurfaceHit hover)

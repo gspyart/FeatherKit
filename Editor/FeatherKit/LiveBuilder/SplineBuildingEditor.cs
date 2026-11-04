@@ -17,8 +17,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             serializedObject.Update();
             var building = (SplineBuilding)target;
 
-            GUILayout.Label("Высота " + BoxModelSceneText.FormatMeters(building.TotalHeight) + " м, комната до потолка " +
-                            BoxModelSceneText.FormatMeters(building.ClearHeight) + " м", EditorStyles.miniLabel);
+            GUILayout.Label("Высота " + LiveBuilderSceneText.FormatMeters(building.TotalHeight) + " м, комната до потолка " +
+                            LiveBuilderSceneText.FormatMeters(building.ClearHeight) + " м", EditorStyles.miniLabel);
             DrawRotationWarning(building);
 
             LiveBuilderInspectorLayout.Section("Этажи");
@@ -28,7 +28,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             LiveBuilderInspectorLayout.Properties(serializedObject, "wallType");
 
             if (building.WallType != null)
-                LiveBuilderInspectorLayout.DrivenValue("Wall Thickness", BoxModelSceneText.FormatMeters(building.WallThickness) + " м", "Толщина и материал снаружи — из типа стены", "от типа");
+                LiveBuilderInspectorLayout.DrivenValue("Wall Thickness", LiveBuilderSceneText.FormatMeters(building.WallThickness) + " м", "Толщина и материал снаружи — из типа стены", "от типа");
             else
                 LiveBuilderInspectorLayout.Properties(serializedObject, "wallThickness");
 

@@ -219,8 +219,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var max = min + size;
                 Handles.color = BoxModelPartHandles.CutColor;
                 Handles.DrawWireCube(min + size / 2f, size);
-                BoxModelSceneText.DrawLabel(max, "комната " + BoxModelSceneText.FormatMeters(size.x) + " × " + BoxModelSceneText.FormatMeters(size.z) +
-                                                 " м, высота " + BoxModelSceneText.FormatMeters(size.y) + " м");
+                LiveBuilderSceneText.DrawLabel(max, "комната " + LiveBuilderSceneText.FormatMeters(size.x) + " × " + LiveBuilderSceneText.FormatMeters(size.z) +
+                                                    " м, высота " + LiveBuilderSceneText.FormatMeters(size.y) + " м");
             }
         }
 
@@ -233,7 +233,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             using (new Handles.DrawingScope(context.Building.transform.localToWorldMatrix))
             {
-                var height = Vector3.up * context.ClearHeight;
+                var height = Vector3.up * context.Building.ClearHeight;
                 var wallCount = 0;
 
                 for (var side = 0; side < 4; side++)
@@ -258,8 +258,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 }
 
                 var size = rectangle.Max - rectangle.Min;
-                BoxModelSceneText.DrawLabel(corners[2] + height, BoxModelSceneText.FormatMeters(size.x) + " × " + BoxModelSceneText.FormatMeters(size.z) +
-                                                                 " м, перегородок: " + wallCount + (context.CopyCount > 1 ? ", × " + context.CopyCount + " этажа" : ""));
+                LiveBuilderSceneText.DrawLabel(corners[2] + height, LiveBuilderSceneText.FormatMeters(size.x) + " × " + LiveBuilderSceneText.FormatMeters(size.z) +
+                                                                    " м, перегородок: " + wallCount + (context.CopyCount > 1 ? ", × " + context.CopyCount + " этажа" : ""));
             }
         }
     }

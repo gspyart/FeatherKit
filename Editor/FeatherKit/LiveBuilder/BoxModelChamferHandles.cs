@@ -23,7 +23,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (part.Mode != BoxModelPartMode.Add)
                 return;
 
-            var min = BoxModelRebuilder.LocalMinOf(model, part);
+            var min = BoxModelShapeCollector.LocalMinOf(model, part.transform);
             var max = min + part.Size;
 
             using (new Handles.DrawingScope(HandleColor, model.transform.localToWorldMatrix))
@@ -59,15 +59,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var size = HandleUtility.GetHandleSize(position) * DotSizeFactor;
             EditorGUI.BeginChangeCheck();
-            var moved = Handles.Slider2D(position, AxisVector(3 - firstAxis - secondAxis), AxisVector(secondAxis), AxisVector(firstAxis), size,
+            var moved = Handles.Slider2D(position, BoxModelEdgeCutting.AxisVector(3 - firstAxis - secondAxis), BoxModelEdgeCutting.AxisVector(secondAxis), BoxModelEdgeCutting.AxisVector(firstAxis), size,
                 Handles.DotHandleCap, 0f);
 
             if (!EditorGUI.EndChangeCheck())
                 return;
 
             // Внутрь поперёк первой стороны — это вдоль оси второй, против её знака; и наоборот.
-            var newSizeOnFirst = Mathf.Clamp(BoxModelGrid.Snap((edgeMiddle[secondAxis] - moved[secondAxis]) * secondSign, secondAxis), 0f, max[secondAxis] - min[secondAxis]);
-            var newSizeOnSecond = Mathf.Clamp(BoxModelGrid.Snap((edgeMiddle[firstAxis] - moved[firstAxis]) * firstSign, firstAxis), 0f, max[firstAxis] - min[firstAxis]);
+            var newSizeOnFirst = Mathf.Clamp(LiveBuilderGrid.Snap((edgeMiddle[secondAxis] - moved[secondAxis]) * secondSign, secondAxis), 0f, max[secondAxis] - min[secondAxis]);
+            var newSizeOnSecond = Mathf.Clamp(LiveBuilderGrid.Snap((edgeMiddle[firstAxis] - moved[firstAxis]) * firstSign, firstAxis), 0f, max[firstAxis] - min[firstAxis]);
 
             if (Mathf.Approximately(newSizeOnFirst, sizeOnFirst) && Mathf.Approximately(newSizeOnSecond, sizeOnSecond))
                 return;
@@ -104,16 +104,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var worldPosition = Handles.matrix.MultiplyPoint3x4(position);
 
             using (new Handles.DrawingScope(Matrix4x4.identity))
-                BoxModelSceneText.DrawLabel(worldPosition, "скос " + BoxModelSceneText.FormatMeters(chamfer.SizeOnFirstFace) + " × " +
-                                                           BoxModelSceneText.FormatMeters(chamfer.SizeOnSecondFace) + " м");
-        }
-
-
-        private static Vector3 AxisVector(int axis)
-        {
-            var vector = Vector3.zero;
-            vector[axis] = 1f;
-            return vector;
+                LiveBuilderSceneText.DrawLabel(worldPosition, "скос " + LiveBuilderSceneText.FormatMeters(chamfer.SizeOnFirstFace) + " × " +
+                                                              LiveBuilderSceneText.FormatMeters(chamfer.SizeOnSecondFace) + " м");
         }
     }
 }

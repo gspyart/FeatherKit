@@ -9,13 +9,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Резчик дыры под лучом: кто он, где луч входит в его коробку и выходит из неё и где проходит сквозь саму дыру, м от начала луча.
     /// Решает, видно ли его дыру при ближайшей поверхности на таком-то расстоянии.
     /// </summary>
-    public readonly struct HoleCutterRayHit
+    public readonly struct GeometryCutterRayHit
     {
         // Ближе на столько — считается ближе, м: грани на одном месте не спорят.
         private const float Tolerance = 0.01f;
 
 
-        public HoleCutterRayHit(Component cutter, float entryDistance, float exitDistance, float holeCrossingDistance)
+        public GeometryCutterRayHit(Component cutter, float entryDistance, float exitDistance, float holeCrossingDistance)
         {
             Cutter = cutter;
             EntryDistance = entryDistance;
@@ -49,23 +49,23 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Выбор кликом по дыре того, кто её прорезал, но сам невидим: вырез (<see cref="GeometryCutter"/>, со всеми копиями вверх) или вырезающая коробка в здании.
     /// Дыру рисует меш самой стены или здания, а клик сквозь дыру улетает дальше. Здесь — по коробке, в которую вписан резчик:
-    /// клик выделяет его, если перед ним ничего нет и клик — по дыре или её откосу, а не по пустой части коробки мимо дыры (<see cref="HoleCutterRayHit"/>).
+    /// клик выделяет его, если перед ним ничего нет и клик — по дыре или её откосу, а не по пустой части коробки мимо дыры (<see cref="GeometryCutterRayHit"/>).
     /// Работает и в Live Builder, и в обычном выборе Unity (Move, Rotate), даже без значков (Gizmos).
     /// Вырезающие коробки обычного объекта из коробок сюда не входят: их и так выделяет клик по стенке дыры.
     /// </summary>
     [InitializeOnLoad]
-    public static class HoleCutterPicker
+    public static class GeometryCutterPicker
     {
-        static HoleCutterPicker()
+        static GeometryCutterPicker()
         {
             HandleUtility.pickGameObjectCustomPasses += PickForUnitySelection;
         }
 
 
         // Резчик под лучом, в чью коробку луч входит раньше всех: вырез или вырезающая коробка в здании.
-        public static bool TryPick(Ray ray, out HoleCutterRayHit hit)
+        public static bool TryPick(Ray ray, out GeometryCutterRayHit hit)
         {
-            hit = new HoleCutterRayHit(null, float.MaxValue, float.MaxValue, float.MaxValue);
+            hit = new GeometryCutterRayHit(null, float.MaxValue, float.MaxValue, float.MaxValue);
             var stage = StageUtility.GetCurrentStageHandle();
 
             foreach (var cutter in stage.FindComponentsOfType<GeometryCutter>())
@@ -80,7 +80,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
         // Вырез со всеми копиями вверх — по коробке, в которую вписана его форма; дыра — середина коробки по глубине (Z выреза).
-        private static void ConsiderCutter(Ray ray, GeometryCutter cutter, ref HoleCutterRayHit hit)
+        private static void ConsiderCutter(Ray ray, GeometryCutter cutter, ref GeometryCutterRayHit hit)
         {
             var box = new Bounds(new Vector3(0f, cutter.Height / 2f, 0f), new Vector3(cutter.Width, cutter.Height, cutter.Depth));
 
@@ -89,21 +89,21 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
         // Вырезающие коробки в зданиях этого объекта — со всеми копиями по этажам. Дыра у них — вся коробка: луч в ней — уже в дыре.
-        private static void ConsiderBuildingCutBoxes(Ray ray, BoxModel model, ref HoleCutterRayHit hit)
+        private static void ConsiderBuildingCutBoxes(Ray ray, BoxModel model, ref GeometryCutterRayHit hit)
         {
             foreach (var box in BoxModelRebuilder.GetSolverBoxes(model))
             {
                 if (box.Mode != BoxModelPartMode.Cut || box.Owner is not BoxModelPart part || part.GetComponentInParent<SplineBuilding>() == null)
                     continue;
 
-                var min = (Vector3)box.Box.Min / MillimeterBox.MillimetersPerMeter;
-                var max = (Vector3)box.Box.Max / MillimeterBox.MillimetersPerMeter;
+                var min = box.Box.MinInMeters;
+                var max = box.Box.MaxInMeters;
                 Consider(ray, part, model.transform.localToWorldMatrix, new Bounds((min + max) / 2f, max - min), false, ref hit);
             }
         }
 
         // Луч входит в коробку резчика раньше найденного — он и выбран.
-        private static void Consider(Ray ray, Component candidate, Matrix4x4 localToWorld, Bounds localBox, bool isHoleAtMiddleDepth, ref HoleCutterRayHit hit)
+        private static void Consider(Ray ray, Component candidate, Matrix4x4 localToWorld, Bounds localBox, bool isHoleAtMiddleDepth, ref GeometryCutterRayHit hit)
         {
             var toLocal = localToWorld.inverse;
             var localRay = new Ray(toLocal.MultiplyPoint3x4(ray.origin), toLocal.MultiplyVector(ray.direction));
@@ -130,7 +130,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     crossing = WorldDistanceAt(localCrossing);
             }
 
-            hit = new HoleCutterRayHit(candidate, entry, WorldDistanceAt(localExit), crossing);
+            hit = new GeometryCutterRayHit(candidate, entry, WorldDistanceAt(localExit), crossing);
         }
 
         // Где луч входит в коробку и выходит из неё, в его единицах; начало луча внутри — вход ноль.

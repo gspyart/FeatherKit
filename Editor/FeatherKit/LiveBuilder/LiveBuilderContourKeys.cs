@@ -92,7 +92,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             };
 
             var frame = LiveBuilderContourDrag.SnapFrameOf(owner);
-            var worldShift = (frame != null ? frame.TransformDirection(direction) : direction) * BoxModelGrid.CurrentStep;
+            var worldShift = (frame != null ? frame.TransformDirection(direction) : direction) * LiveBuilderGrid.CurrentStep;
             localShift = owner.transform.InverseTransformDirection(worldShift);
             return direction != Vector3.zero;
         }

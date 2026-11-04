@@ -7,7 +7,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Прицел под мышью, как в ProBuilder: точка, уже прилипшая к сетке, и клочок сетки вокруг на плоскости рисования.
     /// До нажатия видно, куда встанет угол коробки и в какой плоскости она начнётся.
     /// </summary>
-    public static class BoxModelSnapCursor
+    public static class LiveBuilderSnapCursor
     {
         // Сколько клеток сетки видно в каждую сторону от точки.
         private const int VisibleCellsEachSide = 3;
@@ -41,8 +41,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Линии вдоль оси lineAxis, разнесённые по оси spreadAxis.
         private static void DrawLinesAcross(Vector3 center, int lineAxis, int spreadAxis)
         {
-            var lineStep = BoxModelGrid.StepOn(lineAxis);
-            var spreadStep = BoxModelGrid.StepOn(spreadAxis);
+            var lineStep = LiveBuilderGrid.StepOn(lineAxis);
+            var spreadStep = LiveBuilderGrid.StepOn(spreadAxis);
 
             for (var index = -VisibleCellsEachSide; index <= VisibleCellsEachSide; index++)
             {

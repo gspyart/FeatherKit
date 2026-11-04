@@ -25,7 +25,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             materialIndex = -1;
 
-            if (BoxModelActions.IsToolActive || BoxModelActions.SelectedModel() == null || Camera.current == null)
+            if (LiveBuilderActivation.IsToolActive || BoxModelActions.SelectedModel() == null || Camera.current == null)
                 return null;
 
             if (!BoxModelPicker.TryPickSurface(HandleUtility.GUIPointToWorldRay(position), out var hit))

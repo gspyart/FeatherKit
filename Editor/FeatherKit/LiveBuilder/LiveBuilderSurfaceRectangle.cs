@@ -93,7 +93,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Высота — по сетке от пола этажа (низ двери встаёт на пол), вдоль поверхности — по сетке мира.
         private Vector3 SnapOrigin(Vector3 point)
         {
-            var step = BoxModelGrid.CurrentStep;
+            var step = LiveBuilderGrid.CurrentStep;
             var alongRight = Vector3.Dot(point, Right);
             point += Right * (Mathf.Round(alongRight / step) * step - alongRight);
 
@@ -120,7 +120,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return;
 
             var offset = worldRay.GetPoint(enter) - Origin;
-            var step = BoxModelGrid.CurrentStep;
+            var step = LiveBuilderGrid.CurrentStep;
             End = new Vector2(Mathf.Round(Vector3.Dot(offset, Right) / step) * step, Mathf.Round(Vector3.Dot(offset, Up) / step) * step);
         }
 

@@ -101,14 +101,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
             using (new EditorGUIUtility.IconSizeScope(new Vector2(LiveBuilderWindowControls.IconSize, LiveBuilderWindowControls.IconSize)))
             using (new EditorGUILayout.HorizontalScope())
             {
-                var isActive = BoxModelActions.IsToolActive;
+                var isActive = LiveBuilderActivation.IsToolActive;
                 var previous = GUI.backgroundColor;
                 GUI.backgroundColor = isActive ? new Color(0.45f, 0.85f, 0.5f) : previous;
                 var label = isActive ? " Live Builder включён · B" : " Включить Live Builder · B";
                 var power = new GUIContent(label, LiveBuilderOptionIcons.Themed(LiveBuilderOptionIcon.Power), "Пока включён, мышь в окне сцены строит выбранным инструментом");
 
                 if (GUILayout.Toggle(isActive, power, "Button", GUILayout.Height(24f)) != isActive)
-                    BoxModelActions.SetToolActive(!isActive);
+                    LiveBuilderActivation.SetToolActive(!isActive);
 
                 GUI.backgroundColor = previous;
 
@@ -195,7 +195,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     continue;
 
                 LiveBuilderToolPalette.Current = tool;
-                BoxModelActions.SetToolActive(true);
+                LiveBuilderActivation.SetToolActive(true);
             }
 
             EditorGUILayout.Space(2f);
@@ -224,7 +224,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Внизу окна — что делать сейчас, как внизу окна сцены. Сцена ещё не перерисовалась — что делает инструмент.
         private static string HintText()
         {
-            if (!BoxModelActions.IsToolActive)
+            if (!LiveBuilderActivation.IsToolActive)
                 return "Live Builder выключен — B в окне сцены или кнопка вверху";
 
             var text = LiveBuilderSceneTool.CurrentHintText;
@@ -240,7 +240,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Полоса цвета инструмента: значок инструмента и текст. Live Builder выключен — серая, без значка.
         private static void DrawHint(Rect rect, string text)
         {
-            var isActive = BoxModelActions.IsToolActive;
+            var isActive = LiveBuilderActivation.IsToolActive;
             var inner = HintPadding.padding.Remove(rect);
 
             if (Event.current.type == EventType.Repaint)
@@ -249,7 +249,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 {
                     EditorGUI.DrawRect(rect, LiveBuilderWindowZones.TintOf(LiveBuilderZoneColor.Tool, 0.14f));
                     EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), LiveBuilderWindowZones.ColorOf(LiveBuilderZoneColor.Tool));
-                    LiveBuilderToolIcons.Draw(new Rect(inner.x, inner.y + 1f, HintIconSize, HintIconSize), LiveBuilderToolPalette.Current, LiveBuilderWindowControls.IconColor);
+                    LiveBuilderToolIcons.Draw(new Rect(inner.x, inner.y + 1f, HintIconSize, HintIconSize), LiveBuilderToolPalette.Current, LiveBuilderIconCache.ThemedColor);
                 }
                 else
                     LiveBuilderWindowControls.DrawLine(new Rect(rect.x, rect.y, rect.width, 1f));

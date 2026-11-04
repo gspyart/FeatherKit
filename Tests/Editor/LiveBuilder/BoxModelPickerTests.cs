@@ -82,9 +82,9 @@ namespace FeatherKit.Tests.LiveBuilder
 
             var hit = LiveBuilderSceneHit.Find(new Ray(Origin + new Vector3(1f, 5f, 1f), Vector3.down));
 
-            Assert.IsNotNull(hit.HoleCutter, "луч проходит через коробку выреза");
+            Assert.IsNotNull(hit.GeometryCutter, "луч проходит через коробку выреза");
             Assert.IsTrue(hit.HasBoxSurface, "грань объекта под лучом");
-            Assert.IsFalse(hit.IsHoleCutterInFront, "клик по своей грани — грань, а не вырез");
+            Assert.IsFalse(hit.IsGeometryCutterInFront, "клик по своей грани — грань, а не вырез");
         }
 
 
@@ -104,7 +104,7 @@ namespace FeatherKit.Tests.LiveBuilder
 
             var hit = LiveBuilderSceneHit.Find(new Ray(Origin + new Vector3(1f, 5f, 1f), Vector3.down));
 
-            Assert.IsTrue(hit.IsHoleCutterInFront, "чужой вырез, в чьей коробке грань, — по-прежнему он");
+            Assert.IsTrue(hit.IsGeometryCutterInFront, "чужой вырез, в чьей коробке грань, — по-прежнему он");
         }
 
 
@@ -125,9 +125,9 @@ namespace FeatherKit.Tests.LiveBuilder
             var past = LiveBuilderSceneHit.Find(new Ray(Origin + new Vector3(0.5f, 5f, 0.5f), Vector3.down));
             var through = LiveBuilderSceneHit.Find(new Ray(Origin + new Vector3(0f, 2.5f, 5f), Vector3.back));
 
-            Assert.IsNotNull(past.HoleCutter, "луч проходит через коробку выреза");
-            Assert.IsFalse(past.IsHoleCutterInFront, "мимо дыры, через пустую часть коробки — грань за ней");
-            Assert.IsTrue(through.IsHoleCutterInFront, "сквозь дыру — вырез");
+            Assert.IsNotNull(past.GeometryCutter, "луч проходит через коробку выреза");
+            Assert.IsFalse(past.IsGeometryCutterInFront, "мимо дыры, через пустую часть коробки — грань за ней");
+            Assert.IsTrue(through.IsGeometryCutterInFront, "сквозь дыру — вырез");
         }
 
 

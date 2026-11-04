@@ -252,7 +252,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     if (!PrefabUtility.IsPartOfPrefabInstance(building))
                         SplineBuildingRebuilder.Rebuild(building);
 
-                BoxModelRebuilder.SaveMeshFiles(contents);
+                BoxModelMeshSaving.SaveMeshFiles(contents);
                 PrefabUtility.SaveAsPrefabAsset(contents, prefabPath);
             }
             finally

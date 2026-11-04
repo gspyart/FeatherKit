@@ -108,7 +108,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var worldCenter = plane.FrameToWorld.MultiplyPoint3x4((rectangleStart + rectangleEnd) / 2f);
             var worldOutward = plane.FrameToWorld.MultiplyVector(plane.OutwardDirection).normalized;
             var translation = HandleUtility.CalcLineTranslation(depthMouseStart, mousePosition, worldCenter, worldOutward);
-            var newDepth = BoxModelGrid.Snap(translation, plane.Axis);
+            var newDepth = LiveBuilderGrid.Snap(translation, plane.Axis);
 
             if (Mathf.Approximately(newDepth, depth))
                 return;
@@ -189,7 +189,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // сразу на всех этажах выше; потом повтор по этажам — в «Этажи в здании».
         private static void AttachToBuilding(BoxModel model, BoxModelPart part)
         {
-            var center = model.transform.TransformPoint(BoxModelRebuilder.LocalMinOf(model, part) + part.Size / 2f);
+            var center = model.transform.TransformPoint(BoxModelShapeCollector.LocalMinOf(model, part.transform) + part.Size / 2f);
             var building = LiveBuilderBuildingContext.BuildingContaining(model, center);
 
             if (building == null)
@@ -225,7 +225,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     Handles.color = Color.cyan;
                     var size = rectangleEnd - rectangleStart;
                     Handles.DrawWireCube((rectangleStart + rectangleEnd) / 2f, new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z)));
-                    BoxModelSceneText.DrawLabel(rectangleEnd, RectangleSizeText() + " м");
+                    LiveBuilderSceneText.DrawLabel(rectangleEnd, RectangleSizeText() + " м");
                     return;
                 }
 
@@ -233,7 +233,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var mode = CurrentPartMode();
                 Handles.color = mode == BoxModelPartMode.Add ? BoxModelPartHandles.AddColor : BoxModelPartHandles.CutColor;
                 Handles.DrawWireCube((min + max) / 2f, max - min);
-                BoxModelSceneText.DrawLabel(max, DepthText(mode));
+                LiveBuilderSceneText.DrawLabel(max, DepthText(mode));
             }
         }
 
@@ -243,7 +243,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var axisU = (plane.Axis + 1) % 3;
             var axisV = (plane.Axis + 2) % 3;
             var size = rectangleEnd - rectangleStart;
-            return BoxModelSceneText.FormatMeters(size[axisU]) + " × " + BoxModelSceneText.FormatMeters(size[axisV]);
+            return LiveBuilderSceneText.FormatMeters(size[axisU]) + " × " + LiveBuilderSceneText.FormatMeters(size[axisV]);
         }
 
         // «2 × 3 м, высота 1,5 м — добавить»: у пола и потолка — высота, у стен — глубина.
@@ -251,7 +251,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var depthName = plane.Axis == 1 ? "высота" : "глубина";
             var action = mode == BoxModelPartMode.Add ? "добавить" : plane.Model == null && pathOwner == null ? "вырезать нечего" : "вырезать";
-            return RectangleSizeText() + " м, " + depthName + " " + BoxModelSceneText.FormatMeters(depth) + " м — " + action;
+            return RectangleSizeText() + " м, " + depthName + " " + LiveBuilderSceneText.FormatMeters(depth) + " м — " + action;
         }
 
 

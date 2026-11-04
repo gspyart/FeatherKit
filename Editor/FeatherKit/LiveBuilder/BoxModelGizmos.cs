@@ -1,6 +1,5 @@
 using FeatherKit.LiveBuilder;
 using UnityEditor;
-using UnityEditor.EditorTools;
 
 namespace FeatherKit.EditorTools.LiveBuilder
 {
@@ -10,7 +9,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         [DrawGizmo(GizmoType.Selected | GizmoType.InSelectionHierarchy)]
         private static void DrawPartsOfSelectedModel(BoxModel model, GizmoType gizmoType)
         {
-            if (ToolManager.activeToolType == typeof(LiveBuilderSceneTool))
+            if (LiveBuilderActivation.IsToolActive)
                 return;
 
             BoxModelPartHandles.DrawWireframes(model);
@@ -23,7 +22,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var model = part.GetComponentInParent<BoxModel>();
 
-            if (model != null && ToolManager.activeToolType != typeof(LiveBuilderSceneTool))
+            if (model != null && !LiveBuilderActivation.IsToolActive)
                 BoxModelPartHandles.DrawWireframes(model);
         }
     }

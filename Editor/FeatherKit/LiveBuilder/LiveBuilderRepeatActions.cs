@@ -129,7 +129,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                         continue;
 
                     var boxBounds = new Bounds();
-                    boxBounds.SetMinMax((Vector3)box.Box.Min / MillimeterBox.MillimetersPerMeter, (Vector3)box.Box.Max / MillimeterBox.MillimetersPerMeter);
+                    boxBounds.SetMinMax(box.Box.MinInMeters, box.Box.MaxInMeters);
 
                     if (hasAny)
                         bounds.Encapsulate(boxBounds);

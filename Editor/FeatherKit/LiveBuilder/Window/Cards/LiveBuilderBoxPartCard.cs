@@ -36,7 +36,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 var mode = (BoxModelPartMode)LiveBuilderWindowControls.Switch(new GUIContent("Режим", "Добавить объём или вырезать дыру"), (int)part.Mode,
                     ("Добавить", LiveBuilderOptionIcon.BoxAdd), ("Вырезать", LiveBuilderOptionIcon.BoxCut));
-                var min = BoxModelRebuilder.LocalMinOf(model, part);
+                var min = BoxModelShapeCollector.LocalMinOf(model, part.transform);
                 var newMin = EditorGUILayout.Vector3Field(new GUIContent("Угол, м", "Угол с наименьшими координатами, в осях объекта"), min);
                 var newSize = EditorGUILayout.Vector3Field(new GUIContent("Размер, м"), part.Size);
 
