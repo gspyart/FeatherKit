@@ -23,8 +23,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
         [Tooltip("Группа на сцене для новых объектов, путь от корня: «Level/Geometry». Группы на сцене нет или поле пустое — объект ложится в корень.")]
         [SerializeField] private string newObjectsGroup = "";
 
+        [Space]
+        [Header("Файлы мешей")]
         [Tooltip("Папка файлов мешей, пока сцена не сохранена. У сохранённой сцены меши лежат рядом с ней, в папке «<Сцена>_BoxModels».")]
         [SerializeField] private string unsavedSceneMeshFolder = "Assets/Live Builder Meshes";
+
+        [Tooltip("При сохранении сцены файлы мешей в её папке «<Сцена>_BoxModels», на которые не ссылается ни одна сцена и ни один префаб, " +
+                 "сами уходят в корзину системы. Выключено — только кнопкой «Убрать лишние меши…».")]
+        [SerializeField] private bool isUnusedMeshCleanupOnSave = true;
 
         [Space]
         [Header("Типы стен")]
@@ -89,6 +95,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public string NewObjectsGroup => newObjectsGroup.Trim('/', ' ');
 
         public string UnsavedSceneMeshFolder => unsavedSceneMeshFolder.TrimEnd('/', ' ');
+
+        public bool IsUnusedMeshCleanupOnSave => isUnusedMeshCleanupOnSave;
 
 
         // ── Типы стен ────────────────────────────────────────────────────

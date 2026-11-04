@@ -80,7 +80,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public static class BoxModelDrawPlaneFinder
     {
-        public static bool TryFind(Ray worldRay, bool isForNewModel, out BoxModelDrawPlane plane, out Vector3 snappedLocalPoint)
+        // keepsExactHeight — плоскость ровно на высоте поверхности, без сетки (по сетке — только точка на ней): здание встаёт низом прямо на неё.
+        // Без него высота прочей геометрии округляется к сетке — так коробки встают ровно по шагу.
+        public static bool TryFind(Ray worldRay, bool isForNewModel, out BoxModelDrawPlane plane, out Vector3 snappedLocalPoint, bool keepsExactHeight = false)
         {
             var hasSurface = BoxModelPicker.TryPickSurface(worldRay, out var surfaceHit);
 
@@ -101,7 +103,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var modelTransform = surfaceHit.Model.transform;
                 var worldPoint = modelTransform.TransformPoint(surfaceHit.LocalPoint);
                 var worldNormal = modelTransform.TransformDirection(BoxFaces.Normal(surfaceHit.Surface.Face));
-                plane = PlaneOnSurface(targetModel, frameToWorld, worldPoint, worldNormal, out snappedLocalPoint);
+                plane = PlaneOnSurface(targetModel, frameToWorld, worldPoint, worldNormal, keepsExactHeight, out snappedLocalPoint);
                 return true;
             }
 
@@ -110,7 +112,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 // Пол или стена здания, стена по линии — коробка встаёт в их объект: так ей есть что вырезать.
                 var hitModel = targetModel == null && !isForNewModel ? OuterModelOfPathGeometry(hit.collider) : targetModel;
                 var hitFrame = hitModel != null ? hitModel.transform.localToWorldMatrix : frameToWorld;
-                plane = PlaneOnSurface(hitModel, hitFrame, hit.point, hit.normal, out snappedLocalPoint);
+                plane = PlaneOnSurface(hitModel, hitFrame, hit.point, hit.normal, keepsExactHeight, out snappedLocalPoint);
                 return true;
             }
 
@@ -133,15 +135,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return owner != null ? SplineWallRebuilder.OuterModelOf(owner) : null;
         }
 
-        // Плоскость по точке и нормали поверхности в мире: поперёк ближайшей к нормали оси рамки, на сетке.
+        // Плоскость по точке и нормали поверхности в мире: поперёк ближайшей к нормали оси рамки, на сетке или ровно на поверхности.
         private static BoxModelDrawPlane PlaneOnSurface(BoxModel targetModel, Matrix4x4 frameToWorld, Vector3 worldPoint, Vector3 worldNormal,
-            out Vector3 snappedLocalPoint)
+            bool keepsExactHeight, out Vector3 snappedLocalPoint)
         {
             var localPoint = frameToWorld.inverse.MultiplyPoint3x4(worldPoint);
             var localNormal = frameToWorld.inverse.MultiplyVector(worldNormal);
             var axis = DominantAxis(localNormal);
-            var plane = new BoxModelDrawPlane(targetModel, frameToWorld, axis, BoxModelGrid.Snap(localPoint[axis], axis),
-                localNormal[axis] >= 0f ? 1f : -1f);
+            var coordinate = keepsExactHeight ? localPoint[axis] : BoxModelGrid.Snap(localPoint[axis], axis);
+            var plane = new BoxModelDrawPlane(targetModel, frameToWorld, axis, coordinate, localNormal[axis] >= 0f ? 1f : -1f);
             snappedLocalPoint = plane.SnapOnPlane(localPoint);
             return plane;
         }

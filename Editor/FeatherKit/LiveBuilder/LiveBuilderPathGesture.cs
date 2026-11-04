@@ -297,13 +297,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
         }
 
-        // Здание — в выделенном объекте из коробок, а без него — в новом. Пол первого этажа — ровно на полу этажа уровня:
-        // точка опоры здания — низ плиты пола, на её толщину ниже.
+        // Здание — в выделенном объекте из коробок, а без него — в новом. Стоит низом ровно на том, где кликнул:
+        // точка опоры здания — низ плиты пола, пол первого этажа — на толщину плиты выше.
         private SplineBuilding BeginBuilding(Vector3 worldPoint)
         {
             var parentModel = SelectedOrNewModel(worldPoint, "Building");
-            var floorThickness = LiveBuilderBuildingSettings.HasFloor ? LiveBuilderBuildingSettings.SlabThickness : 0f;
-            return BoxModelFactory.CreateBuilding(parentModel, worldPoint + Vector3.down * floorThickness, parentModel.transform.rotation);
+            return BoxModelFactory.CreateBuilding(parentModel, worldPoint, parentModel.transform.rotation);
         }
 
         // Стена внутри здания — перегородка: в его объекте, до потолка этажа, толщиной перегородки, на этом или всех этажах выше.
@@ -328,7 +327,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
         // В здании — замкнутая перегородка-комната: стороны вдоль его стен не строятся. В доме из коробок — стены перегородки до его потолка.
-        // В пустоте — комната со стенами, полом и потолком, как у здания: пол — на полу этажа.
+        // В пустоте — комната со стенами, полом и потолком, как у здания: стоит низом на том, где кликнул.
         private Component BeginRoom(Vector3 worldPoint, LiveBuilderBuildingContext context)
         {
             if (context != null)
@@ -350,7 +349,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             var parentModel = SelectedOrNewModel(worldPoint, "Room");
-            return BoxModelFactory.CreateContourRoom(parentModel, worldPoint + Vector3.down * LiveBuilderRoomSettings.SlabThickness, parentModel.transform.rotation);
+            return BoxModelFactory.CreateContourRoom(parentModel, worldPoint, parentModel.transform.rotation);
         }
 
         // Выделенный объект из коробок, а без него — новый: так в здании или комнате сразу работают лестницы и вырезы.
@@ -372,7 +371,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var isSmooth = LiveBuilderWallSettings.IsSmooth != isShiftHeld;
             var localPoint = pathOwner.transform.InverseTransformPoint(worldPoint);
 
-            // Контур здания и комнаты в пустоте — на точке опоры, а кликаешь по полу этажа выше неё на толщину плиты.
+            // Контур здания и комнаты в пустоте — ровно на точке опоры, на высоте первой точки.
             if (pathOwner is SplineBuilding)
                 localPoint.y = 0f;
 
@@ -460,13 +459,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return true;
         }
 
-        // Первая точка — на верх того, что под мышью (коробки, крыши, перекрытия, любой геометрии), если он смотрит вверх; по сетке.
-        // Дальше линия идёт на этой высоте. Под мышью стена сбоку или пусто — false: тогда пол этажа.
+        // Первая точка — на верх того, что под мышью (коробки, крыши, перекрытия, любой геометрии), если он смотрит вверх: по сетке в плане,
+        // а по высоте — ровно на поверхности, без округления к сетке. Дальше линия идёт на этой высоте. Под мышью стена сбоку или пусто — false: тогда пол этажа.
         private static bool TryGetSurfaceTopPoint(Ray worldRay, out Vector3 worldPoint)
         {
             worldPoint = default;
 
-            if (!BoxModelDrawPlaneFinder.TryFind(worldRay, false, out var plane, out var localPoint) || plane.Axis != 1 || plane.OutwardSign < 0f)
+            if (!BoxModelDrawPlaneFinder.TryFind(worldRay, false, out var plane, out var localPoint, true) || plane.Axis != 1 || plane.OutwardSign < 0f)
                 return false;
 
             worldPoint = plane.FrameToWorld.MultiplyPoint3x4(localPoint);

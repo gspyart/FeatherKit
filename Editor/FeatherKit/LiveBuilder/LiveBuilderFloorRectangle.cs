@@ -147,7 +147,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var worldPoint = point;
 
                 foreach (var model in StageUtility.GetCurrentStageHandle().FindComponentsOfType<BoxModel>())
-                    if (IsInsideSolid(model, model.transform.InverseTransformPoint(worldPoint)))
+                    if (model.gameObject.activeInHierarchy && IsInsideSolid(model, model.transform.InverseTransformPoint(worldPoint)))
                     {
                         plane = BoxModelDrawPlaneFinder.StoreyFloorPlane(model);
                         plane.TryIntersect(worldRay, out point);

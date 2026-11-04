@@ -48,6 +48,10 @@ namespace FeatherKit.EditorTools
         // Пока открыто меню строки, окно теряет фокус — закрываться в это время нельзя.
         private bool isRowMenuOpen;
 
+        // Кто был в фокусе до окна и где курсор — после закрытия им возвращается фокус и «мышь над тобой» (<see cref="PopupFocusRestorer"/>).
+        private EditorWindow windowFocusedBeforeOpen;
+        private Vector2 lastMouseScreenPosition;
+
 
         private bool HasObjectsToMove => objectsToMove.Count > 0;
 
@@ -81,8 +85,10 @@ namespace FeatherKit.EditorTools
             window.scene = window.HasObjectsToMove ? window.objectsToMove[0].gameObject.scene : SceneBeingEdited();
             window.Refresh();
 
+            window.windowFocusedBeforeOpen = EditorWindow.focusedWindow;
+            window.lastMouseScreenPosition = MouseScreenPoint();
             window.ShowPopup();
-            window.position = new Rect(MouseScreenPoint(), new Vector2(WindowWidth, window.FittingHeight));
+            window.position = new Rect(window.lastMouseScreenPosition, new Vector2(WindowWidth, window.FittingHeight));
             window.Focus();
         }
 
@@ -517,10 +523,18 @@ namespace FeatherKit.EditorTools
             Undo.undoRedoPerformed -= OnUndoRedo;
         }
 
+        private void OnDestroy()
+        {
+            PopupFocusRestorer.RestoreAfterClose(windowFocusedBeforeOpen, lastMouseScreenPosition);
+        }
+
         private void OnGUI()
         {
             if (Event.current.type == EventType.MouseDown)
                 isRowMenuOpen = false;
+
+            if (Event.current.isMouse)
+                lastMouseScreenPosition = GUIUtility.GUIToScreenPoint(Event.current.mousePosition);
 
             HandleKeyboard();
             DrawHeader();

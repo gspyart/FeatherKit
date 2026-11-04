@@ -14,11 +14,32 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// - дыра от выреза (<see cref="GeometryCutter"/>) или вырезающей коробки в здании — сам резчик:
     ///   он невидим, но его коробка ближе того, что за дырой, — и откос дыры тоже
     /// - мимо всего или не своё — снять выделение. Shift — добавить к выделению или убрать
+    /// Повторный клик в то же место — следующее по глубине (<see cref="LiveBuilderDepthClick"/>).
     /// Спрятанное разрезом над этажом клик не ловит.
     /// </summary>
     public static class LiveBuilderClickSelection
     {
+        // Повторный клик в то же место — следующее по глубине (<see cref="LiveBuilderDepthClick"/>); в режиме «Грани» двойной клик — по-прежнему грань целиком.
         public static void Select(Event current, LiveBuilderTool tool, bool isDoubleClick)
+        {
+            if (current.shift)
+            {
+                LiveBuilderDepthClick.Forget();
+                SelectNearest(current, tool, isDoubleClick);
+                return;
+            }
+
+            var isWholeFaceClick = isDoubleClick && BoxModelSelectionModeSetting.IsSelectingFaces;
+
+            if (!isWholeFaceClick && LiveBuilderDepthClick.TrySelectDeeper(current.mousePosition, tool))
+                return;
+
+            SelectNearest(current, tool, isDoubleClick);
+            LiveBuilderDepthClick.RememberClick(current.mousePosition, tool);
+        }
+
+        // Обычный клик: ближайшее под мышью.
+        private static void SelectNearest(Event current, LiveBuilderTool tool, bool isDoubleClick)
         {
             var hit = LiveBuilderSceneHit.Find(HandleUtility.GUIPointToWorldRay(current.mousePosition));
 

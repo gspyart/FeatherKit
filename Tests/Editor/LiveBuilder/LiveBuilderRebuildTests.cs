@@ -119,5 +119,28 @@ namespace FeatherKit.Tests.LiveBuilder
                 AssetDatabase.DeleteAsset(removedPath);
             }
         }
+
+
+        // Автоуборка после сохранения сцены смотрит только в её папку: лишний файл в другой папке не находится.
+        [Test]
+        public void MeshCleanupInFolder_LooksOnlyThere()
+        {
+            AssetDatabase.CreateFolder("Assets", "LiveBuilderTestTemp");
+            var removed = testScene.CreateWall(Vector3.zero, new Vector3(10f, 0f, 0f));
+            var removedPath = AssetDatabase.GetAssetPath(removed.GetComponent<MeshFilter>().sharedMesh);
+            Object.DestroyImmediate(removed.gameObject);
+
+            try
+            {
+                Assert.AreEqual("Assets/Levels/Street_BoxModels", BoxModelMeshStorage.FolderNextTo("Assets/Levels/Street.unity"));
+                CollectionAssert.Contains(BoxModelMeshCleanup.FindUnusedMeshFiles(BoxModelMeshStorage.FallbackFolder), removedPath, "в своей папке — найден");
+                CollectionAssert.DoesNotContain(BoxModelMeshCleanup.FindUnusedMeshFiles(TempFolder), removedPath, "в чужой папке — не ищется");
+                CollectionAssert.IsEmpty(BoxModelMeshCleanup.FindUnusedMeshFiles("Assets/No Such Folder"), "папки нет — пусто");
+            }
+            finally
+            {
+                AssetDatabase.DeleteAsset(removedPath);
+            }
+        }
     }
 }

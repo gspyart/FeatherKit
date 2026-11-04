@@ -25,13 +25,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public static class LiveBuilderToolSetting
     {
-        // Палитра рядами: «Выделение» — сверху одно, за ним «Строить», остальные — «Детали и мера».
-        public const int SelectToolCount = 1;
-        public const int BuildToolCount = 4;
-
         private const string PreferenceKey = "FeatherKit.LiveBuilder.Tool";
 
         // Порядок в палитре окна и панели сцены; номер в нём — клавиша 1, 2, 3… в окне сцены.
+        // Группы: «Выделение», «Строить» — от «Коробки» до «Здания», «Детали и мера» — остальные.
         public static readonly LiveBuilderTool[] PaletteOrder =
         {
             LiveBuilderTool.Select,

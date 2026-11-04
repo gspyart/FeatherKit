@@ -199,12 +199,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             return storey + CurrentTool switch
             {
-                LiveBuilderTool.Select => SelectToolHint(),
+                LiveBuilderTool.Select => SelectToolHint() + LiveBuilderDepthClick.HintAt(Event.current.mousePosition, CurrentTool),
                 LiveBuilderTool.Room => roomGesture.IsActive ? roomGesture.Hint : "Протяни по полу — комната. Клик — выделить",
                 LiveBuilderTool.Stairs => stairsGesture.IsActive ? stairsGesture.Hint : "Протяни по полу прямоугольник лестницы, потом мышью высоту. Клик — выделить",
                 LiveBuilderTool.Opening => cutterGesture.IsActive ? cutterGesture.Hint : openingPlacer.Hint,
                 LiveBuilderTool.Ruler => ruler.Hint,
-                _ => BoxHint()
+                _ => BoxHint() + LiveBuilderDepthClick.HintAt(Event.current.mousePosition, CurrentTool)
             };
         }
 

@@ -148,16 +148,20 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Папка ────────────────────────────────────────────────────────
 
+        // Папка мешей сцены или префаба по его файлу: «<папка>/<Имя>_BoxModels»; файла нет (не сохранено) — папка из настроек проекта.
+        public static string FolderNextTo(string sceneOrPrefabPath)
+        {
+            if (string.IsNullOrEmpty(sceneOrPrefabPath))
+                return FallbackFolder;
+
+            var directory = Path.GetDirectoryName(sceneOrPrefabPath)?.Replace('\\', '/');
+            return directory + "/" + Path.GetFileNameWithoutExtension(sceneOrPrefabPath) + FolderSuffix;
+        }
+
         private static string FolderFor(GameObject owner)
         {
             var prefabStage = PrefabStageUtility.GetPrefabStage(owner);
-            var ownerPath = prefabStage != null ? prefabStage.assetPath : owner.scene.path;
-
-            if (string.IsNullOrEmpty(ownerPath))
-                return FallbackFolder;
-
-            var directory = Path.GetDirectoryName(ownerPath)?.Replace('\\', '/');
-            return directory + "/" + Path.GetFileNameWithoutExtension(ownerPath) + FolderSuffix;
+            return FolderNextTo(prefabStage != null ? prefabStage.assetPath : owner.scene.path);
         }
 
         private static void EnsureFolder(string folderPath)

@@ -10,10 +10,21 @@ namespace FeatherKit.EditorTools
     /// Переносит точку опоры (пивот) объекта, не двигая его детей: объект встаёт в новую
     /// точку, дети возвращаются на прежние места в мире. Поворот и масштаб не меняются.
     /// Только для объектов без своей геометрии — меш или коллайдер на нём уехал бы вместе с пивотом.
+    /// Исключение — объекты, чья форма записана относительно пивота: их переносит свой <see cref="IShapePivotMover"/>, пересчитывая форму.
     /// Каждый перенос отменяется через Ctrl+Z одним шагом.
     /// </summary>
     public static class PivotMover
     {
+        private static IShapePivotMover[] shapePivotMovers;
+
+
+        // Все переносы с пересчётом формы, какие есть в проекте: находятся по типу один раз.
+        private static IShapePivotMover[] ShapePivotMovers => shapePivotMovers ??= TypeCache.GetTypesDerivedFrom<IShapePivotMover>()
+            .Where(type => !type.IsAbstract && type.GetConstructor(Type.EmptyTypes) != null)
+            .Select(type => (IShapePivotMover)Activator.CreateInstance(type))
+            .ToArray();
+
+
         // ── Можно ли перенести ───────────────────────────
 
         public static bool CanMovePivot(Transform root) => ExplainWhyCannotMovePivot(root) == null;
@@ -22,6 +33,9 @@ namespace FeatherKit.EditorTools
         // Почему у объекта пивот не перенести; null — можно.
         public static string ExplainWhyCannotMovePivot(Transform root)
         {
+            if (ShapePivotMoverOf(root) != null)
+                return null;
+
             if (root.childCount == 0)
                 return $"«{root.name}»: нет детей — переносить пивот не у чего, проще подвинуть сам объект";
 
@@ -52,10 +66,27 @@ namespace FeatherKit.EditorTools
             if (movable.Count == 0)
                 return;
 
-            Undo.RecordObjects(movable.SelectMany(RootAndChildren).ToArray(), undoName);
+            // Точки считаются до переноса: у соседей по выделению они не должны зависеть от того, кого перенесли первым.
+            var newPivots = movable.Select(findNewPivot).ToList();
+            var undoGroup = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName(undoName);
 
-            foreach (var root in movable)
-                MovePivotKeepingChildren(root, findNewPivot(root));
+            for (var index = 0; index < movable.Count; index++)
+            {
+                var root = movable[index];
+                var shapePivotMover = ShapePivotMoverOf(root);
+
+                if (shapePivotMover != null)
+                {
+                    shapePivotMover.MovePivot(root, newPivots[index]);
+                    continue;
+                }
+
+                Undo.RecordObjects(RootAndChildren(root).ToArray(), undoName);
+                MovePivotKeepingChildren(root, newPivots[index]);
+            }
+
+            Undo.CollapseUndoOperations(undoGroup);
         }
 
         private static IEnumerable<Transform> RootAndChildren(Transform root) => root.Cast<Transform>().Prepend(root);
@@ -70,6 +101,15 @@ namespace FeatherKit.EditorTools
 
             for (int i = 0; i < children.Length; i++)
                 children[i].position = childPositions[i];
+        }
+
+
+        // ── Общие помощники ──────────────────────────────
+
+        // Перенос с пересчётом формы, которому принадлежит объект; обычный объект — null.
+        private static IShapePivotMover ShapePivotMoverOf(Transform root)
+        {
+            return ShapePivotMovers.FirstOrDefault(mover => mover.IsOwnerOf(root));
         }
     }
 }

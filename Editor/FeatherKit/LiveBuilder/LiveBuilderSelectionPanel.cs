@@ -7,7 +7,7 @@ using UnityEngine.Splines;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Секция «Выделено» окна Live Builder: числа вместо прицеливания мышью.
+    /// Зона «Выделено» окна Live Builder: числа вместо прицеливания мышью.
     /// - коробка — режим, угол и размер в осях объекта, скосы рёбер (<see cref="BoxModelChamferPanel"/>), материалы сторон
     /// - коробки и лестницы — «повторить»: этажами вверх, вдоль X, вдоль Z
     /// - повтор — сколько копий и шаг, «убрать повтор»
@@ -36,7 +36,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
             else if (parts.Count > 1)
             {
-                EditorGUILayout.LabelField("Коробок: " + parts.Count);
+                LiveBuilderWindowControls.Computed("Коробок", parts.Count.ToString());
                 hasAnything = true;
             }
 
@@ -67,7 +67,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Выделено что-то от Live Builder — есть что показать в секции выделенного.
+        // Выделено что-то от Live Builder — есть что показать в зоне выделенного.
         public static bool HasEditableSelection()
         {
             var selected = Selection.activeGameObject;
@@ -158,7 +158,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             using (LiveBuilderWindowControls.Card("Коробка «" + part.name + "»"))
             {
-                var mode = (BoxModelPartMode)EditorGUILayout.EnumPopup(new GUIContent("Режим", "Добавить объём или вырезать дыру"), part.Mode);
+                var mode = (BoxModelPartMode)LiveBuilderWindowControls.Switch(new GUIContent("Режим", "Добавить объём или вырезать дыру"), (int)part.Mode,
+                    ("Добавить", LiveBuilderOptionIcon.BoxAdd), ("Вырезать", LiveBuilderOptionIcon.BoxCut));
                 var min = BoxModelRebuilder.LocalMinOf(model, part);
                 var newMin = EditorGUILayout.Vector3Field(new GUIContent("Угол, м", "Угол с наименьшими координатами, в осях объекта"), min);
                 var newSize = EditorGUILayout.Vector3Field(new GUIContent("Размер, м"), part.Size);
@@ -206,7 +207,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     part.BackMaterial = back;
                 }
 
-                LiveBuilderWindowControls.Note("Быстрее — перетащи материал из Project или палитры уровня на грань в окне сцены: он ляжет в эту сторону. " +
+                LiveBuilderWindowControls.Explanation("BoxMaterials", "Быстрее — перетащи материал из Project или палитры уровня на грань в окне сцены: он ляжет в эту сторону. " +
                                                "С Alt — во всю коробку.");
             }
         }
@@ -290,7 +291,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     LiveBuilderRepeatActions.Unwrap(repeat);
             }
 
-            LiveBuilderWindowControls.Note("Исключение для одной копии — коробка ниже группы в списке объектов: она главнее.");
+            LiveBuilderWindowControls.Explanation("Repeat", "Исключение для одной копии — коробка ниже группы в списке объектов: она главнее.");
         }
 
 
@@ -311,8 +312,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             using (LiveBuilderWindowControls.Card(selected.name))
             {
-                Editor.CreateCachedEditor(component, null, ref componentEditor);
-                componentEditor.OnInspectorGUI();
+                DrawCachedInspector(component, null, ref componentEditor);
 
                 if (component is BoxModel && BoxModelActions.CanFreezeToProBuilder && GUILayout.Button(new GUIContent("В ProBuilder", "Копия объекта обычным мешем для ручной правки; сам объект выключается")))
                     BoxModelActions.FreezeSelectedModel();
@@ -335,10 +335,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             using (LiveBuilderWindowControls.Card("Этажи уровня"))
             {
-                EditorGUILayout.HelpBox("Этажи здания не совпадают с этажами уровня: пол первого этажа не на полу этажа или высота этажа другая. " +
+                EditorGUILayout.HelpBox("Этажи здания не совпадают с этажами уровня: низ здания не на полу этажа или высота этажа другая. " +
                                         "Тогда «этаж» в окне и в здании — разные.", MessageType.Warning);
 
-                if (GUILayout.Button(new GUIContent("Поставить на этажи уровня", "Пол первого этажа — на ближайший пол этажа уровня, высота этажа — как в окне. Интерьер переедет вместе")))
+                if (GUILayout.Button(new GUIContent("Поставить на этажи уровня", "Низ здания — на ближайший пол этажа уровня, высота этажа — как в окне. Интерьер переедет вместе")))
                     LiveBuilderBuildingContext.AlignToLevel(building);
             }
         }
@@ -356,8 +356,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 using (LiveBuilderWindowControls.Card("Этажи в здании"))
                 {
-                    Editor.CreateCachedEditor(link, typeof(SplineBuildingStoreyLinkEditor), ref linkEditor);
-                    linkEditor.OnInspectorGUI();
+                    DrawCachedInspector(link, typeof(SplineBuildingStoreyLinkEditor), ref linkEditor);
                 }
 
                 return true;
@@ -400,13 +399,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 var isOwnSelection = LiveBuilderContourSelection.Owner != null && LiveBuilderContourSelection.Owner.GetComponent<SplineContainer>() == container;
                 var selected = isOwnSelection ? LiveBuilderContourSelection.Knots.Count : 0;
-                EditorGUILayout.LabelField("Точек", total + (selected > 0 ? ", выбрано " + selected : ""));
+                LiveBuilderWindowControls.Computed("Точек", total + (selected > 0 ? ", выбрано " + selected : ""));
 
                 var current = LiveBuilderContourSelection.CommonShapeOf(container);
                 var chosen = LiveBuilderWindowControls.Switch(
                     new GUIContent(selected > 0 ? "Выбранные" : "Все точки", "Угол — прямые отрезки. Плавно — кривая сама проходит через точку. " +
                                                                            "Безье — у точки два уса, ими гнёшь кривую в сцене. Выбрано в сцене — меняются выбранные, иначе все"),
-                    current, "Угол", "Плавно", "Безье");
+                    current, ("Угол", LiveBuilderOptionIcon.Corner), ("Плавно", LiveBuilderOptionIcon.Smooth), ("Безье", LiveBuilderOptionIcon.Bezier));
 
                 if (chosen != current && chosen >= 0)
                     LiveBuilderContourSelection.ApplyShape(container, (LiveBuilderKnotShape)chosen);
@@ -426,7 +425,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                             LiveBuilderContourKeys.ToggleClosed(container);
                 }
 
-                LiveBuilderWindowControls.Note("В сцене, в «Выделении» (" + LiveBuilderToolSetting.HotkeyOf(LiveBuilderTool.Select) + ") или в инструменте этой постройки: тяни точку, «+» на отрезке — новая точка, " +
+                LiveBuilderWindowControls.Explanation("Points", "В сцене, в «Выделении» (" + LiveBuilderToolSetting.HotkeyOf(LiveBuilderTool.Select) + ") или в инструменте этой постройки: тяни точку, «+» на отрезке — новая точка, " +
                                                "«+» за концом — продлить, Shift+клик или Shift+рамка — выбрать несколько, двойной клик — угол → плавно → Безье, " +
                                                "у Безье тяни усы, у угла — голубая ручка скругления, стрелки — на шаг сетки, Delete — убрать.");
             }
@@ -460,6 +459,20 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             foreach (var (spline, knot) in corners)
                 LiveBuilderCornerRadii.SetRadius(spline, knot, Mathf.Max(0f, radius));
+        }
+
+        // Инспектор компонента внутри окна. Undo и пересборка здания пересоздают объект с тем же номером —
+        // готовый инспектор тогда держит мёртвый объект и сыплет ошибками: такой собираем заново.
+        private static void DrawCachedInspector(Component component, System.Type editorType, ref Editor editor)
+        {
+            if (editor != null && (editor.target == null || editor.target != component))
+            {
+                Object.DestroyImmediate(editor);
+                editor = null;
+            }
+
+            Editor.CreateCachedEditor(component, editorType, ref editor);
+            editor.OnInspectorGUI();
         }
 
         private static Component OwnComponentOf(GameObject selected)

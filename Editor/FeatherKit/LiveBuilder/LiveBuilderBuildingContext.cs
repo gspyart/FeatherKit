@@ -8,7 +8,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Где строишь, если внутри здания по контуру (<see cref="SplineBuilding"/>): здание под мышью и этаж — тот, что выбран в окне
-    /// (этажи уровня и здания — одни и те же: здание стоит на этаже уровня, его этажи идут с тем же шагом). Отсюда пол этажа,
+    /// (этажи уровня и здания — одни и те же: здание стоит низом на этаже уровня, его этажи идут с тем же шагом). Отсюда пол этажа,
     /// сколько до потолка и сколько этажей выше. Стена, комната, лестница и проём сами берут высоты здания,
     /// а «только этот этаж / этот и все выше» решает, встанет ли новое на одном этаже или на всех выше разом.
     /// </summary>
@@ -106,6 +106,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             foreach (var building in UnityEditor.SceneManagement.StageUtility.GetCurrentStageHandle().FindComponentsOfType<SplineBuilding>())
             {
+                if (!building.gameObject.activeInHierarchy)
+                    continue;
+
                 var local = building.transform.InverseTransformPoint(floorPoint);
 
                 foreach (var path in SplineWallPath.FromContainer(building.GetComponent<SplineContainer>(), building.CurveStep))
@@ -117,7 +120,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Этаж уровня, на котором стоит первый этаж здания: по высоте его пола.
         // Здание этого объекта, внутри которого точка мира: в плане — внутри его стен, по высоте — от пола до крыши. Нет такого — null.
         public static SplineBuilding BuildingContaining(BoxModel model, Vector3 worldPoint)
         {
@@ -141,31 +143,35 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Этаж уровня, на котором стоит низ здания.
         public static int BaseStoreyOf(SplineBuilding building)
         {
-            var firstFloor = building.transform.TransformPoint(new Vector3(0f, BaseHeightOf(building) + building.FloorTopHeight, 0f)).y;
-            return Mathf.RoundToInt((firstFloor - LiveBuilderStoreys.GroundLevel) / LiveBuilderStoreys.StoreyHeight);
+            return Mathf.RoundToInt((BottomWorldHeightOf(building) - LiveBuilderStoreys.GroundLevel) / LiveBuilderStoreys.StoreyHeight);
         }
 
 
-        // Здание стоит ровно на этаже уровня и с тем же шагом — его этажи совпадают с этажами окна.
+        // Здание стоит низом ровно на этаже уровня и с тем же шагом — его этажи совпадают с этажами окна.
         public static bool IsAlignedToLevel(SplineBuilding building)
         {
-            var firstFloor = building.transform.TransformPoint(new Vector3(0f, BaseHeightOf(building) + building.FloorTopHeight, 0f)).y;
             var levelFloor = LiveBuilderStoreys.GroundLevel + BaseStoreyOf(building) * LiveBuilderStoreys.StoreyHeight;
-            return Mathf.Abs(firstFloor - levelFloor) < 0.005f && Mathf.Abs(building.StoreyHeight - LiveBuilderStoreys.StoreyHeight) < 0.005f;
+            return Mathf.Abs(BottomWorldHeightOf(building) - levelFloor) < 0.005f && Mathf.Abs(building.StoreyHeight - LiveBuilderStoreys.StoreyHeight) < 0.005f;
         }
 
 
-        // Поставить здание на ближайший этаж уровня и взять высоту этажа из окна. С Undo.
+        // Поставить здание низом на ближайший этаж уровня и взять высоту этажа из окна. С Undo.
         public static void AlignToLevel(SplineBuilding building)
         {
             Undo.RecordObjects(new Object[] { building, building.transform }, "Align Building To Storeys");
             building.StoreyHeight = LiveBuilderStoreys.StoreyHeight;
 
-            var firstFloor = building.transform.TransformPoint(new Vector3(0f, BaseHeightOf(building) + building.FloorTopHeight, 0f)).y;
             var levelFloor = LiveBuilderStoreys.GroundLevel + BaseStoreyOf(building) * LiveBuilderStoreys.StoreyHeight;
-            building.transform.position += Vector3.up * (levelFloor - firstFloor);
+            building.transform.position += Vector3.up * (levelFloor - BottomWorldHeightOf(building));
+        }
+
+        // Низ здания в мире, м: низ плиты пола, а без пола — низ стен; на высоте контура.
+        private static float BottomWorldHeightOf(SplineBuilding building)
+        {
+            return building.transform.TransformPoint(new Vector3(0f, BaseHeightOf(building), 0f)).y;
         }
 
 

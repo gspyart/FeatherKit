@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Секция «Общее» окна Live Builder — то, что действует всегда, при любом инструменте и выделении:
+    /// Зона «Общее» окна Live Builder — то, что действует всегда, при любом инструменте и выделении:
     /// на каком этаже строишь, сетка, что видно в окне сцены (срез этажа, каркасы коробок).
     /// Настройки конкретного инструмента — в <see cref="LiveBuilderToolSettingsPanel"/>.
     /// </summary>
@@ -25,7 +25,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.PrefixLabel(new GUIContent("Этаж", "На каком этаже строишь — и в пустоте, и в зданиях: их этажи те же. PageUp и PageDown в окне сцены"));
+                LiveBuilderWindowControls.PrefixLabel(LiveBuilderWindowControls.IconLabel("Этаж", LiveBuilderOptionIcon.Storey,
+                    "На каком этаже строишь — и в пустоте, и в зданиях: их этажи те же. PageUp и PageDown в окне сцены"));
 
                 if (GUILayout.Button("◀", EditorStyles.miniButtonLeft, GUILayout.Width(22f)))
                     LiveBuilderStoreys.CurrentStorey--;
@@ -38,7 +39,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (GUILayout.Button("▶", EditorStyles.miniButtonRight, GUILayout.Width(22f)))
                     LiveBuilderStoreys.CurrentStorey++;
 
-                GUILayout.Label("пол " + BoxModelSceneText.FormatMeters(LiveBuilderStoreys.CurrentFloorHeight) + " м", EditorStyles.miniLabel);
+                LiveBuilderWindowControls.ValueChip(new GUIContent("пол " + BoxModelSceneText.FormatMeters(LiveBuilderStoreys.CurrentFloorHeight) + " м",
+                    "Высота пола этого этажа в мире"));
             }
         }
 
@@ -59,7 +61,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     current = index;
             }
 
-            var chosen = LiveBuilderWindowControls.Switch(new GUIContent("Сетка, м", "Всё прилипает к клеткам этого размера. Клавиши [ и ] в окне сцены"), current, names);
+            var chosen = LiveBuilderWindowControls.Switch(
+                LiveBuilderWindowControls.IconLabel("Сетка, м", LiveBuilderOptionIcon.Grid, "Всё прилипает к клеткам этого размера. Клавиши [ и ] в окне сцены"), current, names);
 
             if (chosen != current)
                 BoxModelGrid.SetStep(steps[chosen]);
@@ -76,9 +79,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var current = !isSectioned ? 0 : Mathf.Approximately(height, 1f) ? 2 : 1;
 
             var chosen = LiveBuilderWindowControls.Switch(
-                new GUIContent("Вид", "Всё — как есть. Комнаты — выше 3 м над полом этажа спрятано, видно стены и проёмы. " +
-                                      "Стены вниз — выше 1 м: видно комнаты с любого угла. Только в окне сцены"),
-                current, "Всё", "Комнаты", "Стены вниз");
+                LiveBuilderWindowControls.IconLabel("Вид", LiveBuilderOptionIcon.Eye, "Всё — как есть. Комнаты — выше 3 м над полом этажа спрятано, видно стены и проёмы. " +
+                                                                                     "Стены вниз — выше 1 м: видно комнаты с любого угла. Только в окне сцены"),
+                current, ("Всё", LiveBuilderOptionIcon.ViewAll), ("Комнаты", LiveBuilderOptionIcon.ViewRooms), ("Стены вниз", LiveBuilderOptionIcon.ViewWallsDown));
 
             if (chosen == current)
                 return;
@@ -94,8 +97,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static void DrawWireframes()
         {
             var isShowingOnlySelected = LiveBuilderWindowControls.Switch(
-                new GUIContent("Каркасы", "Голубые (добавляют) и красные (вырезают) каркасы коробок в окне сцены. " +
-                                          "Выделенные — только у выделенной коробки или её грани: в сложном объекте каркасы не мешают"),
+                LiveBuilderWindowControls.IconLabel("Каркасы", LiveBuilderOptionIcon.Wireframe, "Голубые (добавляют) и красные (вырезают) каркасы коробок в окне сцены. " +
+                                                                                               "Выделенные — только у выделенной коробки или её грани: в сложном объекте каркасы не мешают"),
                 !BoxModelWireframesSetting.IsShowingAll, "Все", "Выделенные");
 
             if (isShowingOnlySelected == BoxModelWireframesSetting.IsShowingAll)

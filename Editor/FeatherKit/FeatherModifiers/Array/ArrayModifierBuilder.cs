@@ -376,7 +376,7 @@ namespace FeatherKit.EditorTools
         private static void DestroyOwnMeshes(GameObject copy)
         {
             foreach (var filter in copy.GetComponentsInChildren<MeshFilter>(true))
-                if (filter.sharedMesh != null && filter.sharedMesh.hideFlags == PreviewFlags)
+                if (IsOwnMesh(filter.sharedMesh))
                     Object.DestroyImmediate(filter.sharedMesh);
         }
 
@@ -384,8 +384,14 @@ namespace FeatherKit.EditorTools
         private static void KeepOwnMeshes(GameObject copy)
         {
             foreach (var filter in copy.GetComponentsInChildren<MeshFilter>(true))
-                if (filter.sharedMesh != null && filter.sharedMesh.hideFlags == PreviewFlags)
+                if (IsOwnMesh(filter.sharedMesh))
                     filter.sharedMesh.hideFlags = HideFlags.None;
+        }
+
+        // Меш, собранный для копии. Встроенные меши Unity (Cube и др.) несут те же флаги, но лежат файлом — они не свои.
+        private static bool IsOwnMesh(Mesh mesh)
+        {
+            return mesh != null && mesh.hideFlags == PreviewFlags && !EditorUtility.IsPersistent(mesh);
         }
 
         // Модификатор на скрытой копии другого массива или внутри неё.

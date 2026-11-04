@@ -5,10 +5,10 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Секция «Инструмент» окна Live Builder: настройки выбранного инструмента — только те, что на него действуют, карточками:
+    /// Зона инструмента окна Live Builder: настройки выбранного инструмента — только те, что на него действуют, карточками:
     /// как рисовать (форма, точки) → размер → материалы; что выделяет клик — у «Выделения» и «Коробки»;
     /// «в здании — этот этаж или все выше» — у инструментов, которые ставят своё в здание.
-    /// Уже созданное не меняет: его числа — в секции выделенного (<see cref="LiveBuilderSelectionPanel"/>).
+    /// Уже созданное не меняет: его числа — в зоне выделенного (<see cref="LiveBuilderSelectionPanel"/>).
     /// Числа хранятся у каждого человека свои — настройки инструментов, например <see cref="LiveBuilderRoomSettings"/>.
     /// </summary>
     public static class LiveBuilderToolSettingsPanel
@@ -33,7 +33,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderBuildingContext.IsOnAllStoreys = LiveBuilderWindowControls.Switch(
                     new GUIContent("Этажи", "Наведёшь на здание — поставленное встанет на этот этаж здания, до его потолка, с его толщинами. " +
                                             "И все выше — то же на каждом этаже выше: перегородки, лестничная клетка, окна по фасаду. После перезапуска Unity — снова «только этот»"),
-                    LiveBuilderBuildingContext.IsOnAllStoreys, "Только этот", "И все выше");
+                    LiveBuilderBuildingContext.IsOnAllStoreys, ("Только этот", LiveBuilderOptionIcon.ThisStorey), ("И все выше", LiveBuilderOptionIcon.AllStoreysAbove));
         }
 
         private static void DrawCurrentToolSettings()
@@ -79,10 +79,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static void DrawSelectSettings()
         {
-            using (LiveBuilderWindowControls.Card("Выделение"))
+            using (LiveBuilderWindowControls.Card("Клик"))
                 DrawSelectionModeSwitch();
 
-            LiveBuilderWindowControls.Note("Клик выделяет что угодно: коробку, комнату, лестницу, стену, здание, проём; Shift — добавить или убрать. " +
+            LiveBuilderWindowControls.Explanation("Select", "Клик выделяет что угодно: коробку, комнату, лестницу, стену, здание, проём; Shift — добавить или убрать. " +
                                            "У выделенного — все его ручки: грани коробок (с Ctrl — выдавить новую), точки стен и контуров, ручки проёмов, повтор. " +
                                            "Остальные инструменты создают своё и правят только своё. Esc в них — сюда.");
         }
@@ -92,11 +92,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static void DrawBoxSettings()
         {
-            using (LiveBuilderWindowControls.Card("Коробка"))
+            using (LiveBuilderWindowControls.Card("Рисование"))
             {
                 var drawMode = (BoxModelDrawMode)LiveBuilderWindowControls.Switch(
                     new GUIContent("Режим", "Что делает нарисованная коробка. Авто — наружу добавляет, внутрь вырезает"),
-                    (int)BoxModelDrawModeSetting.Current, "Авто", "Добавить", "Вырезать");
+                    (int)BoxModelDrawModeSetting.Current,
+                    ("Авто", LiveBuilderOptionIcon.BoxAuto), ("Добавить", LiveBuilderOptionIcon.BoxAdd), ("Вырезать", LiveBuilderOptionIcon.BoxCut));
 
                 if (drawMode != BoxModelDrawModeSetting.Current)
                     BoxModelDrawModeSetting.Current = drawMode;
@@ -105,7 +106,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 DrawTargetModel();
             }
 
-            LiveBuilderWindowControls.Note("Протяни по поверхности, мышью глубина, клик — готово. Клик по грани — выделить коробку или кусок грани, " +
+            LiveBuilderWindowControls.Explanation("Box", "Протяни по поверхности, мышью глубина, клик — готово. Клик по грани — выделить коробку или кусок грани, " +
                                            "смотря что выбрано в «Клик выделяет». Здесь правятся только коробки; остальное — в своих инструментах или в «Выделении».");
         }
 
@@ -119,12 +120,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.PrefixLabel(new GUIContent("Объект", "Куда встанет коробка, нарисованная на пустом месте. " +
+                LiveBuilderWindowControls.PrefixLabel(new GUIContent("Объект", "Куда встанет коробка, нарисованная на пустом месте. " +
                                                                      "Рисуешь по поверхности другого объекта — она встанет в него"));
-                GUILayout.Label(new GUIContent(targetName, targetName), EditorStyles.miniBoldLabel, GUILayout.MinWidth(40f));
+                LiveBuilderWindowControls.ValueChip(new GUIContent(targetName, targetName), GUILayout.MinWidth(40f));
 
-                var isPressed = GUILayout.Toggle(isNewRequested, new GUIContent("Новый объект", "Следующая коробка — отдельный объект, даже поверх другого. " +
-                                                                                                "Нажать ещё раз — отмена"), EditorStyles.miniButton, GUILayout.Width(96f));
+                var isPressed = LiveBuilderWindowControls.IconToggle(isNewRequested, LiveBuilderOptionIcon.NewObject, "Новый",
+                    "Следующая коробка — отдельный объект, даже поверх другого. Нажать ещё раз — отмена");
 
                 if (isPressed == isNewRequested)
                     return;
@@ -148,7 +149,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderRoomSettings.Shape = (LiveBuilderRoomShape)LiveBuilderWindowControls.Switch(
                     new GUIContent("Рисовать", "Прямоугольник — протянул по полу. По контуру — кликами точки, любая форма; " +
                                                "в доме из коробок по контуру встают стены до его потолка, а не вырез"),
-                    (int)LiveBuilderRoomSettings.Shape, "Прямоугольник", "По контуру");
+                    (int)LiveBuilderRoomSettings.Shape, ("Прямоугольник", LiveBuilderOptionIcon.Rectangle), ("По контуру", LiveBuilderOptionIcon.Contour));
 
                 if (LiveBuilderRoomSettings.Shape == LiveBuilderRoomShape.Contour)
                     DrawKnotModeSwitch();
@@ -169,7 +170,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderRoomSettings.SlabThickness = EditorGUILayout.FloatField(
                     new GUIContent("Толщина перекрытия, м", "Пол и потолок. Высота комнаты — этаж минус перекрытие"), LiveBuilderRoomSettings.SlabThickness);
 
-                EditorGUILayout.LabelField("Высота комнаты", BoxModelSceneText.FormatMeters(LiveBuilderRoomSettings.ClearHeight) + " м — этаж минус перекрытие");
+                LiveBuilderWindowControls.Computed("Высота комнаты", BoxModelSceneText.FormatMeters(LiveBuilderRoomSettings.ClearHeight) + " м", "Этаж минус перекрытие");
                 DrawPartitionThickness();
             }
 
@@ -209,7 +210,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     !LiveBuilderWallSettings.IsStoreyHigh, "До потолка", "Своя");
 
                 if (LiveBuilderWallSettings.IsStoreyHigh)
-                    EditorGUILayout.LabelField(" ", BoxModelSceneText.FormatMeters(LiveBuilderWallSettings.Height) + " м");
+                    LiveBuilderWindowControls.Computed(" ", BoxModelSceneText.FormatMeters(LiveBuilderWallSettings.Height) + " м", "Этаж минус перекрытие");
                 else
                     LiveBuilderWallSettings.CustomHeight = EditorGUILayout.FloatField(new GUIContent("Своя высота, м", "Высота стены над линией"),
                         LiveBuilderWallSettings.CustomHeight);
@@ -240,7 +241,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 LiveBuilderBuildingSettings.StoreyCount = EditorGUILayout.IntSlider(new GUIContent("Этажей", "Перекрытия между этажами ставятся сами"),
                     LiveBuilderBuildingSettings.StoreyCount, 1, SplineBuilding.MaxStoreys);
-                EditorGUILayout.LabelField("Высота этажа", BoxModelSceneText.FormatMeters(LiveBuilderStoreys.StoreyHeight) + " м — как у этажей уровня");
+                LiveBuilderWindowControls.Computed("Высота этажа", BoxModelSceneText.FormatMeters(LiveBuilderStoreys.StoreyHeight) + " м",
+                    "Как у этажей уровня — в зоне «Уровень»");
             }
 
             using (LiveBuilderWindowControls.Card("Стены и перекрытия"))
@@ -256,10 +258,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderBuildingSettings.SlabThickness = EditorGUILayout.FloatField(new GUIContent("Толщина перекрытий, м", "Пол, перекрытия и крыша"),
                     LiveBuilderBuildingSettings.SlabThickness);
 
-                LiveBuilderBuildingSettings.HasFloor = LiveBuilderWindowControls.Switch(new GUIContent("Пол", "Плита пола первого этажа"),
-                    LiveBuilderBuildingSettings.HasFloor, "Нет", "Есть");
-                LiveBuilderBuildingSettings.HasRoof = LiveBuilderWindowControls.Switch(new GUIContent("Крыша", "Плоская крыша сверху. Нет — сверху видно этажи"),
-                    LiveBuilderBuildingSettings.HasRoof, "Нет", "Есть");
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    LiveBuilderWindowControls.PrefixLabel(new GUIContent("Есть", "Нажата — есть, бледная — нет"));
+                    LiveBuilderBuildingSettings.HasFloor = LiveBuilderWindowControls.IconToggle(LiveBuilderBuildingSettings.HasFloor, LiveBuilderOptionIcon.Floor,
+                        "Пол", "Плита пола первого этажа");
+                    LiveBuilderBuildingSettings.HasRoof = LiveBuilderWindowControls.IconToggle(LiveBuilderBuildingSettings.HasRoof, LiveBuilderOptionIcon.Roof,
+                        "Крыша", "Плоская крыша сверху. Нет — сверху видно этажи");
+                }
             }
 
             using (LiveBuilderWindowControls.Card("Материалы"))
@@ -274,7 +280,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderBuildingSettings.RoofMaterial = LiveBuilderWindowControls.MaterialField("Крыша", "Пусто — как стены снаружи", LiveBuilderBuildingSettings.RoofMaterial);
             }
 
-            LiveBuilderWindowControls.Note("Здание встанет на выбранный этаж: его пол — на полу этажа, этажи — те же, что в окне.");
+            LiveBuilderWindowControls.Explanation("Building", "Здание встанет на выбранный этаж: его пол — на полу этажа, этажи — те же, что в окне.");
         }
 
 
@@ -287,7 +293,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderCutterSettings.Shape = (LiveBuilderCutterShape)LiveBuilderWindowControls.Switch(
                     new GUIContent("Новый проём", "Прямоугольник — дверь, окно. Арка — верх полукругом. Круг — круглое окно; не квадрат — овал. " +
                                                   "Потом всё меняется у самого проёма: размер, скругление углов, форма"),
-                    (int)LiveBuilderCutterSettings.Shape, "Прямоугольник", "Арка", "Круг");
+                    (int)LiveBuilderCutterSettings.Shape,
+                    ("Прямоугольник", LiveBuilderOptionIcon.OpeningRectangle), ("Арка", LiveBuilderOptionIcon.OpeningArch), ("Круг", LiveBuilderOptionIcon.OpeningCircle));
 
             DrawOpeningSizeSettings();
 
@@ -306,7 +313,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderCutterSettings.RevealMaterial = LiveBuilderWindowControls.MaterialField("Стенки дыры", "Пусто — материал того, что режем",
                     LiveBuilderCutterSettings.RevealMaterial);
 
-            LiveBuilderWindowControls.Note("Клик по стене — проём этого размера. Протяни по любой поверхности, хоть по косой стене, — свой размер. " +
+            LiveBuilderWindowControls.Explanation("Opening", "Клик по стене — проём этого размера. Протяни по любой поверхности, хоть по косой стене, — свой размер. " +
                                            "Проём — отдельный объект: двигай и поворачивай как угодно, дыра едет за ним; в стене по линии и здании — ещё и за их точками. " +
                                            "Режет коробки, стены и здания, но не свой префаб: дверь-префаб с проёмом внутри сама прорезает стену, куда её поставил.");
         }
@@ -319,7 +326,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderCutterSettings.IsSnappedToGrid = LiveBuilderWindowControls.Switch(
                     new GUIContent("Место", "Где навёл — середина проёма ровно под мышью. По сетке — левый край и низ прилипают к сетке: проёмы встают ровными рядами. " +
                                             "В здании с этажами низ — всегда от пола его этажа, на «Низ над полом»"),
-                    LiveBuilderCutterSettings.IsSnappedToGrid ? 1 : 0, "Где навёл", "По сетке") == 1;
+                    LiveBuilderCutterSettings.IsSnappedToGrid, ("Где навёл", LiveBuilderOptionIcon.AtCursor), ("По сетке", LiveBuilderOptionIcon.Grid));
 
                 var presets = LiveBuilderOpeningPresets.Presets;
                 var names = new string[presets.Count + 1];
@@ -341,8 +348,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (LiveBuilderOpeningPresets.SelectedIndex != LiveBuilderOpeningPresets.CustomIndex)
                 {
                     var size = LiveBuilderOpeningPresets.Selected;
-                    EditorGUILayout.LabelField("Ширина × высота", BoxModelSceneText.FormatMeters(size.Width) + " × " + BoxModelSceneText.FormatMeters(size.Height) + " м");
-                    EditorGUILayout.LabelField("Низ над полом этажа", BoxModelSceneText.FormatMeters(size.Sill) + " м");
+                    LiveBuilderWindowControls.Computed("Ширина × высота", BoxModelSceneText.FormatMeters(size.Width) + " × " + BoxModelSceneText.FormatMeters(size.Height) + " м");
+                    LiveBuilderWindowControls.Computed("Низ над полом этажа", BoxModelSceneText.FormatMeters(size.Sill) + " м");
                     return;
                 }
 
@@ -362,7 +369,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 var isSolid = LiveBuilderWindowControls.Switch(
                     new GUIContent("Ступени", "Отдельные — плиты, под лестницей пусто. Сплошная — ступенчатый объём от пола"),
-                    LiveBuilderStairsSettings.Style == BoxModelStairsStyle.Solid, "Отдельные", "Сплошная");
+                    LiveBuilderStairsSettings.Style == BoxModelStairsStyle.Solid, ("Отдельные", LiveBuilderOptionIcon.SeparateSteps), ("Сплошная", LiveBuilderOptionIcon.SolidSteps));
                 LiveBuilderStairsSettings.Style = isSolid ? BoxModelStairsStyle.Solid : BoxModelStairsStyle.SeparateSteps;
 
                 if (LiveBuilderStairsSettings.Style == BoxModelStairsStyle.SeparateSteps)
@@ -389,7 +396,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     LiveBuilderStairsSettings.CutsAbove, "Не пробивать", "Пробивать");
             }
 
-            LiveBuilderWindowControls.Note("Как кубик: протянул прямоугольник — длина и ширина, низ — где начал; отпустил — мышью высота, клик — готово. Tab — повернуть. " +
+            LiveBuilderWindowControls.Explanation("Stairs", "Как кубик: протянул прямоугольник — длина и ширина, низ — где начал; отпустил — мышью высота, клик — готово. Tab — повернуть. " +
                                            "Готовую — ручки на гранях, Tab, «Повернуть» и «Развернуть»; на любой угол — поверни её объект.");
         }
 
@@ -413,7 +420,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var selectionMode = (BoxModelSelectionMode)LiveBuilderWindowControls.Switch(
                 new GUIContent("Клик выделяет", "Коробки — коробку целиком, тянешь точки на её гранях. " +
                                                 "Грани — видимый кусок грани, двойной клик — грань целиком, Shift — несколько; стрелки двигают все"),
-                (int)BoxModelSelectionModeSetting.Current, "Коробки", "Грани");
+                (int)BoxModelSelectionModeSetting.Current, ("Коробки", LiveBuilderOptionIcon.Boxes), ("Грани", LiveBuilderOptionIcon.Faces));
 
             if (selectionMode != BoxModelSelectionModeSetting.Current)
                 BoxModelSelectionModeSetting.Current = selectionMode;
@@ -424,7 +431,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             LiveBuilderWallSettings.IsSmooth = LiveBuilderWindowControls.Switch(
                 new GUIContent("Новая точка", "Угол — прямые отрезки. Плавно — кривая через точки. Shift на клике — наоборот"),
-                LiveBuilderWallSettings.IsSmooth, "Угол", "Плавно");
+                LiveBuilderWallSettings.IsSmooth, ("Угол", LiveBuilderOptionIcon.Corner), ("Плавно", LiveBuilderOptionIcon.Smooth));
         }
 
         // Перегородка внутри здания — у стены и комнаты общая: тип или своя толщина.

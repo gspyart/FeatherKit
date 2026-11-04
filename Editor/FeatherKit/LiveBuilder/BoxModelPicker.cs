@@ -25,11 +25,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
     /// <summary>
     /// Ищет поверхность объекта из коробок под лучом мыши: по прямоугольникам наружных поверхностей, без физики —
-    /// работает и у объекта без коллайдера. Прочая геометрия сцены перед объектом закрывает его.
+    /// работает и у объекта без коллайдера. Прочая геометрия сцены перед объектом закрывает его — и здания, и стены по линии, даже лежащие в объекте из коробок.
     /// Спрятанное разрезом над этажом (<see cref="LiveBuilderStoreys"/>) не ловится: клик проходит сквозь него.
     /// </summary>
     public static class BoxModelPicker
     {
+        // Поверхности одного объекта под лучом — один список на все вызовы: поиск идёт на каждое движение мыши.
+        private static readonly List<BoxModelSurfaceHit> ModelHitsScratch = new();
+
+
         public static bool TryPickSurface(Ray worldRay, out BoxModelSurfaceHit hit)
         {
             hit = default;
@@ -37,7 +41,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             foreach (var model in StageUtility.GetCurrentStageHandle().FindComponentsOfType<BoxModel>())
             {
-                if (!TryPickOnModel(model, worldRay, out var modelHit) || modelHit.Distance >= bestDistance)
+                // Выключенный объект — как в Unity: не ловится и не служит опорой.
+                if (!model.gameObject.activeInHierarchy || !TryPickOnModel(model, worldRay, out var modelHit) || modelHit.Distance >= bestDistance)
                     continue;
 
                 hit = modelHit;
@@ -47,8 +52,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (bestDistance == float.MaxValue)
                 return false;
 
+            // Закрывает всё, кроме меша самого объекта из коробок — и здание или стена по линии внутри объекта тоже:
+            // иначе коробка, нарисованная на полу здания, легла бы на объект под ним.
             var isHiddenBehindOtherGeometry = TryRaycastVisible(worldRay, bestDistance, out var physicsHit)
-                && physicsHit.collider.GetComponentInParent<BoxModel>() == null
+                && !physicsHit.collider.TryGetComponent<BoxModel>(out _)
                 && physicsHit.distance < bestDistance - 0.01f;
 
             return !isHiddenBehindOtherGeometry;
@@ -89,14 +96,40 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Все лицевые поверхности включённых объектов под лучом, от ближней к дальней, — и закрытые другими тоже: для повторного клика вглубь.
+        public static List<BoxModelSurfaceHit> PickAllSurfaces(Ray worldRay)
+        {
+            var hits = new List<BoxModelSurfaceHit>();
+
+            foreach (var model in StageUtility.GetCurrentStageHandle().FindComponentsOfType<BoxModel>())
+                if (model.gameObject.activeInHierarchy)
+                    CollectHitsOnModel(model, worldRay, hits);
+
+            hits.Sort((first, second) => first.Distance.CompareTo(second.Distance));
+            return hits;
+        }
+
+
         // Ближайшая лицевая поверхность объекта под лучом.
         private static bool TryPickOnModel(BoxModel model, Ray worldRay, out BoxModelSurfaceHit hit)
         {
             hit = default;
+            ModelHitsScratch.Clear();
+            CollectHitsOnModel(model, worldRay, ModelHitsScratch);
+
+            foreach (var modelHit in ModelHitsScratch)
+                if (hit.Model == null || modelHit.Distance < hit.Distance)
+                    hit = modelHit;
+
+            return hit.Model != null;
+        }
+
+        // Лицевые поверхности объекта, через которые проходит луч; спрятанное разрезом над этажом — нет.
+        private static void CollectHitsOnModel(BoxModel model, Ray worldRay, List<BoxModelSurfaceHit> hits)
+        {
             var modelTransform = model.transform;
             var origin = modelTransform.InverseTransformPoint(worldRay.origin);
             var direction = modelTransform.InverseTransformDirection(worldRay.direction);
-            var bestDistance = float.MaxValue;
             IReadOnlyList<BoxModelSurface> surfaces = BoxModelRebuilder.GetSurfaces(model);
 
             foreach (var surface in surfaces)
@@ -117,16 +150,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     continue;
 
                 var worldPoint = modelTransform.TransformPoint(point);
-                var distance = Vector3.Distance(worldRay.origin, worldPoint);
 
-                if (distance >= bestDistance || LiveBuilderStoreys.IsHiddenBySection(worldPoint))
-                    continue;
-
-                bestDistance = distance;
-                hit = new BoxModelSurfaceHit(model, surface, point, distance);
+                if (!LiveBuilderStoreys.IsHiddenBySection(worldPoint))
+                    hits.Add(new BoxModelSurfaceHit(model, surface, point, Vector3.Distance(worldRay.origin, worldPoint)));
             }
-
-            return bestDistance < float.MaxValue;
         }
 
         private static bool Contains(BoxModelSurface surface, Vector3 localPoint)

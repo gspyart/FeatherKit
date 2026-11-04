@@ -15,15 +15,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         private LiveBuilderSceneHit(bool hasBoxSurface, BoxModelSurfaceHit boxSurface, bool hasVisibleHit, RaycastHit visibleHit,
-            Component pathOwner, Component holeCutter, float holeCutterDistance)
+            Component pathOwner, bool hasHoleCutter, HoleCutterRayHit holeCutterHit)
         {
             HasBoxSurface = hasBoxSurface;
             BoxSurface = boxSurface;
             HasVisibleHit = hasVisibleHit;
             VisibleHit = visibleHit;
             PathOwner = pathOwner;
-            HoleCutter = holeCutter;
-            HoleCutterDistance = holeCutterDistance;
+            HasHoleCutter = hasHoleCutter;
+            HoleCutterHit = holeCutterHit;
         }
 
 
@@ -37,24 +37,37 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Стена по линии или здание, если ближайший коллайдер — их. Иначе — null.
         public Component PathOwner { get; }
 
-        // Резчик дыры под лучом и расстояние до входа в его коробку. Нет — null.
-        public Component HoleCutter { get; }
-        public float HoleCutterDistance { get; }
+        // Резчик дыры, в чью коробку входит луч, и где луч его пересекает.
+        public bool HasHoleCutter { get; }
+        public HoleCutterRayHit HoleCutterHit { get; }
+
+        // Резчик под лучом. Нет — null.
+        public Component HoleCutter => HasHoleCutter ? HoleCutterHit.Cutter : null;
 
         // Стена по линии или здание ближе грани объекта из коробок.
         public bool IsPathOwnerCloser => PathOwner != null && (!HasBoxSurface || VisibleHit.distance < BoxSurface.Distance - Tolerance);
 
-        // Резчик ближе всего остального: его дыру и видно — клик по ней — он.
+        // Видна дыра резчика: клик по ней или её откосу — он (<see cref="HoleCutterRayHit.IsVisibleBefore"/>).
+        // Ближе всего — геометрия самого объекта, на котором стоит вырез (балкон, прорезающий дверь в стене), — она, а не вырез:
+        // свой объект вырез не режет, и его грани выделяются как обычно.
         public bool IsHoleCutterInFront
         {
             get
             {
-                if (HoleCutter == null)
+                if (!HasHoleCutter)
                     return false;
 
                 var nearest = Mathf.Min(HasBoxSurface ? BoxSurface.Distance : float.MaxValue, HasVisibleHit ? VisibleHit.distance : float.MaxValue);
-                return HoleCutterDistance < nearest + Tolerance;
+                return !IsHoleCutterOwnGeometryAt(nearest) && HoleCutterHit.IsVisibleBefore(nearest);
             }
+        }
+
+        private bool IsHoleCutterOwnGeometryAt(float distance)
+        {
+            var cutterTransform = HoleCutter.transform;
+            var isOwnBoxSurface = HasBoxSurface && BoxSurface.Distance < distance + Tolerance && BoxSurface.Model.transform.IsChildOf(cutterTransform);
+            var isOwnCollider = HasVisibleHit && VisibleHit.distance < distance + Tolerance && VisibleHit.collider.transform.IsChildOf(cutterTransform);
+            return isOwnBoxSurface || isOwnCollider;
         }
 
 
@@ -64,10 +77,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var hasBoxSurface = BoxModelPicker.TryPickSurface(worldRay, out var boxSurface);
             var hasVisibleHit = BoxModelPicker.TryRaycastVisible(worldRay, float.MaxValue, out var visibleHit);
             var pathOwner = hasVisibleHit ? LiveBuilderPathOwners.OwnerOf(visibleHit.collider) : null;
-            var hasHoleCutter = HoleCutterPicker.TryPick(worldRay, out var holeCutter, out var holeCutterDistance);
+            var hasHoleCutter = HoleCutterPicker.TryPick(worldRay, out var holeCutterHit);
 
-            return new LiveBuilderSceneHit(hasBoxSurface, boxSurface, hasVisibleHit, visibleHit, pathOwner,
-                hasHoleCutter ? holeCutter : null, hasHoleCutter ? holeCutterDistance : float.MaxValue);
+            return new LiveBuilderSceneHit(hasBoxSurface, boxSurface, hasVisibleHit, visibleHit, pathOwner, hasHoleCutter, holeCutterHit);
         }
     }
 }

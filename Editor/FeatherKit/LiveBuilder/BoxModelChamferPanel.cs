@@ -27,7 +27,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 foreach (var chamfer in new System.Collections.Generic.List<BoxModelEdgeChamfer>(part.Chamfers))
                     DrawChamfer(part, chamfer);
 
-                LiveBuilderWindowControls.Note("Новый скос — потяни точку посередине ребра в окне сцены внутрь коробки. " +
+                LiveBuilderWindowControls.Explanation("Chamfers", "Новый скос — потяни точку посередине ребра в окне сцены внутрь коробки. " +
                                                "Пандус — верхнее ребро до противоположного нижнего, двускатная крыша — два верхних ребра.");
             }
         }
