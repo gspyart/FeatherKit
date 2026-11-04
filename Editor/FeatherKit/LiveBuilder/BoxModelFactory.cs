@@ -271,6 +271,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Есть ли у здания группа «Interior» — до того, как InteriorOf её создаст.
+        public static bool HasInterior(SplineBuilding building)
+        {
+            return building.transform.Find(InteriorGroupName) != null;
+        }
+
+
         // Вырез: опора — низ посередине, в мире; в постройке, которую режет, — едет вместе с ней. Только для редактора: в игру идёт прорезанный меш.
         public static GeometryCutter CreateCutter(Transform owner, Vector3 worldBottomCenter, Quaternion worldRotation, Vector2 size, float depth)
         {

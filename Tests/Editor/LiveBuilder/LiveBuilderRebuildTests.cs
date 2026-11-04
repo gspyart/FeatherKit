@@ -10,7 +10,8 @@ namespace FeatherKit.Tests.LiveBuilder
 {
     /// <summary>
     /// Пересборка и файлы мешей: окно на одном этаже пересобирает только этот этаж; экземпляр префаба под чужим вырезом получает свой меш
-    /// и возвращается к мешу префаба, когда выреза нет; уборка находит брошенные файлы мешей и не трогает нужные.
+    /// и возвращается к мешу префаба, когда выреза нет; копия не перезаписывает общий с оригиналом файл; хеш линии не зависит от языка системы;
+    /// уборка находит брошенные файлы мешей и не трогает нужные.
     /// </summary>
     public class LiveBuilderRebuildTests
     {
@@ -98,6 +99,48 @@ namespace FeatherKit.Tests.LiveBuilder
 
 
         // ── Файлы мешей ──────────────────────────────────────────────────
+
+        // Копия (Ctrl+D) делит файл меша с оригиналом; пересборка копии напрямую, как после рисования, оригинал не трогает.
+        [Test]
+        public void CopyRebuiltDirectly_GetsOwnMeshFile()
+        {
+            var original = testScene.CreateWall(Vector3.zero, new Vector3(10f, 0f, 0f));
+            var originalMesh = original.GetComponent<MeshFilter>().sharedMesh;
+            var originalBounds = originalMesh.bounds;
+
+            var copy = Object.Instantiate(original.gameObject).GetComponent<SplineWall>();
+            Assert.AreSame(originalMesh, copy.GetComponent<MeshFilter>().sharedMesh, "копия начинает с общего файла");
+
+            copy.Height = 5f;
+            SplineWallRebuilder.Rebuild(copy);
+
+            Assert.AreNotSame(originalMesh, copy.GetComponent<MeshFilter>().sharedMesh, "у копии — свой файл");
+            Assert.AreSame(originalMesh, original.GetComponent<MeshFilter>().sharedMesh, "у оригинала — прежний");
+            Assert.AreEqual(originalBounds, originalMesh.bounds, "меш оригинала не перезаписан");
+        }
+
+
+        // Хеш линии одинаков при любом языке системы и на любом запуске: сцена не становится «изменённой» сама.
+        [Test]
+        public void LineHash_SameUnderAnyCulture()
+        {
+            var wall = testScene.CreateWall(Vector3.zero, new Vector3(10.25f, 0f, 0.5f));
+            var container = wall.GetComponent<SplineContainer>();
+            var previousCulture = System.Globalization.CultureInfo.CurrentCulture;
+
+            try
+            {
+                System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("ru-RU");
+                var russian = LiveBuilderSyncEdits.LineHashOf(container);
+                System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+                Assert.AreEqual(russian, LiveBuilderSyncEdits.LineHashOf(container));
+            }
+            finally
+            {
+                System.Globalization.CultureInfo.CurrentCulture = previousCulture;
+            }
+        }
+
 
         [Test]
         public void MeshCleanup_FindsAbandonedFileOnly()

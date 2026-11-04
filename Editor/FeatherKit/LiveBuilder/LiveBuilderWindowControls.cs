@@ -285,10 +285,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 ExplanationLinkStyle.Draw(new Rect(rect.x + IconSize + 2f, rect.y, rect.width - IconSize - 2f, rect.height), content, isHovered, false, false, false);
             }
 
+            // Пояснение появится или пропадёт — этот проход окна прерываем, иначе IMGUI путается в разметке.
             if (GUI.Button(rect, GUIContent.none, GUIStyle.none))
             {
-                isOpen = !isOpen;
-                EditorPrefs.SetBool(preferenceKey, isOpen);
+                EditorPrefs.SetBool(preferenceKey, !isOpen);
+                GUIUtility.ExitGUI();
             }
 
             if (isOpen)

@@ -38,6 +38,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
             _ => depth < 0f
         };
 
+        // Глубина, как встанет: в «Добавить» — всегда наружу, в «Вырезать» — всегда внутрь, в «Авто» — куда тянешь.
+        private float ResultDepth => BoxModelDrawModeSetting.Current switch
+        {
+            BoxModelDrawMode.Add => Mathf.Abs(depth),
+            BoxModelDrawMode.Cut => -Mathf.Abs(depth),
+            _ => depth
+        };
+
 
         // ── Косая поверхность ────────────────────────────────────────────
 
@@ -159,7 +167,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var min = rectangle.Min;
             var size = rectangle.Size;
             var corners = new[] { min, new Vector2(min.x + size.x, min.y), min + size, new Vector2(min.x, min.y + size.y) };
-            var offset = rectangle.Normal * depth;
+            var offset = rectangle.Normal * ResultDepth;
 
             Handles.color = !isChoosingDepth ? BoxModelPartHandles.AddColor : IsCutting ? GeometryCutterGizmos.CutterColor : BoxModelPartHandles.AddColor;
 

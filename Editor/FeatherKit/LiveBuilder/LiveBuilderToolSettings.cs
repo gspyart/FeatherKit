@@ -52,6 +52,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Вариант из списка, хранится числом. Число не из списка (старая версия, правка руками) — fallback.
+        public static TEnum GetEnum<TEnum>(string name, TEnum fallback) where TEnum : struct, System.Enum
+        {
+            var stored = EditorPrefs.GetInt(Prefix + name, System.Convert.ToInt32(fallback));
+            return System.Enum.IsDefined(typeof(TEnum), stored) ? (TEnum)System.Enum.ToObject(typeof(TEnum), stored) : fallback;
+        }
+
+
         // Материал — по адресу файла: так он переживает перезапуск редактора.
         public static Material GetMaterial(string name)
         {
@@ -116,7 +124,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public static LiveBuilderRoomShape Shape
         {
-            get => (LiveBuilderRoomShape)LiveBuilderPreferences.GetInt("Room.Shape", (int)LiveBuilderRoomShape.Rectangle);
+            get => LiveBuilderPreferences.GetEnum("Room.Shape", LiveBuilderRoomShape.Rectangle);
             set
             {
                 if (Shape == value)
@@ -131,7 +139,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Куда встают стены от нарисованного. Прямоугольнику в доме из коробок всё равно: он вырезается, своих стен у него нет.
         public static LiveBuilderRoomWallSide WallSide
         {
-            get => (LiveBuilderRoomWallSide)LiveBuilderPreferences.GetInt("Room.WallSide", (int)LiveBuilderRoomWallSide.Outward);
+            get => LiveBuilderPreferences.GetEnum("Room.WallSide", LiveBuilderRoomWallSide.Outward);
             set
             {
                 if (WallSide == value)
@@ -210,7 +218,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public static SplineWallAlignment Alignment
         {
-            get => (SplineWallAlignment)LiveBuilderPreferences.GetInt("Wall.Alignment", (int)SplineWallAlignment.Center);
+            get => LiveBuilderPreferences.GetEnum("Wall.Alignment", SplineWallAlignment.Center);
             set => LiveBuilderPreferences.SetInt("Wall.Alignment", (int)value);
         }
 
@@ -269,7 +277,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public static SplineBuildingContourSide ContourSide
         {
-            get => (SplineBuildingContourSide)LiveBuilderPreferences.GetInt("Building.ContourSide", (int)SplineBuildingContourSide.Outside);
+            get => LiveBuilderPreferences.GetEnum("Building.ContourSide", SplineBuildingContourSide.Outside);
             set => LiveBuilderPreferences.SetInt("Building.ContourSide", (int)value);
         }
 
@@ -340,7 +348,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     {
         public static LiveBuilderCutterShape Shape
         {
-            get => (LiveBuilderCutterShape)LiveBuilderPreferences.GetInt("Cutter.Shape", (int)LiveBuilderCutterShape.Rectangle);
+            get => LiveBuilderPreferences.GetEnum("Cutter.Shape", LiveBuilderCutterShape.Rectangle);
             set => LiveBuilderPreferences.SetInt("Cutter.Shape", (int)value);
         }
 
@@ -379,7 +387,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     {
         public static BoxModelStairsStyle Style
         {
-            get => (BoxModelStairsStyle)LiveBuilderPreferences.GetInt("Stairs.Style", (int)BoxModelStairsStyle.SeparateSteps);
+            get => LiveBuilderPreferences.GetEnum("Stairs.Style", BoxModelStairsStyle.SeparateSteps);
             set => LiveBuilderPreferences.SetInt("Stairs.Style", (int)value);
         }
 

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 namespace FeatherKit.EditorTools.LiveBuilder
@@ -6,7 +7,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Значки окна Live Builder из линий, без файлов картинок: ломаные в квадрате 24 × 24 (y вниз) превращаются в текстуру с гладкими краями.
     /// Здесь же — заготовки для рисунков: ломаная по числам, дуга, кривая. Сами рисунки — в <see cref="LiveBuilderToolIcons"/> и <see cref="LiveBuilderOptionIcons"/>.
+    /// Текстуры не сохраняются со сценой и сами не удаляются: перед перезагрузкой скриптов их удаляем здесь — запомненные значки к тому времени уже забыты.
     /// </summary>
+    [InitializeOnLoad]
     public static class LiveBuilderIconRasterizer
     {
         // Сторона текстуры, пикс. Вдвое больше значка на экране — чётко и на экранах с удвоенной плотностью.
@@ -14,6 +17,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // Толщина линии в клетках сетки 24 × 24.
         private const float StrokeWidth = 1.6f;
+
+        // Все созданные текстуры — удалить перед перезагрузкой скриптов.
+        private static readonly List<Texture2D> CreatedTextures = new();
+
+
+        static LiveBuilderIconRasterizer()
+        {
+            AssemblyReloadEvents.beforeAssemblyReload += DestroyCreatedTextures;
+        }
 
 
         // ── Растеризация ─────────────────────────────────────────────────
@@ -44,6 +56,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             texture.SetPixels32(pixels);
             texture.Apply();
+            CreatedTextures.Add(texture);
             return texture;
         }
 
@@ -67,6 +80,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             return best;
+        }
+
+
+        // Перед перезагрузкой скриптов: словари значков забудутся, а текстуры остались бы висеть в памяти.
+        private static void DestroyCreatedTextures()
+        {
+            foreach (var texture in CreatedTextures)
+                if (texture != null)
+                    Object.DestroyImmediate(texture);
+
+            CreatedTextures.Clear();
         }
 
 

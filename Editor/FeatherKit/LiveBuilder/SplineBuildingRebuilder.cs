@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text;
 using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -28,20 +27,22 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public static void RebuildChangedBuildings()
         {
-            var buildings = StageUtility.GetCurrentStageHandle().FindComponentsOfType<SplineBuilding>();
-            var meshUserCounts = CountPartMeshUsers();
-
-            foreach (var building in buildings)
+            foreach (var building in StageUtility.GetCurrentStageHandle().FindComponentsOfType<SplineBuilding>())
             {
-                if (BoxModelPrefabInstances.TryUsePrefabGeometry(building, () => IsPrefabUpToDate(building), () => PrefabStateOf(building)))
-                    continue;
+                try
+                {
+                    if (BoxModelPrefabInstances.TryUsePrefabGeometry(building, () => IsPrefabUpToDate(building), () => PrefabStateOf(building)))
+                        continue;
 
-                var signature = SignatureOf(building);
+                    var signature = SignatureOf(building);
 
-                if (building.BuiltSignature == signature && ArePartsBuilt(building) && ArePartsCutUpToDate(building, signature))
-                    continue;
-
-                Rebuild(building, meshUserCounts);
+                    if (building.BuiltSignature != signature || !ArePartsBuilt(building) || !ArePartsCutUpToDate(building, signature))
+                        Rebuild(building);
+                }
+                catch (System.Exception exception)
+                {
+                    Debug.LogException(exception, building);
+                }
             }
         }
 
@@ -70,14 +71,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        public static void Rebuild(SplineBuilding building)
-        {
-            Rebuild(building, CountPartMeshUsers());
-        }
-
         // Собирает части: недостающие создаёт, лишние (этажей стало меньше, крышу выключили) убирает.
         // Само здание то же, поменялись только вырезы — пересобираются лишь части, которые они задели: окно на пятом этаже не трогает первый.
-        private static void Rebuild(SplineBuilding building, Dictionary<Mesh, int> meshUserCounts)
+        public static void Rebuild(SplineBuilding building)
         {
             RemoveOwnMeshComponents(building);
 
@@ -108,7 +104,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var isPartBuilt = isBuildingSame && part.BuiltSignature == partSignature && part.GetComponent<MeshFilter>().sharedMesh != null;
 
                 if (!isPartBuilt)
-                    FillPart(building, part, partGeometry, materials, meshUserCounts, cutters, partSignature, uncutBounds);
+                    FillPart(building, part, partGeometry, materials, cutters, partSignature, uncutBounds);
             }
 
             isHierarchyChanged |= RemoveUnusedParts(building, builtParts);
@@ -117,6 +113,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 building.BuiltSignature = signature;
                 EditorUtility.SetDirty(building);
+                LiveBuilderSyncEdits.RecordPrefabInstance(building);
             }
 
             if (isHierarchyChanged && building.gameObject.scene.IsValid())
@@ -125,10 +122,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // Меш, материалы и коллайдер одной части. Общий с копией или префабом файл не перезаписывается — у части будет свой.
         private static void FillPart(SplineBuilding building, SplineBuildingPart part, SplineBuildingPartGeometry partGeometry, Material[] materials,
-            Dictionary<Mesh, int> meshUserCounts, List<GeometryCutter> cutters, string partSignature, Bounds uncutBounds)
+            List<GeometryCutter> cutters, string partSignature, Bounds uncutBounds)
         {
-            LiveBuilderMeshWriter.ReleaseIfShared(part, meshUserCounts);
-
             var written = LiveBuilderMeshWriter.Write(part, building.name + " " + PartName(partGeometry.Kind, partGeometry.Storey), mesh =>
             {
                 partGeometry.Geometry.WriteTo(mesh);
@@ -140,6 +135,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 part.BuiltSignature = partSignature;
                 part.UncutBounds = uncutBounds;
                 EditorUtility.SetDirty(part);
+                LiveBuilderSyncEdits.RecordPrefabInstance(part);
             }
 
             LiveBuilderMeshWriter.UpdateCollider(part, building.HasCollider, written.Mesh);
@@ -278,15 +274,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // ── Общие меши ───────────────────────────────────────────────────
-
-        // Сколько частей зданий на сцене смотрит на каждый меш: больше одной — копии, файл общий.
-        private static Dictionary<Mesh, int> CountPartMeshUsers()
-        {
-            return LiveBuilderMeshWriter.CountMeshUsers(StageUtility.GetCurrentStageHandle().FindComponentsOfType<SplineBuildingPart>());
-        }
-
-
         // ── Дыры в перекрытиях ───────────────────────────────────────────
 
         // Вырезающие коробки объекта, в котором лежит здание: прямоугольник в плане здания и высоты над контуром.
@@ -332,37 +319,37 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Подпись ──────────────────────────────────────────────────────
 
         // Всё, от чего зависит геометрия здания: числа, материалы, точки контура, вырезающие коробки объекта вокруг и где стоят здание и объект.
+        // Хеш, одинаковый на любом запуске и машине (<see cref="LiveBuilderStableHash"/>).
         // Вырезы сюда не входят — они у каждой части свои (PartSignatureOf).
         private static string SignatureOf(SplineBuilding building)
         {
-            var signature = new StringBuilder();
-            signature.Append(LayoutVersion).Append('|').Append(building.StoreyCount).Append(',').Append(building.StoreyHeight).Append(',').Append(building.WallThickness)
-                .Append(',').Append((int)building.ContourSide).Append(',').Append(building.SlabThickness).Append(building.HasFloor ? "f" : "-")
-                .Append(building.HasRoof ? "r" : "-").Append(building.HasCollider ? "c" : "-").Append(',').Append(building.CurveStep).Append(',').Append(building.CornerSegments);
+            var hash = new Hash128();
+            hash.Append(LayoutVersion);
+            hash.Append(building.StoreyCount);
+            hash.Append(building.StoreyHeight);
+            hash.Append(building.WallThickness);
+            hash.Append((int)building.ContourSide);
+            hash.Append(building.SlabThickness);
+            hash.Append(building.HasFloor ? 1 : 0);
+            hash.Append(building.HasRoof ? 1 : 0);
+            hash.Append(building.HasCollider ? 1 : 0);
+            hash.Append(building.CurveStep);
+            hash.Append(building.CornerSegments);
 
             foreach (var material in new[] { building.OuterWallMaterial, building.InnerWallMaterial, building.FloorMaterial, building.CeilingMaterial, building.RoofMaterial })
-                signature.Append(',').Append(BoxModelSideMaterials.KeyOf(material));
+                hash.Append(BoxModelSideMaterials.KeyOf(material));
 
-            foreach (var spline in building.GetComponent<SplineContainer>().Splines)
-            {
-                signature.Append(spline.Closed ? "|closed" : "|open");
-
-                for (var index = 0; index < spline.Count; index++)
-                {
-                    var knot = spline[index];
-                    signature.Append(';').Append(knot.Position).Append(knot.TangentIn).Append(knot.TangentOut).Append(knot.Rotation)
-                        .Append('r').Append(LiveBuilderCornerRadii.RadiusOf(spline, index))
-                        .Append((int)spline.GetTangentMode(index));
-                }
-            }
-
+            LiveBuilderStableHash.AppendSplines(ref hash, building.GetComponent<SplineContainer>());
             var model = SplineWallRebuilder.OuterModelOf(building);
 
             if (model != null)
-                signature.Append("|m").Append(SplineWallRebuilder.CutBoxesHashOf(model, true))
-                    .Append(model.transform.worldToLocalMatrix * building.transform.localToWorldMatrix);
+            {
+                var cutBoxes = SplineWallRebuilder.CutBoxesHashOf(model, true);
+                hash.Append(ref cutBoxes);
+                LiveBuilderStableHash.AppendMatrix(ref hash, model.transform.worldToLocalMatrix * building.transform.localToWorldMatrix);
+            }
 
-            return signature.ToString();
+            return hash.ToString();
         }
 
 

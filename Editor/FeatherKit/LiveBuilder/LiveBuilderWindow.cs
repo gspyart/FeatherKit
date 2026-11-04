@@ -116,11 +116,20 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var isShowingAll = LiveBuilderWindowControls.IsShowingAllExplanations;
                 var info = new GUIContent(LiveBuilderOptionIcons.Themed(LiveBuilderOptionIcon.Info), "Все пояснения «Как пользоваться» — сразу открыты");
 
+                // Пояснения и клавиши появятся или пропадут — этот проход окна прерываем, иначе IMGUI путается в разметке.
                 if (GUILayout.Toggle(isShowingAll, info, "Button", GUILayout.Width(28f), GUILayout.Height(24f)) != isShowingAll)
+                {
                     LiveBuilderWindowControls.IsShowingAllExplanations = !isShowingAll;
+                    GUIUtility.ExitGUI();
+                }
 
                 var keys = new GUIContent(LiveBuilderOptionIcons.Themed(LiveBuilderOptionIcon.Keyboard), "Клавиши в окне сцены");
-                isShowingHotkeys = GUILayout.Toggle(isShowingHotkeys, keys, "Button", GUILayout.Width(28f), GUILayout.Height(24f));
+
+                if (GUILayout.Toggle(isShowingHotkeys, keys, "Button", GUILayout.Width(28f), GUILayout.Height(24f)) != isShowingHotkeys)
+                {
+                    isShowingHotkeys = !isShowingHotkeys;
+                    GUIUtility.ExitGUI();
+                }
             }
         }
 

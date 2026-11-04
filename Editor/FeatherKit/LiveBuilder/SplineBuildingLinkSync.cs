@@ -68,12 +68,32 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (link == null)
                 link = Undo.AddComponent<SplineBuildingStoreyLink>(target);
 
+            // Сверка ниже меняет место, высоту и копии без Undo — записать их заранее: Ctrl+Z вернёт всё вместе с привязкой.
+            Undo.RecordObjects(ChangedBySync(target, link), "Attach To Building Storeys");
+
             link.Building = building;
             link.IsToBuildingTop = isToBuildingTop;
             link.SkipsTopStorey = skipsTopStorey;
             RememberPlace(link, building);
             Sync(link);
             return link;
+        }
+
+        // Что сверка привязки может поменять у объекта: сама привязка, место, копии вверх, высота стены и лестницы, видимость.
+        private static Object[] ChangedBySync(GameObject target, SplineBuildingStoreyLink link)
+        {
+            var changed = new List<Object> { link, target.transform, target };
+
+            foreach (var storeyCopies in target.GetComponents<IStoreyCopies>())
+                changed.Add((Object)storeyCopies);
+
+            if (target.TryGetComponent<SplineWall>(out var wall))
+                changed.Add(wall);
+
+            if (target.TryGetComponent<BoxModelStairs>(out var stairs))
+                changed.Add(stairs);
+
+            return changed.ToArray();
         }
 
 

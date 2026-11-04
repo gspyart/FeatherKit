@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text;
 using FeatherKit.LiveBuilder;
 using UnityEngine;
 using UnityEngine.Splines;
@@ -53,21 +52,21 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Для подписи стены: от чего у здания зависят пропущенные стороны — его контур, стены и где стоит стена относительно него.
-        public static string BuildingKeyOf(SplineWall wall)
+        public static void AppendBuildingKey(ref Hash128 hash, SplineWall wall)
         {
             if (!TryGetBuilding(wall, out var building))
-                return "";
+            {
+                hash.Append(0);
+                return;
+            }
 
-            var key = new StringBuilder();
-            key.Append(building.WallThickness).Append(',').Append((int)building.ContourSide).Append(',').Append(building.CurveStep).Append(',').Append(building.CornerSegments)
-                .Append(building.transform.worldToLocalMatrix * wall.transform.localToWorldMatrix);
-
-            foreach (var spline in building.GetComponent<SplineContainer>().Splines)
-                for (var index = 0; index < spline.Count; index++)
-                    key.Append(';').Append(spline[index].Position).Append(spline[index].TangentIn).Append(spline[index].TangentOut)
-                        .Append((int)spline.GetTangentMode(index)).Append('r').Append(LiveBuilderCornerRadii.RadiusOf(spline, index));
-
-            return key.ToString();
+            hash.Append(1);
+            hash.Append(building.WallThickness);
+            hash.Append((int)building.ContourSide);
+            hash.Append(building.CurveStep);
+            hash.Append(building.CornerSegments);
+            LiveBuilderStableHash.AppendMatrix(ref hash, building.transform.worldToLocalMatrix * wall.transform.localToWorldMatrix);
+            LiveBuilderStableHash.AppendSplines(ref hash, building.GetComponent<SplineContainer>());
         }
 
 

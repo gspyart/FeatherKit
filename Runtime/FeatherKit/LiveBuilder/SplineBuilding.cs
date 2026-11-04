@@ -200,8 +200,8 @@ namespace FeatherKit.LiveBuilder
         // Высота верха здания над контуром, м.
         public float TotalHeight => FloorTopHeight + storeyCount * storeyHeight;
 
-        // От пола до потолка этажа, м.
-        public float ClearHeight => storeyHeight - slabThickness;
+        // От пола до потолка этажа, м. Перекрытие толще этажа — не меньше 5 см, как наименьшая высота стены: иначе перегородки сверялись бы без конца.
+        public float ClearHeight => Mathf.Max(0.05f, storeyHeight - slabThickness);
 
         // Высота пола первого этажа в мире, м: контур — на высоте первой точки сплайна.
         public float FirstFloorWorldHeight

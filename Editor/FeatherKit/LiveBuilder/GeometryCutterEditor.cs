@@ -27,7 +27,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             LiveBuilderInspectorLayout.Section("Сдвиг");
             LiveBuilderInspectorLayout.Properties(serializedObject, "shapeOffset");
 
-            if (cutter.Shape == GeometryCutterShape.Box)
+            // Выделено несколько — скругление видно, только если все прямоугольные.
+            if (IsEveryTargetBox())
             {
                 LiveBuilderInspectorLayout.Section("Скругление");
                 LiveBuilderInspectorLayout.Properties(serializedObject, "topCornerRadius", "bottomCornerRadius");
@@ -35,7 +36,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     if (GUILayout.Button(new GUIContent("Арка", "Верх — полукругом: радиус верхних углов — половина ширины")))
-                        SetTopRadius(cutter.Width / 2f);
+                        MakeEveryTargetArch();
 
                     if (GUILayout.Button(new GUIContent("Прямые углы", "Без скруглений")))
                     {
@@ -54,7 +55,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
             LiveBuilderInspectorLayout.Properties(serializedObject, "followsWallLine");
 
             if (LiveBuilderInspectorLayout.Foldout("GeometryCutter.Fine", "Тонко"))
-                LiveBuilderInspectorLayout.Properties(serializedObject, cutter.Shape == GeometryCutterShape.Box ? "cornerSegments" : "circleSegments");
+            {
+                if (IsAnyTargetBox())
+                    LiveBuilderInspectorLayout.Properties(serializedObject, "cornerSegments");
+
+                if (!IsEveryTargetBox())
+                    LiveBuilderInspectorLayout.Properties(serializedObject, "circleSegments");
+            }
 
             serializedObject.ApplyModifiedProperties();
         }
@@ -62,6 +69,38 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private void SetTopRadius(float radius)
         {
             serializedObject.FindProperty("topCornerRadius").floatValue = radius;
+        }
+
+        // «Арка» каждому выделенному — по его ширине: общее поле записало бы всем радиус первого.
+        private void MakeEveryTargetArch()
+        {
+            foreach (var each in targets)
+            {
+                var single = new SerializedObject(each);
+                single.FindProperty("topCornerRadius").floatValue = ((GeometryCutter)each).Width / 2f;
+                single.ApplyModifiedProperties();
+            }
+
+            serializedObject.Update();
+        }
+
+
+        private bool IsEveryTargetBox()
+        {
+            foreach (var each in targets)
+                if (((GeometryCutter)each).Shape != GeometryCutterShape.Box)
+                    return false;
+
+            return true;
+        }
+
+        private bool IsAnyTargetBox()
+        {
+            foreach (var each in targets)
+                if (((GeometryCutter)each).Shape == GeometryCutterShape.Box)
+                    return true;
+
+            return false;
         }
     }
 }

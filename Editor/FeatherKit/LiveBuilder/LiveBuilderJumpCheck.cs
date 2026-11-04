@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FeatherKit.EditorTools.LiveBuilder
@@ -107,10 +108,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return LiveBuilderJumpVerdict.Hard;
         }
 
-        // Легко и предел для щели на эту глубину вниз — между строками таблицы по прямой.
+        // Легко и предел для щели на эту глубину вниз — между строками таблицы по прямой. «Легко» не шире предела.
         private static void GetGapLimits(float drop, out float easy, out float limit)
         {
-            var gaps = Settings.JumpGaps;
+            InterpolateGapLimits(drop, out easy, out limit);
+            easy = Mathf.Min(easy, limit);
+        }
+
+        private static void InterpolateGapLimits(float drop, out float easy, out float limit)
+        {
+            var gaps = GapsByDrop();
             var clamped = Mathf.Clamp(drop, gaps[0].Drop, gaps[^1].Drop);
 
             for (var index = 0; index < gaps.Count - 1; index++)
@@ -130,6 +137,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
             easy = gaps[^1].EasyGap;
             limit = gaps[^1].MaxGap;
         }
+
+        // Строки таблицы по глубине: в настройках их могли вписать вразнобой. Копия — настройки не трогаем.
+        private static List<LiveBuilderJumpGap> GapsByDrop()
+        {
+            var gaps = new List<LiveBuilderJumpGap>(Settings.JumpGaps);
+            gaps.Sort((first, second) => first.Drop.CompareTo(second.Drop));
+            return gaps;
+        }
+
 
         private static string Format(float meters)
         {

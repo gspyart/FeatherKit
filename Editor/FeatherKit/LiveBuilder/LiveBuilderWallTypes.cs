@@ -7,10 +7,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Типы стен (<see cref="SplineWallType"/>) для окна Live Builder: список всех типов проекта выпадающим полем,
-    /// «Без типа» и «Новый тип…» — файл в папке типов.
+    /// «Без типа» и «Новый тип…» — файл в папке типов. Список типов запомнен: окно перерисовывается на каждое движение мыши,
+    /// а поиск по проекту небыстрый. Забывается, когда в проекте что-то поменялось.
     /// </summary>
+    [InitializeOnLoad]
     public static class LiveBuilderWallTypes
     {
+        // Папка типов, если в настройках проекта — путь не внутри Assets.
+        private const string FallbackFolder = "Assets/Live Builder Wall Types";
+
+        // Все типы проекта, по имени; null — искать заново.
+        private static List<SplineWallType> cachedTypes;
+
+
+        static LiveBuilderWallTypes()
+        {
+            EditorApplication.projectChanged += ForgetTypes;
+        }
+
+
         private static LiveBuilderProjectSettings Settings => LiveBuilderProjectSettings.instance;
 
 
@@ -57,8 +72,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Все типы проекта, по имени.
+        // Все типы проекта, по имени. Копия запомненного списка — его можно менять.
         public static List<SplineWallType> AllTypes()
+        {
+            cachedTypes ??= FindTypes();
+            cachedTypes.RemoveAll(type => type == null);
+            return new List<SplineWallType>(cachedTypes);
+        }
+
+        private static List<SplineWallType> FindTypes()
         {
             var types = new List<SplineWallType>();
 
@@ -75,22 +97,43 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // В проекте добавили, удалили или переименовали файлы — список типов ищется заново.
+        private static void ForgetTypes()
+        {
+            cachedTypes = null;
+        }
+
+
         // Файл типа в папке типов; новый, заданный человеком, — сразу выделен, чтобы назвать и настроить.
         private static SplineWallType CreateType(string name, float thickness, Material material, bool isSelecting)
         {
-            EnsureFolder(Settings.WallTypesFolder);
+            var folder = TypesFolder();
+            EnsureFolder(folder);
 
             var type = ScriptableObject.CreateInstance<SplineWallType>();
             type.Thickness = thickness;
             type.Material = material;
 
-            AssetDatabase.CreateAsset(type, AssetDatabase.GenerateUniqueAssetPath(Settings.WallTypesFolder + "/" + name + ".asset"));
+            AssetDatabase.CreateAsset(type, AssetDatabase.GenerateUniqueAssetPath(folder + "/" + name + ".asset"));
             AssetDatabase.SaveAssets();
+            ForgetTypes();
 
             if (isSelecting)
                 EditorGUIUtility.PingObject(type);
 
             return type;
+        }
+
+        // Папка из настроек проекта; не внутри Assets — запасная, с предупреждением: файл вне Assets не создать.
+        private static string TypesFolder()
+        {
+            var folder = Settings.WallTypesFolder.Replace('\\', '/');
+
+            if (folder == "Assets" || folder.StartsWith("Assets/"))
+                return folder;
+
+            Debug.LogWarning("Live Builder: папка типов стен «" + folder + "» — не внутри Assets. Тип создан в «" + FallbackFolder + "».");
+            return FallbackFolder;
         }
 
         private static void EnsureFolder(string path)

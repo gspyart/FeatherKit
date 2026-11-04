@@ -124,9 +124,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Рост ─────────────────────────────────────────────────────────
 
         // Новые коробки и правки их размера — один шаг Ctrl+Z.
+        // От выделенных граней группу на весь жест уже открыл BoxModelFaceMoveHandle: в ней же и куски граней — пишем туда.
         private static void BeginUndoGroup(bool startsFromFaceSelection)
         {
-            Undo.IncrementCurrentGroup();
+            if (!startsFromFaceSelection)
+                Undo.IncrementCurrentGroup();
+
             undoGroup = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName("Extrude Box");
             isFromFaceSelection = startsFromFaceSelection;
@@ -150,6 +153,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var extrudedPart = partObject.AddComponent<BoxModelPart>();
             EditorUtility.CopySerialized(part, extrudedPart);
+
+            // Скосы рёбер остаются у исходной коробки: новая — прямая.
+            while (extrudedPart.Chamfers.Count > 0)
+                extrudedPart.RemoveChamfer(extrudedPart.Chamfers[0].FirstFace, extrudedPart.Chamfers[0].SecondFace);
 
             var sourceMin = BoxModelRebuilder.LocalMinOf(model, part);
             var extrusion = new FaceExtrusion(model, part, extrudedPart, face, sourceMin, sourceMin + part.Size);
@@ -196,6 +203,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Конец ────────────────────────────────────────────────────────
 
         // Кнопку мыши отпустили: невытянутые коробки — прочь, вытянутые выделены, шаг Ctrl+Z один. Ни одной — как не было.
+        // От выделенных граней группа общая с жестом (там и куски граней) — убираем только свои коробки, а не откатываем её.
         public static void FinishIfReleased()
         {
             if (Extrusions.Count == 0 || GUIUtility.hotControl != 0)
@@ -208,7 +216,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (extrusion.HasDepth)
                     kept.Add(extrusion);
 
-            if (kept.Count == 0)
+            if (kept.Count == 0 && !isFromFaceSelection)
             {
                 Undo.RevertAllDownToGroup(undoGroup);
                 Extrusions.Clear();
@@ -219,7 +227,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (!extrusion.HasDepth)
                     Undo.DestroyObjectImmediate(extrusion.Extruded.gameObject);
 
-            SelectExtruded(kept);
+            if (kept.Count > 0)
+                SelectExtruded(kept);
             Undo.CollapseUndoOperations(undoGroup);
             Extrusions.Clear();
         }

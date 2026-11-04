@@ -186,25 +186,35 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Меш префаба ──────────────────────────────────────────────────
 
-        // Снимает с экземпляра переопределения меша, коллайдера, материалов и подписи (у здания — и у его частей) — остаются меши префаба.
+        // Снимает с экземпляра переопределения меша, материалов и подписи (у здания — и его собранных частей целиком) — остаются меши префаба.
+        // Остальные правки рендерера и коллайдера (тени, триггер, физ. материал) — человека, их не трогаем.
         private static void TakePrefabGeometry(Component owner)
         {
-            var geometryComponents = new List<Object>
-            {
-                owner,
-                owner.GetComponent<MeshFilter>(),
-                owner.GetComponent<MeshRenderer>(),
-                owner.GetComponent<MeshCollider>()
-            };
+            var generatedComponents = new List<Object> { owner };
 
             foreach (var part in owner.GetComponentsInChildren<SplineBuildingPart>(true))
-                geometryComponents.AddRange(new Object[] { part.GetComponent<MeshFilter>(), part.GetComponent<MeshRenderer>(), part.GetComponent<MeshCollider>() });
+                generatedComponents.AddRange(new Object[] { part, part.GetComponent<MeshFilter>(), part.GetComponent<MeshRenderer>(), part.GetComponent<MeshCollider>() });
 
             var instanceRoot = PrefabUtility.GetOutermostPrefabInstanceRoot(owner);
 
             foreach (var overridden in PrefabUtility.GetObjectOverrides(instanceRoot, false))
-                if (geometryComponents.Contains(overridden.instanceObject) && !PrefabUtility.IsAddedComponentOverride(overridden.instanceObject))
+                if (generatedComponents.Contains(overridden.instanceObject) && !PrefabUtility.IsAddedComponentOverride(overridden.instanceObject))
                     PrefabUtility.RevertObjectOverride(overridden.instanceObject, InteractionMode.AutomatedAction);
+
+            RevertPropertyOverride(owner.GetComponent<MeshFilter>(), "m_Mesh");
+            RevertPropertyOverride(owner.GetComponent<MeshRenderer>(), "m_Materials");
+            RevertPropertyOverride(owner.GetComponent<MeshCollider>(), "m_Mesh");
+        }
+
+        private static void RevertPropertyOverride(Object target, string propertyPath)
+        {
+            if (target == null || PrefabUtility.IsAddedComponentOverride(target))
+                return;
+
+            var property = new SerializedObject(target).FindProperty(propertyPath);
+
+            if (property != null && property.prefabOverride)
+                PrefabUtility.RevertPropertyOverride(property, InteractionMode.AutomatedAction);
         }
 
 
@@ -225,6 +235,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var contents = PrefabUtility.LoadPrefabContents(prefabPath);
 
+            // Меши построек префаба — в его папке, вырезы — его собственные, а не сцены.
+            BoxModelMeshStorage.BeginLoadedPrefab(contents.scene, prefabPath);
+
             try
             {
                 foreach (var model in contents.GetComponentsInChildren<BoxModel>(true))
@@ -244,6 +257,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
             finally
             {
+                BoxModelMeshStorage.EndLoadedPrefab(contents.scene);
                 PrefabUtility.UnloadPrefabContents(contents);
             }
         }

@@ -214,15 +214,22 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Своя линия и где перегородка относительно здания: сдвинули её целиком — тоже «двигали саму».
         private static int OwnLineHashOf(SplineWall wall, SplineContainer container, SplineBuilding building)
         {
-            var hash = System.HashCode.Combine(LiveBuilderSyncEdits.LineHashOf(container), building.transform.worldToLocalMatrix * wall.transform.localToWorldMatrix);
-            return hash != 0 ? hash : 1;
+            var hash = new Hash128();
+            LiveBuilderStableHash.AppendSplines(ref hash, container);
+            LiveBuilderStableHash.AppendMatrix(ref hash, building.transform.worldToLocalMatrix * wall.transform.localToWorldMatrix);
+            return LiveBuilderStableHash.ToNonZeroInt(hash);
         }
 
-        // Контур здания и всё, от чего зависит внутренняя сторона его стен.
+        // Контур здания и всё, от чего зависит внутренняя сторона его стен, — и скругления углов.
         private static int BuildingLineHashOf(SplineBuilding building, SplineContainer buildingContainer)
         {
-            var hash = System.HashCode.Combine(LiveBuilderSyncEdits.LineHashOf(buildingContainer), building.WallThickness, (int)building.ContourSide, building.CurveStep);
-            return hash != 0 ? hash : 1;
+            var hash = new Hash128();
+            LiveBuilderStableHash.AppendSplines(ref hash, buildingContainer);
+            hash.Append(building.WallThickness);
+            hash.Append((int)building.ContourSide);
+            hash.Append(building.CurveStep);
+            hash.Append(building.CornerSegments);
+            return LiveBuilderStableHash.ToNonZeroInt(hash);
         }
 
         private static int KnotCountOf(SplineContainer container)

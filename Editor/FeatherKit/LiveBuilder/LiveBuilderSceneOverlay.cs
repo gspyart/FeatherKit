@@ -72,27 +72,20 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Всё, комнаты (разрез на 3 м над полом этажа), стены вниз (на 1 м). Только в окне сцены.
+        // Виды — общие с окном (<see cref="LiveBuilderGlobalSettingsPanel"/>); своя высота среза — не горит ни одна кнопка.
         private static void DrawVisibility()
         {
-            var isSectioned = LiveBuilderStoreys.IsSectionEnabled;
-            var height = LiveBuilderStoreys.SectionHeightAboveFloor;
-            var isRooms = isSectioned && Mathf.Approximately(height, 3f);
-            var isLowWalls = isSectioned && Mathf.Approximately(height, 1f);
-
-            if (GUILayout.Toggle(!isSectioned, new GUIContent("Всё", "Всё как есть"), EditorStyles.miniButtonLeft) && isSectioned)
-                LiveBuilderStoreys.IsSectionEnabled = false;
-
-            if (GUILayout.Toggle(isRooms, new GUIContent("Комнаты", "Выше 3 м над полом этажа спрятано"), EditorStyles.miniButtonMid) && !isRooms)
-                SetSection(3f);
-
-            if (GUILayout.Toggle(isLowWalls, new GUIContent("Стены вниз", "Выше 1 м над полом этажа спрятано"), EditorStyles.miniButtonRight) && !isLowWalls)
-                SetSection(1f);
+            DrawViewButton(LiveBuilderGlobalSettingsPanel.ViewAll, new GUIContent("Всё", "Всё как есть"), EditorStyles.miniButtonLeft);
+            DrawViewButton(LiveBuilderGlobalSettingsPanel.ViewRooms, new GUIContent("Комнаты", "Выше 3 м над полом этажа спрятано"), EditorStyles.miniButtonMid);
+            DrawViewButton(LiveBuilderGlobalSettingsPanel.ViewWallsDown, new GUIContent("Стены вниз", "Выше 1 м над полом этажа спрятано"), EditorStyles.miniButtonRight);
         }
 
-        private static void SetSection(float heightAboveFloor)
+        private static void DrawViewButton(int preset, GUIContent content, GUIStyle style)
         {
-            LiveBuilderStoreys.SectionHeightAboveFloor = heightAboveFloor;
-            LiveBuilderStoreys.IsSectionEnabled = true;
+            var isCurrent = LiveBuilderGlobalSettingsPanel.CurrentViewPreset() == preset;
+
+            if (GUILayout.Toggle(isCurrent, content, style) && !isCurrent)
+                LiveBuilderGlobalSettingsPanel.ApplyViewPreset(preset);
         }
     }
 }

@@ -4,6 +4,7 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>Надписи инструмента «Live Builder» в окне сцены: размеры рядом с коробкой и строка-подсказка внизу — что делать сейчас.</summary>
+    [InitializeOnLoad]
     public static class BoxModelSceneText
     {
         private const float HintBottomMargin = 12f;
@@ -21,6 +22,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static Texture2D background;
         private static GUIStyle labelStyle;
         private static GUIStyle hintStyle;
+
+
+        // Подложка не сохраняется и сама не удаляется: перед перезагрузкой скриптов — удалить, иначе после каждой копится новая.
+        static BoxModelSceneText()
+        {
+            AssemblyReloadEvents.beforeAssemblyReload += () =>
+            {
+                if (background != null)
+                    Object.DestroyImmediate(background);
+            };
+        }
 
 
         // Тёмная подложка: на светлой и пёстрой сцене белый текст читается одинаково.

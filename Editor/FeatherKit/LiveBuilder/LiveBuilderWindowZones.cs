@@ -108,7 +108,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (!GUI.Button(rect, GUIContent.none, GUIStyle.none))
                 return isExpanded;
 
+            // Содержимое появится или пропадёт — этот проход окна прерываем, иначе IMGUI путается в разметке.
             EditorPrefs.SetBool(preferenceKey, !isExpanded);
+            GUIUtility.ExitGUI();
             return !isExpanded;
         }
 

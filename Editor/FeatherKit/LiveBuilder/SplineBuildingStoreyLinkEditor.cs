@@ -44,8 +44,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Этаж выше, чем есть у здания: ползунок сам подвинул бы объект от одного выделения — только пишем, что не так.
         private static void DrawStorey(SplineBuildingStoreyLink link, int count)
         {
+            if (link.Storey < 0 || link.Storey >= count)
+            {
+                EditorGUILayout.HelpBox("Стоит на этаже " + (link.Storey + 1) + ", а у здания этажей " + count + ": добавь зданию этажей — тогда этаж можно будет выбрать.",
+                    MessageType.Warning);
+                return;
+            }
+
             var storey = EditorGUILayout.IntSlider(new GUIContent("Этаж", "На каком этаже здания стоит. Подвинешь — переедет туда на ту же высоту над полом"),
                 link.Storey + 1, 1, count) - 1;
 
@@ -79,10 +87,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (!isRange)
                 return;
 
+            // Только если двинули ползунок: иначе сама подрезка числа в пределы правила бы привязку от одного выделения.
+            EditorGUI.BeginChangeCheck();
             var lastStorey = EditorGUILayout.IntSlider(new GUIContent("По этаж", "Последний этаж с копией, включительно"),
                 Mathf.Clamp(link.LastStorey, link.Storey, highestCopyStorey) + 1, link.Storey + 1, highestCopyStorey + 1) - 1;
 
-            if (lastStorey != link.LastStorey)
+            if (EditorGUI.EndChangeCheck() && lastStorey != link.LastStorey)
                 SetSpan(link, false, true, lastStorey);
         }
 

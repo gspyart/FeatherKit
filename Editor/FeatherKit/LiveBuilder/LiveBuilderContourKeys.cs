@@ -9,6 +9,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Клавиши правки контура (<see cref="LiveBuilderContourHandles"/>), пока выбраны точки: Delete — убрать выбранные
     /// (у замкнутого контура остаётся хотя бы три, у линии — две; объект целиком тогда не удаляется), стрелки — сдвинуть на шаг сетки, Esc — снять выбор.
     /// У стены по линии, пока видны её точки, C — замкнуть или разомкнуть, выбраны точки или нет. Здание всегда замкнуто.
+    /// Пока тянут точку или рамку, клавиши правки не работают: Delete только глушится, чтобы не удалить объект целиком.
     /// </summary>
     public static class LiveBuilderContourKeys
     {
@@ -16,10 +17,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private const int MinOpenKnots = 2;
 
 
-        // Возвращает, забрал ли событие.
-        public static bool Handle(Component owner, SplineContainer container)
+        // Возвращает, забрал ли событие. isGestureActive — тянут точку или рамку.
+        public static bool Handle(Component owner, SplineContainer container, bool isGestureActive)
         {
             var current = Event.current;
+
+            if (isGestureActive)
+                return SwallowDelete(current);
 
             if (current.type == EventType.KeyDown && current.keyCode == KeyCode.C && !current.control && !current.alt && CanToggleClosed(owner, container))
             {
@@ -31,10 +35,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (LiveBuilderContourSelection.Knots.Count == 0)
                 return false;
 
-            var isDeleteCommand = current.type is EventType.ValidateCommand or EventType.ExecuteCommand && current.commandName is "Delete" or "SoftDelete";
-            var isDeleteKey = current.type == EventType.KeyDown && current.keyCode is KeyCode.Delete or KeyCode.Backspace;
-
-            if (isDeleteCommand || isDeleteKey)
+            if (IsDelete(current))
             {
                 if (current.type != EventType.ValidateCommand)
                     RemoveSelectedKnots(container);
@@ -59,6 +60,23 @@ namespace FeatherKit.EditorTools.LiveBuilder
             LiveBuilderContourDrag.ShiftSelected(container, localShift, "Nudge Contour Points");
             current.Use();
             return true;
+        }
+
+        // Delete посреди перетаскивания: ничего не убираем, но и окну сцены не отдаём — иначе удалит объект.
+        private static bool SwallowDelete(Event current)
+        {
+            if (!IsDelete(current))
+                return false;
+
+            current.Use();
+            return true;
+        }
+
+        private static bool IsDelete(Event current)
+        {
+            var isDeleteCommand = current.type is EventType.ValidateCommand or EventType.ExecuteCommand && current.commandName is "Delete" or "SoftDelete";
+            var isDeleteKey = current.type == EventType.KeyDown && current.keyCode is KeyCode.Delete or KeyCode.Backspace;
+            return isDeleteCommand || isDeleteKey;
         }
 
         // Стрелки — на шаг сетки вдоль осей сетки: влево-вправо — X, вверх-вниз — Z.
@@ -105,6 +123,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             foreach (var (splineIndex, knotIndex) in knots)
             {
+                if (!LiveBuilderContourSelection.IsKnotInside(container, splineIndex, knotIndex))
+                    continue;
+
                 var spline = container.Splines[splineIndex];
 
                 if (spline.Count > (spline.Closed ? MinClosedKnots : MinOpenKnots))

@@ -10,6 +10,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public static class LiveBuilderGlobalSettingsPanel
     {
+        // Виды окна сцены — общие с панелью над сценой (<see cref="LiveBuilderSceneOverlay"/>). Своя высота среза (панель «Уровень») —
+        // ViewCustom: не горит ни одна кнопка, даже «Всё», ведь срез включён.
+        public const int ViewCustom = -1;
+        public const int ViewAll = 0;
+        public const int ViewRooms = 1;
+        public const int ViewWallsDown = 2;
+
+        // Срез «Комнаты» и «Стены вниз» — на сколько выше пола этажа, м.
+        private const float RoomsSectionHeight = 3f;
+        private const float WallsDownSectionHeight = 1f;
+
+
         public static void Draw()
         {
             DrawStorey();
@@ -74,22 +86,39 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Что видно в окне сцены: всё, этаж срезом на 3 м (комнаты) или на 1 м (стены вниз). Игру не меняет.
         private static void DrawSection()
         {
-            var isSectioned = LiveBuilderStoreys.IsSectionEnabled;
-            var height = LiveBuilderStoreys.SectionHeightAboveFloor;
-            var current = !isSectioned ? 0 : Mathf.Approximately(height, 1f) ? 2 : 1;
+            var current = CurrentViewPreset();
 
             var chosen = LiveBuilderWindowControls.Switch(
                 LiveBuilderWindowControls.IconLabel("Вид", LiveBuilderOptionIcon.Eye, "Всё — как есть. Комнаты — выше 3 м над полом этажа спрятано, видно стены и проёмы. " +
                                                                                      "Стены вниз — выше 1 м: видно комнаты с любого угла. Только в окне сцены"),
                 current, ("Всё", LiveBuilderOptionIcon.ViewAll), ("Комнаты", LiveBuilderOptionIcon.ViewRooms), ("Стены вниз", LiveBuilderOptionIcon.ViewWallsDown));
 
-            if (chosen == current)
-                return;
+            if (chosen != current && chosen >= 0)
+                ApplyViewPreset(chosen);
+        }
 
-            if (chosen > 0)
-                LiveBuilderStoreys.SectionHeightAboveFloor = chosen == 1 ? 3f : 1f;
 
-            LiveBuilderStoreys.IsSectionEnabled = chosen > 0;
+        // Какой из видов сейчас: Всё, Комнаты, Стены вниз или своя высота среза.
+        public static int CurrentViewPreset()
+        {
+            if (!LiveBuilderStoreys.IsSectionEnabled)
+                return ViewAll;
+
+            var height = LiveBuilderStoreys.SectionHeightAboveFloor;
+
+            if (Mathf.Approximately(height, RoomsSectionHeight))
+                return ViewRooms;
+
+            return Mathf.Approximately(height, WallsDownSectionHeight) ? ViewWallsDown : ViewCustom;
+        }
+
+
+        public static void ApplyViewPreset(int preset)
+        {
+            if (preset == ViewRooms || preset == ViewWallsDown)
+                LiveBuilderStoreys.SectionHeightAboveFloor = preset == ViewRooms ? RoomsSectionHeight : WallsDownSectionHeight;
+
+            LiveBuilderStoreys.IsSectionEnabled = preset != ViewAll;
         }
 
 

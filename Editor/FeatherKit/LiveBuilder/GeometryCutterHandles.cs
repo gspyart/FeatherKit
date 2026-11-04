@@ -90,22 +90,24 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
         // Грани коробки выреза: опора формы — низ посередине, поэтому после правки она переезжает в новый низ.
-        // Оси ручек — только поворот выреза, без его места: иначе тянешь грань — дыра едет, оси с ней, и Unity прибавляет сдвиг снова и снова.
+        // Оси ручек — поворот и масштаб выреза, без его места: иначе тянешь грань — дыра едет, оси с ней, и Unity прибавляет сдвиг снова и снова.
+        // Масштаб — как у дыры (<see cref="GeometryCutterOutline.ShapeToWorld"/>): без него рамка не совпадает с дырой и грань скачет.
         private static void DrawSizeHandles(GeometryCutter cutter, Vector3 copyLift)
         {
-            var rotation = cutter.transform.rotation;
-            var pivot = Quaternion.Inverse(rotation) * (GeometryCutterOutline.ShapeBottomOf(cutter) + copyLift);
+            var frame = cutter.transform.localToWorldMatrix;
+            frame.SetColumn(3, new Vector4(0f, 0f, 0f, 1f));
+            var pivot = frame.inverse.MultiplyPoint3x4(GeometryCutterOutline.ShapeBottomOf(cutter) + copyLift);
             var min = pivot + new Vector3(-cutter.Width / 2f, 0f, -cutter.Depth / 2f);
             var max = pivot + new Vector3(cutter.Width / 2f, cutter.Height, cutter.Depth / 2f);
             var oldMin = min;
             var oldMax = max;
 
-            if (!LiveBuilderFaceHandles.Draw(Matrix4x4.Rotate(rotation), ref min, ref max, GeometryCutterGizmos.CutterColor, AxisNames))
+            if (!LiveBuilderFaceHandles.Draw(frame, ref min, ref max, GeometryCutterGizmos.CutterColor, AxisNames))
                 return;
 
             LiveBuilderFaceHandles.SnapSizesToGrid(oldMin, oldMax, ref min, ref max);
             var size = max - min;
-            var newBottom = rotation * new Vector3((min.x + max.x) / 2f, min.y, (min.z + max.z) / 2f);
+            var newBottom = frame.MultiplyPoint3x4(new Vector3((min.x + max.x) / 2f, min.y, (min.z + max.z) / 2f));
 
             Undo.RecordObject(cutter, "Resize Cutter");
             MoveShapeBottom(cutter, newBottom - copyLift);

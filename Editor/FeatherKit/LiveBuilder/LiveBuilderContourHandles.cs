@@ -38,6 +38,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Показан ли контур: выделено одно здание, стена или комната по контуру.
         public bool IsShown => LiveBuilderContourSelection.Owner != null;
 
+        // Тянут точку, ус или рамку — мышь занята правкой контура.
+        public bool IsGestureActive => drag.IsDragging || boxSelect.IsSelecting;
+
         public string Hint => LiveBuilderContourSelection.Knots.Count > 0
             ? "Выбрано точек: " + LiveBuilderContourSelection.Knots.Count + ". Тяни — двигать, стрелки — на шаг сетки, Delete — убрать, " +
               "двойной клик — угол, плавно или Безье, у Безье — тяни усы, у угла — голубая ручка: скругление, Esc — снять выбор"
@@ -69,17 +72,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (owner == null)
             {
-                drag.End(dragControl);
-                boxSelect.Cancel();
+                Cancel();
                 return;
             }
 
             var container = owner.GetComponent<SplineContainer>();
 
             if (LiveBuilderContourSelection.Prune(container) && drag.IsDragging)
-                drag.End(dragControl);
+                drag.End();
 
-            if (drag.Handle(owner, container, dragControl) || boxSelect.Handle(owner, container, boxSelectControl) || LiveBuilderContourKeys.Handle(owner, container))
+            if (drag.Handle(owner, container, dragControl) || boxSelect.Handle(owner, container, boxSelectControl) || LiveBuilderContourKeys.Handle(owner, container, IsGestureActive))
                 return;
 
             if (Event.current.type == EventType.Layout)
@@ -109,7 +111,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             if (allowsBoxSelect)
-                boxSelect.TryBegin(boxSelectControl, ownControls);
+                boxSelect.TryBegin(ownControls);
+        }
+
+
+        // Бросить перетаскивание и рамку: мышь освобождается, уже сдвинутые точки остаются. Зовёт и Esc инструмента.
+        public void Cancel()
+        {
+            drag.End();
+            boxSelect.Cancel();
         }
 
         // Одно здание, стена по линии или комната по контуру в выделении; иначе — null.

@@ -68,46 +68,26 @@ namespace FeatherKit.EditorTools.LiveBuilder
             BoxModelSceneText.DrawLabel(position, "× " + repeat.Count);
         }
 
-        // Середина первой копии. Коробки группы идут в расчёте копия за копией, поровну на каждую —
-        // первая копия это первые из них; число копий — с учётом повторов снаружи.
+        // Середина первой копии: коробки группы собраны без сдвигов повторов — ровно там, где стоят в сцене.
         private static bool TryGetFirstCopyCenter(BoxModel model, BoxModelRepeat repeat, out Vector3 center)
         {
-            var groupBoxes = BoxModelRebuilder.GetSolverBoxes(model);
-            var copies = 1;
-
-            for (var node = repeat.transform; node != null && node != model.transform; node = node.parent)
-                if (node.TryGetComponent<BoxModelRepeat>(out var outer))
-                    copies *= outer.Count;
-
+            var firstCopyBoxes = BoxModelShapeCollector.CollectFirstCopy(model, repeat.transform);
             var bounds = new Bounds();
-            var found = 0;
-            var total = 0;
 
-            foreach (var box in groupBoxes)
-                if (box.Owner != null && box.Owner.transform.IsChildOf(repeat.transform))
-                    total++;
-
-            var perCopy = Mathf.Max(1, total / copies);
-
-            foreach (var box in groupBoxes)
+            for (var index = 0; index < firstCopyBoxes.Count; index++)
             {
-                if (box.Owner == null || !box.Owner.transform.IsChildOf(repeat.transform))
-                    continue;
-
+                var box = firstCopyBoxes[index].Box;
                 var boxBounds = new Bounds();
-                boxBounds.SetMinMax((Vector3)box.Box.Min / MillimeterBox.MillimetersPerMeter, (Vector3)box.Box.Max / MillimeterBox.MillimetersPerMeter);
+                boxBounds.SetMinMax((Vector3)box.Min / MillimeterBox.MillimetersPerMeter, (Vector3)box.Max / MillimeterBox.MillimetersPerMeter);
 
-                if (found == 0)
+                if (index == 0)
                     bounds = boxBounds;
                 else
                     bounds.Encapsulate(boxBounds);
-
-                if (++found >= perCopy)
-                    break;
             }
 
             center = bounds.center;
-            return found > 0;
+            return firstCopyBoxes.Count > 0;
         }
     }
 }

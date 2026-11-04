@@ -8,29 +8,45 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Рамка выбора в правке контура (<see cref="LiveBuilderContourHandles"/>): Shift + нажатие по пустому месту и протянуть —
     /// отпустил, и точки внутри рамки добавляются к выбору (<see cref="LiveBuilderContourSelection"/>).
+    /// Рамка начинается, только когда мышь сдвинулась на несколько пикселей: Shift+клик без протягивания достаётся обычному выделению.
     /// </summary>
     public sealed class LiveBuilderContourBoxSelect
     {
+        // Сдвиг мыши, после которого Shift+нажатие — уже рамка, а не клик, пикс. Как у инструмента: он тоже ждёт этот сдвиг.
+        private const float DragThresholdPixels = 4f;
+
         private bool isSelecting;
+
+        // Shift+нажатие было, но мышь ещё не сдвинулась: может, это просто клик.
+        private bool isWaitingForDrag;
+
+        // Кому досталось нажатие — у него рамка и забирает мышь, когда протянули.
+        private int pressedControl;
+
+        // Элемент рамки, пока она держит мышь.
+        private int heldBoxSelectControl;
 
         // Углы рамки на экране.
         private Vector2 start;
         private Vector2 end;
 
 
-        // Shift + нажатие по пустому месту (не по точке, «+» или усу — их ручки в ownControls) — начать рамку.
-        public void TryBegin(int boxSelectControl, HashSet<int> ownControls)
+        public bool IsSelecting => isSelecting;
+
+
+        // Shift + нажатие по пустому месту (не по точке, «+» или усу — их ручки в ownControls) — запомнить: протянут — будет рамка.
+        // Нажатие не забираем: если мышь не сдвинется, это Shift+клик для обычного выделения.
+        public void TryBegin(HashSet<int> ownControls)
         {
             var current = Event.current;
 
             if (current.type != EventType.MouseDown || current.button != 0 || current.alt || !current.shift || ownControls.Contains(HandleUtility.nearestControl))
                 return;
 
-            isSelecting = true;
+            isWaitingForDrag = true;
+            pressedControl = HandleUtility.nearestControl;
             start = current.mousePosition;
             end = current.mousePosition;
-            GUIUtility.hotControl = boxSelectControl;
-            current.Use();
         }
 
 
@@ -39,8 +55,22 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var current = Event.current;
 
-            if (!isSelecting || GUIUtility.hotControl != boxSelectControl)
+            // Новое нажатие — прежнее ожидание забыто, даже если его отпускание ушло мимо окна сцены.
+            if (current.type == EventType.MouseDown)
+                isWaitingForDrag = false;
+
+            if (isWaitingForDrag)
+                return TryStartSelecting(current, boxSelectControl);
+
+            if (!isSelecting)
                 return false;
+
+            // Мышь отобрали, не дав отпустить (окно потеряло фокус), — рамки больше нет.
+            if (GUIUtility.hotControl != boxSelectControl)
+            {
+                isSelecting = false;
+                return false;
+            }
 
             switch (current.GetTypeForControl(boxSelectControl))
             {
@@ -68,6 +98,30 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return false;
         }
 
+        // Мышь сдвинулась дальше порога — рамка забирает мышь у того, кому досталось нажатие. Отпустили раньше — это был клик.
+        private bool TryStartSelecting(Event current, int boxSelectControl)
+        {
+            if (current.type == EventType.MouseUp)
+            {
+                isWaitingForDrag = false;
+                return false;
+            }
+
+            var isPressStillHeld = GUIUtility.hotControl == 0 || GUIUtility.hotControl == pressedControl;
+
+            if (current.type != EventType.MouseDrag || !isPressStillHeld || (current.mousePosition - start).magnitude <= DragThresholdPixels)
+                return false;
+
+            isWaitingForDrag = false;
+            isSelecting = true;
+            end = current.mousePosition;
+            heldBoxSelectControl = boxSelectControl;
+            GUIUtility.hotControl = boxSelectControl;
+            current.Use();
+            return true;
+        }
+
+
         private void SelectInside(Component owner, SplineContainer container)
         {
             var rect = ScreenRect();
@@ -88,9 +142,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Отмена: рамка пропадает, мышь освобождается, если её держит рамка.
         public void Cancel()
         {
+            if (isSelecting && GUIUtility.hotControl == heldBoxSelectControl)
+                GUIUtility.hotControl = 0;
+
             isSelecting = false;
+            isWaitingForDrag = false;
         }
     }
 }

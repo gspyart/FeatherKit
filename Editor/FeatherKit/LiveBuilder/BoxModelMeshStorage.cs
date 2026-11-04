@@ -3,6 +3,7 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FeatherKit.EditorTools.LiveBuilder
 {
@@ -23,6 +24,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private const double SaveDelaySeconds = 0.5;
 
         private static readonly HashSet<Mesh> MeshesToSave = new();
+
+        // Префабы, загруженные кодом для пересборки: сцена → файл префаба. Меши их построек — в папке префаба, а не в общей.
+        private static readonly Dictionary<Scene, string> LoadedPrefabPaths = new();
+
         private static double saveTime;
 
 
@@ -36,12 +41,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public static string FallbackFolder => LiveBuilderProjectSettings.instance.UnsavedSceneMeshFolder;
 
 
-        // Меш-файл объекта (объекта из коробок, стены, части здания): тот, что уже стоит на нём, если он наш; иначе — новый пустой файл с этим именем.
+        // Меш-файл объекта (объекта из коробок, стены, части здания): тот, что уже стоит на нём, если он его; иначе — новый пустой файл с этим именем.
         public static Mesh GetOrCreateMeshFile(Component owner, string fileName = null)
         {
             var currentMesh = owner.GetComponent<MeshFilter>().sharedMesh;
 
-            if (IsBoxModelMeshFile(currentMesh))
+            if (IsOwnMeshFile(owner, currentMesh))
                 return currentMesh;
 
             var folder = FolderFor(owner.gameObject);
@@ -65,6 +70,41 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public static bool IsBoxModelMeshPath(string path)
         {
             return path.EndsWith(".asset") && (path.StartsWith(FallbackFolder + "/") || path.Contains(FolderSuffix + "/"));
+        }
+
+
+        // Файл Live Builder и лежит в папке сцены или префаба этого объекта. Из папки другой сцены или префаба — чужой:
+        // объект скопировали туда или распаковали префаб, а файл всё ещё смотрит и туда.
+        public static bool IsOwnMeshFile(Component owner, Mesh mesh)
+        {
+            if (!IsBoxModelMeshFile(mesh))
+                return false;
+
+            var folder = Path.GetDirectoryName(AssetDatabase.GetAssetPath(mesh))?.Replace('\\', '/');
+            return folder == FolderFor(owner.gameObject);
+        }
+
+
+        // ── Префаб, загруженный кодом ────────────────────────────────────
+
+        // Пересборка префаба через LoadPrefabContents: его сцена — не открытый префаб, а у построек в ней — папка мешей этого префаба.
+        public static void BeginLoadedPrefab(Scene contentsScene, string prefabPath)
+        {
+            LoadedPrefabPaths[contentsScene] = prefabPath;
+        }
+
+
+        public static void EndLoadedPrefab(Scene contentsScene)
+        {
+            LoadedPrefabPaths.Remove(contentsScene);
+        }
+
+
+        // Сцена префаба, загруженного кодом, — не сцена уровня и не открытый в редакторе префаб.
+        public static bool IsLoadedPrefabContents(Scene scene)
+        {
+            var openedPrefab = PrefabStageUtility.GetCurrentPrefabStage();
+            return EditorSceneManager.IsPreviewScene(scene) && (openedPrefab == null || openedPrefab.scene != scene);
         }
 
 
@@ -160,6 +200,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static string FolderFor(GameObject owner)
         {
+            if (LoadedPrefabPaths.TryGetValue(owner.scene, out var loadedPrefabPath))
+                return FolderNextTo(loadedPrefabPath);
+
             var prefabStage = PrefabStageUtility.GetPrefabStage(owner);
             return FolderNextTo(prefabStage != null ? prefabStage.assetPath : owner.scene.path);
         }

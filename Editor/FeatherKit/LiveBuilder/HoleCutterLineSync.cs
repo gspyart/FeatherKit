@@ -43,7 +43,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             container = null;
             lineHash = 0;
 
-            if (pathOwner == null || !pathOwner.TryGetComponent(out container) || container.Splines.Count == 0)
+            if (pathOwner == null || !pathOwner.TryGetComponent(out container) || !HasUsableSpline(container))
                 return false;
 
             if (!lineHashes.TryGetValue(container, out lineHash))
@@ -125,7 +125,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static bool HasSameKnots(SplineContainer container, int splineIndex, int knotCount)
         {
-            return splineIndex < container.Splines.Count && container.Splines[splineIndex].Count == knotCount;
+            return knotCount >= 2 && splineIndex < container.Splines.Count && container.Splines[splineIndex].Count == knotCount;
+        }
+
+        // Хоть один сплайн из двух точек и больше: на пустом место на линии не посчитать — вырез улетел бы в бесконечность.
+        private static bool HasUsableSpline(SplineContainer container)
+        {
+            foreach (var spline in container.Splines)
+                if (spline.Count >= 2)
+                    return true;
+
+            return false;
         }
     }
 }

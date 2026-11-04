@@ -129,7 +129,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var modelTransform = model.transform;
             var origin = modelTransform.InverseTransformPoint(worldRay.origin);
-            var direction = modelTransform.InverseTransformDirection(worldRay.direction);
+            // С масштабом, как и точка: при неравном масштабе без него луч в осях объекта уходит вбок. Расстояние меряется в мире — ниже.
+            var direction = modelTransform.InverseTransformVector(worldRay.direction);
             IReadOnlyList<BoxModelSurface> surfaces = BoxModelRebuilder.GetSurfaces(model);
 
             foreach (var surface in surfaces)

@@ -161,8 +161,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 isDragging = false;
         }
 
+        // Весь жест — один шаг Ctrl+Z: в эту группу пишут и сдвиг граней, и куски, и выдавливание — каждый убирает только своё.
         private static void BeginDrag(IReadOnlyList<BoxModelPartFace> faces, Vector3 position)
         {
+            Undo.IncrementCurrentGroup();
+            Undo.SetCurrentGroupName("Move Box Faces");
             isDragging = true;
             dragStartPosition = position;
             BoxesAtDragStart.Clear();
@@ -210,19 +213,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
         // Грань не проходит сквозь противоположную: коробка остаётся не тоньше шага сетки.
+        // Сошлись обе грани — коробка в шаг толщиной там, где они встретились.
         private static void KeepThickerThanStep(ref Vector3 min, ref Vector3 max, Vector3Int movedSides)
         {
             for (var axis = 0; axis < 3; axis++)
             {
                 var step = BoxModelGrid.StepOn(axis);
 
-                if (movedSides[axis] == 0 || movedSides[axis] == 2 || max[axis] - min[axis] >= step)
+                if (movedSides[axis] == 0 || max[axis] - min[axis] >= step)
                     continue;
 
                 if (movedSides[axis] == 1)
                     max[axis] = min[axis] + step;
-                else
+                else if (movedSides[axis] == -1)
                     min[axis] = max[axis] - step;
+                else
+                {
+                    min[axis] = BoxModelGrid.Snap((min[axis] + max[axis] - step) / 2f, axis);
+                    max[axis] = min[axis] + step;
+                }
             }
         }
 

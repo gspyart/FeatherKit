@@ -17,6 +17,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private (int Spline, int Knot) grabbedKnot;
         private BezierTangent? grabbedTangent;
 
+        // Элемент, который держит мышь, пока тянут.
+        private int heldDragControl;
+
 
         public bool IsDragging { get; private set; }
 
@@ -27,6 +30,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             grabbedKnot = grabbed;
             grabbedTangent = tangent;
+            heldDragControl = dragControl;
             GUIUtility.hotControl = dragControl;
             IsDragging = true;
         }
@@ -37,8 +41,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var current = Event.current;
 
-            if (GUIUtility.hotControl != dragControl || !IsDragging)
+            if (!IsDragging)
                 return false;
+
+            // Мышь отобрали (окно потеряло фокус) или Ctrl+Z убрал точку, за которую тянули, — тянуть нечего.
+            if (GUIUtility.hotControl != dragControl || !HasGrabbedKnot(container))
+            {
+                End();
+                return false;
+            }
 
             switch (current.GetTypeForControl(dragControl))
             {
@@ -52,7 +63,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     return true;
 
                 case EventType.MouseUp:
-                    End(dragControl);
+                    End();
                     current.Use();
                     return true;
 
@@ -65,6 +76,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             return false;
+        }
+
+        private bool HasGrabbedKnot(SplineContainer container)
+        {
+            return grabbedKnot.Spline < container.Splines.Count && grabbedKnot.Knot < container.Splines[grabbedKnot.Spline].Count;
         }
 
         // Точка, за которую тянут, — туда, где мышь на полу, по сетке; остальные выбранные — на тот же сдвиг.
@@ -123,13 +139,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        public void End(int dragControl)
+        // Отпустил или отменили: мышь освобождается, если её держит перетаскивание.
+        public void End()
         {
+            if (IsDragging && GUIUtility.hotControl == heldDragControl)
+                GUIUtility.hotControl = 0;
+
             IsDragging = false;
             grabbedTangent = null;
-
-            if (GUIUtility.hotControl == dragControl)
-                GUIUtility.hotControl = 0;
         }
 
 
@@ -142,6 +159,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             foreach (var (splineIndex, knotIndex) in LiveBuilderContourSelection.Knots)
             {
+                if (!LiveBuilderContourSelection.IsKnotInside(container, splineIndex, knotIndex))
+                    continue;
+
                 var spline = container.Splines[splineIndex];
                 var knot = spline[knotIndex];
                 knot.Position += (float3)localShift;

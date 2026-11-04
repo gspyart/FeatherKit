@@ -19,9 +19,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// в сцене точки выбирают и тянут, в окне меняют их вид — угол, плавно, Безье. Сменился контур (выделили другое) — выбор снимается.
     /// Тут же — как вид точки ложится на режим ручек сплайна Unity.
     /// </summary>
+    [InitializeOnLoad]
     public static class LiveBuilderContourSelection
     {
         private static readonly List<(int Spline, int Knot)> SelectedKnots = new();
+
+
+        // Ctrl+Z мог убрать выбранные точки — номера чистятся сразу, а не при следующей отрисовке сцены.
+        static LiveBuilderContourSelection()
+        {
+            Undo.undoRedoPerformed += PruneAfterUndo;
+        }
 
 
         // Выбор поменялся — окно перерисовывается.
@@ -96,12 +104,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Ctrl+Z мог убрать выбранные точки. Возвращает, пришлось ли что-то убрать.
         public static bool Prune(SplineContainer container)
         {
-            var removed = SelectedKnots.RemoveAll(entry => entry.Spline >= container.Splines.Count || entry.Knot >= container.Splines[entry.Spline].Count);
+            var removed = SelectedKnots.RemoveAll(entry => !IsKnotInside(container, entry.Spline, entry.Knot));
 
             if (removed > 0)
                 Changed?.Invoke();
 
             return removed > 0;
+        }
+
+        private static void PruneAfterUndo()
+        {
+            if (Owner != null && Owner.TryGetComponent<SplineContainer>(out var container))
+                Prune(container);
+        }
+
+
+        // Есть ли ещё такая точка в контуре: после Ctrl+Z и Delete номера выбранных могут указывать в пустоту.
+        public static bool IsKnotInside(SplineContainer container, int splineIndex, int knotIndex)
+        {
+            return splineIndex >= 0 && splineIndex < container.Splines.Count && knotIndex >= 0 && knotIndex < container.Splines[splineIndex].Count;
         }
 
 
@@ -188,7 +209,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var isOwnSelection = Owner != null && Owner.GetComponent<SplineContainer>() == container && SelectedKnots.Count > 0;
 
             if (isOwnSelection)
-                return new List<(int Spline, int Knot)>(SelectedKnots);
+                return SelectedKnots.FindAll(entry => IsKnotInside(container, entry.Spline, entry.Knot));
 
             var all = new List<(int Spline, int Knot)>();
 

@@ -39,6 +39,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private int storeysAbove = 1;
         private float buildingStoreyHeight;
 
+        // Что было под мышью и какой размер стоял: сменили размер в окне — место проёма считается заново, без движения мыши.
+        private LiveBuilderSceneHit lastHit;
+        private LiveBuilderOpeningSize sizeAtLastHover;
+
 
         public bool HasTarget => targetModel != null || targetPathOwner != null;
 
@@ -64,6 +68,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             targetModel = null;
             targetPathOwner = null;
+            lastHit = hit;
+            sizeAtLastHover = LiveBuilderOpeningPresets.Selected;
 
             var hasModelWall = hit.HasBoxSurface && BoxFaces.Axis(hit.BoxSurface.Surface.Face) != 1;
             var isPathWallCloser = hit.PathOwner != null && (!hasModelWall || hit.VisibleHit.distance < hit.BoxSurface.Distance)
@@ -321,6 +327,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public void DrawPreview()
         {
+            if (HasTarget && !sizeAtLastHover.Equals(LiveBuilderOpeningPresets.Selected))
+                UpdateHover(lastHit);
+
             if (targetModel != null)
                 DrawModelFrame();
             else if (targetPathOwner != null)

@@ -117,6 +117,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             roomContourGesture.Finish();
             cutterGesture.Cancel();
             ruler.Cancel();
+            contourHandles.Cancel();
             hoveredSurface = null;
             hoveredSnapPoint = null;
             isMouseDown = false;
@@ -400,6 +401,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private void OnMouseUp(Event current)
         {
             GUIUtility.hotControl = 0;
+
+            // Esc отменил начатое, пока держали мышь: отпускание — уже не клик, выделение не трогаем.
+            if (!isMouseDown)
+            {
+                current.Use();
+                return;
+            }
+
             isMouseDown = false;
 
             if (CurrentTool == LiveBuilderTool.Room && roomGesture.IsActive)
@@ -510,7 +519,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private bool IsAnythingStarted()
         {
             return drawGesture.IsActive || surfaceBoxGesture.IsActive || IsNewModelRequested || roomGesture.IsActive || stairsGesture.IsActive
-                   || cutterGesture.IsActive || ruler.IsActive;
+                   || cutterGesture.IsActive || ruler.IsActive || contourHandles.IsGestureActive;
         }
 
 

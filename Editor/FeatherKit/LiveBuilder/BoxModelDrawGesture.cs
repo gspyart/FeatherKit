@@ -262,7 +262,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (Mathf.Approximately(depth, 0f) || (mode == BoxModelPartMode.Cut && pathOwner != null))
             {
-                preview.Clear();
+                preview.Hide();
                 return;
             }
 

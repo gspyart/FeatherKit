@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text;
 using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -24,6 +23,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private const string EditorOnlyTag = "EditorOnly";
 
+        // Поменял, что входит в подпись, — подними: все объекты пересоберутся один раз.
+        private const int SignatureVersion = 2;
+
         private static readonly Dictionary<EntityId, BoxModelBuildResult> BuildResultsByModel = new();
 
         // При каком номере правки посчитан результат объекта. Пока номер тот же — сцена не менялась, считать заново незачем:
@@ -45,25 +47,26 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Пересборка ───────────────────────────────────────────────────
 
         // Пересобирает объекты, у которых меш не совпадает с коробками.
-        // Экземпляр префаба без своих правок берёт меш префаба. Меш, который делят копии или префаб, не перезаписывается:
-        // изменённая копия получает свой файл, остальные остаются как были.
+        // Экземпляр префаба без своих правок берёт меш префаба. Чужой меш (копии, префаба) не перезаписывается — это решает запись (<see cref="LiveBuilderMeshWriter"/>).
+        // Ошибка в одном объекте не останавливает остальные.
         public static void RebuildChangedModels()
         {
-            var models = FindModels();
-            var meshUserCounts = LiveBuilderMeshWriter.CountMeshUsers(models);
-
-            foreach (var model in models)
+            foreach (var model in FindModels())
             {
-                if (BoxModelPrefabInstances.TryUsePrefabGeometry(model, () => IsPrefabMeshUpToDate(model), () => PrefabStateOf(model)))
-                    continue;
+                try
+                {
+                    if (BoxModelPrefabInstances.TryUsePrefabGeometry(model, () => IsPrefabMeshUpToDate(model), () => PrefabStateOf(model)))
+                        continue;
 
-                TidyPieces(model);
+                    TidyPieces(model);
 
-                if (IsMeshUpToDate(model, model.GetComponent<MeshFilter>().sharedMesh))
-                    continue;
-
-                LiveBuilderMeshWriter.ReleaseIfShared(model, meshUserCounts);
-                Rebuild(model);
+                    if (!IsMeshUpToDate(model, model.GetComponent<MeshFilter>().sharedMesh))
+                        Rebuild(model);
+                }
+                catch (System.Exception exception)
+                {
+                    Debug.LogException(exception, model);
+                }
             }
         }
 
@@ -74,7 +77,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var sourceMesh = source != null ? source.GetComponent<MeshFilter>().sharedMesh : null;
             var result = GetBuildResult(instance);
 
-            return source != null && source.BuiltSignature == result.Signature && sourceMesh != null
+            // Подпись префаба — без части вырезов: свои вырезы префаба режут его меш, а экземпляр их не считает.
+            return source != null && GeometryCutterLookup.WithoutCutterKey(source.BuiltSignature) == result.Signature && sourceMesh != null
                    && (IsCutAfterSurfaces(instance, result) ? sourceMesh.vertexCount > 0 : BoxModelMeshBuilder.IsBuiltFrom(sourceMesh, result.Surfaces));
         }
 
@@ -129,7 +133,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             // Меш только догнал сцену — сцена та же, звёздочку «не сохранено» не ставим.
             if (isSceneChanged)
+            {
                 EditorUtility.SetDirty(model);
+                LiveBuilderSyncEdits.RecordPrefabInstance(model);
+            }
 
             // Вырезы объекта режут его стены и здания — им тоже пора свериться.
             LiveBuilderRebuildQueue.RequestCheck();
@@ -305,32 +312,49 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Всё, от чего зависит меш: коробки расчёта по порядку, их место, режим и материалы, скаты, материал объекта, фаска.
+        // Хеш, одинаковый на любом запуске и машине (<see cref="LiveBuilderStableHash"/>).
         private static string SignatureOf(BoxModel model, List<BoxModelSolverBox> boxes, List<BoxModelRampShape> ramps)
         {
-            var signature = new StringBuilder();
-            signature.Append(BoxModelSideMaterials.KeyOf(model.DefaultMaterial)).Append(model.HasCollider ? "c" : "n");
+            var hash = new Hash128();
+            hash.Append(SignatureVersion);
+            hash.Append(BoxModelSideMaterials.KeyOf(model.DefaultMaterial));
+            hash.Append(model.HasCollider ? 1 : 0);
+            hash.Append(boxes.Count);
 
             foreach (var box in boxes)
             {
-                signature.Append('|').Append((int)box.Mode)
-                    .Append(':').Append(box.Box.Min.ToString()).Append(box.Box.Max.ToString())
-                    .Append(':').Append(box.Materials.Key);
+                var min = box.Box.Min;
+                var max = box.Box.Max;
+                hash.Append((int)box.Mode);
+                hash.Append(ref min);
+                hash.Append(ref max);
+                hash.Append(box.Materials.Key);
+                hash.Append(box.Chamfers.Count);
 
-                // Без скосов подпись прежняя — старые объекты не пересобираются.
                 foreach (var chamfer in box.Chamfers)
-                    signature.Append(":s").Append(chamfer.FirstFace).Append(chamfer.SecondFace)
-                        .Append('x').Append(chamfer.SizeOnFirstFace).Append('x').Append(chamfer.SizeOnSecondFace);
+                {
+                    hash.Append((int)chamfer.FirstFace);
+                    hash.Append((int)chamfer.SecondFace);
+                    hash.Append(chamfer.SizeOnFirstFace);
+                    hash.Append(chamfer.SizeOnSecondFace);
+                }
             }
 
             foreach (var ramp in ramps)
-                signature.Append("|r").Append(MillimeterBox.ToMillimeters(ramp.Corners[0]).ToString())
-                    .Append(MillimeterBox.ToMillimeters(ramp.Corners[6]).ToString());
+            {
+                var low = MillimeterBox.ToMillimeters(ramp.Corners[0]);
+                var high = MillimeterBox.ToMillimeters(ramp.Corners[6]);
+                hash.Append(ref low);
+                hash.Append(ref high);
+            }
 
-            // Без фаски подпись прежняя — старые объекты не пересобираются.
             if (HasBevel(model))
-                signature.Append("|b").Append(model.BevelSize).Append('x').Append(model.BevelSegments);
+            {
+                hash.Append(model.BevelSize);
+                hash.Append(model.BevelSegments);
+            }
 
-            return signature.ToString();
+            return hash.ToString();
         }
 
 
@@ -380,12 +404,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 SaveMeshFile(part.GetComponent<MeshFilter>().sharedMesh);
         }
 
+        // Только свои файлы: чужой меш (модель, ProBuilder) не разворачиваем и не пишем.
         private static void SaveMeshFile(Mesh mesh)
         {
-            BoxModelMeshStorage.AddLightmapUVs(mesh);
+            if (!BoxModelMeshStorage.IsBoxModelMeshFile(mesh))
+                return;
 
-            if (BoxModelMeshStorage.IsBoxModelMeshFile(mesh))
-                AssetDatabase.SaveAssetIfDirty(mesh);
+            BoxModelMeshStorage.AddLightmapUVs(mesh);
+            AssetDatabase.SaveAssetIfDirty(mesh);
         }
     }
 

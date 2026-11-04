@@ -17,6 +17,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Запас к габаритам, м: вырез, вплотную касающийся постройки, тоже считается.
         private const float BoundsMargin = 0.01f;
 
+        // С чего в подписи постройки начинается часть вырезов.
+        private const string CutterKeyPrefix = "|x";
+
         // Вырезы сцены на время прохода; вне прохода — null, ищутся каждый раз.
         private static List<GeometryCutter> passCutters;
 
@@ -36,17 +39,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static List<GeometryCutter> AllCutters()
         {
-            var cutters = new List<GeometryCutter>(StageUtility.GetCurrentStageHandle().FindComponentsOfType<GeometryCutter>());
-
-            // Порядок — постоянный: от него зависит подпись, а пересборка из-за перестановки не нужна.
-            cutters.Sort((first, second) => string.CompareOrdinal(first.GetEntityId().ToString(), second.GetEntityId().ToString()));
-            return cutters;
+            return new List<GeometryCutter>(StageUtility.GetCurrentStageHandle().FindComponentsOfType<GeometryCutter>());
         }
 
 
         // ── Поиск ────────────────────────────────────────────────────────
 
         // Вырезы, которые режут эту постройку в границах её меша (в мире).
+        // Порядок — по форме и месту выреза, а не по номеру объекта: номер новый в каждой сессии, а от порядка зависят меш и подпись.
         public static List<GeometryCutter> CuttersFor(Component owner, Bounds worldBounds)
         {
             var cutters = new List<GeometryCutter>();
@@ -55,10 +55,32 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return cutters;
 
             worldBounds.Expand(BoundsMargin * 2f);
+            var keys = new List<(Hash128 Key, GeometryCutter Cutter)>();
 
-            foreach (var cutter in passCutters ?? AllCutters())
+            foreach (var cutter in CandidatesFor(owner))
                 if (cutter != null && CanCut(cutter, owner) && WorldBoundsOf(cutter).Intersects(worldBounds))
-                    cutters.Add(cutter);
+                    keys.Add((ShapeKeyOf(cutter, Matrix4x4.identity), cutter));
+
+            keys.Sort((first, second) => first.Key.CompareTo(second.Key));
+
+            foreach (var (_, cutter) in keys)
+                cutters.Add(cutter);
+
+            return cutters;
+        }
+
+        // Вырезы сцены постройки. Префаб, загруженный для пересборки, — отдельная сцена: его вырезы — в нём самом.
+        private static IEnumerable<GeometryCutter> CandidatesFor(Component owner)
+        {
+            var scene = owner.gameObject.scene;
+
+            if (!BoxModelMeshStorage.IsLoadedPrefabContents(scene))
+                return passCutters ?? AllCutters();
+
+            var cutters = new List<GeometryCutter>();
+
+            foreach (var root in scene.GetRootGameObjects())
+                cutters.AddRange(root.GetComponentsInChildren<GeometryCutter>(true));
 
             return cutters;
         }
@@ -73,7 +95,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (cutter.transform.IsChildOf(ConstructionOf(owner)))
                 return true;
 
-            if (PrefabStageUtility.GetPrefabStage(cutter.gameObject) != null)
+            if (PrefabStageUtility.GetPrefabStage(cutter.gameObject) != null || BoxModelMeshStorage.IsLoadedPrefabContents(cutter.gameObject.scene))
                 return false;
 
             var prefabRoot = PrefabUtility.GetNearestPrefabInstanceRoot(cutter.gameObject);
@@ -147,26 +169,39 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             foreach (var cutter in cutters)
             {
-                // Форма, а не сам объект: сдвинули дыру — подпись другая.
-                var cutterToOwner = owner.transform.worldToLocalMatrix * GeometryCutterOutline.ShapeToWorld(cutter);
-
-                for (var index = 0; index < 16; index++)
-                    key.Append(cutterToOwner[index]);
-
-                key.Append((int)cutter.Shape);
-                key.Append(cutter.Width);
-                key.Append(cutter.Height);
-                key.Append(cutter.Depth);
-                key.Append(cutter.TopCornerRadius);
-                key.Append(cutter.BottomCornerRadius);
-                key.Append(cutter.CornerSegments);
-                key.Append(cutter.CircleSegments);
-                key.Append(cutter.CopiesUp);
-                key.Append(cutter.CopyStep);
-                key.Append(BoxModelSideMaterials.KeyOf(cutter.RevealMaterial));
+                var cutterKey = ShapeKeyOf(cutter, owner.transform.worldToLocalMatrix);
+                key.Append(ref cutterKey);
             }
 
-            return "|x" + key;
+            return CutterKeyPrefix + key;
+        }
+
+
+        // Подпись без части вырезов — то, что собрано из самой постройки.
+        public static string WithoutCutterKey(string signature)
+        {
+            var index = signature.IndexOf(CutterKeyPrefix, System.StringComparison.Ordinal);
+            return index >= 0 ? signature.Substring(0, index) : signature;
+        }
+
+        // Форма и место выреза в осях toSpace: сдвинули дыру — ключ другой.
+        private static Hash128 ShapeKeyOf(GeometryCutter cutter, Matrix4x4 toSpace)
+        {
+            var key = new Hash128();
+            var cutterToSpace = toSpace * GeometryCutterOutline.ShapeToWorld(cutter);
+            key.Append(ref cutterToSpace);
+            key.Append((int)cutter.Shape);
+            key.Append(cutter.Width);
+            key.Append(cutter.Height);
+            key.Append(cutter.Depth);
+            key.Append(cutter.TopCornerRadius);
+            key.Append(cutter.BottomCornerRadius);
+            key.Append(cutter.CornerSegments);
+            key.Append(cutter.CircleSegments);
+            key.Append(cutter.CopiesUp);
+            key.Append(cutter.CopyStep);
+            key.Append(BoxModelSideMaterials.KeyOf(cutter.RevealMaterial));
+            return key;
         }
     }
 }

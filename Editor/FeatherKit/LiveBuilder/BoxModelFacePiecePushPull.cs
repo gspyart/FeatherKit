@@ -19,12 +19,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Что тянем сейчас: по записи на кусок. Не тянем — пусто.
         private static readonly List<PiecePush> Pushes = new();
 
+        // Группа Ctrl+Z всего жеста: её открывает тот, кто тянет (BoxModelFaceMoveHandle), до первого Drag.
         private static int undoGroup;
+
+        // В том же жесте тянут и цельные грани: группу откатывать нельзя — откатится и их сдвиг.
+        private static bool isUndoGroupShared;
 
 
         // ── Тянуть ───────────────────────────────────────────────────────
 
         // Сдвинуть куски: outwardOffsetOf — насколько кусок ушёл наружу (минус — внутрь), м, уже по сетке. Цельные грани пропускаются.
+        // Группу Ctrl+Z на весь жест открывает вызывающий — до первого вызова.
         public static void Drag(IReadOnlyList<BoxModelPartFace> faces, Func<BoxModelPartFace, float> outwardOffsetOf)
         {
             Pushes.RemoveAll(push => push.Box == null || push.Piece.Model == null);
@@ -38,14 +43,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static void Begin(IReadOnlyList<BoxModelPartFace> faces)
         {
+            isUndoGroupShared = false;
+
             foreach (var partFace in faces)
             {
+                if (!partFace.IsPiece)
+                    isUndoGroupShared = true;
+
                 if (!partFace.IsPiece || partFace.Model == null)
                     continue;
 
                 if (Pushes.Count == 0)
                 {
-                    Undo.IncrementCurrentGroup();
                     undoGroup = Undo.GetCurrentGroup();
                     Undo.SetCurrentGroupName("Push Pull Face");
                 }
@@ -67,6 +76,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var box = boxObject.AddComponent<BoxModelPart>();
             EditorUtility.CopySerialized(source, box);
+
+            // Скосы рёбер остаются у исходной коробки: новая — прямая.
+            while (box.Chamfers.Count > 0)
+                box.RemoveChamfer(box.Chamfers[0].FirstFace, box.Chamfers[0].SecondFace);
+
             return box;
         }
 
@@ -94,6 +108,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Конец ────────────────────────────────────────────────────────
 
         // Кнопку мыши отпустили: пустые коробки — прочь, вместо кусков выделены дальние грани новых. Ни одной — как не было.
+        // Цельные грани тянули тем же жестом — убираем только свои коробки, их сдвиг остаётся.
         public static void FinishIfReleased()
         {
             if (Pushes.Count == 0 || GUIUtility.hotControl != 0)
@@ -102,7 +117,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Pushes.RemoveAll(push => push.Box == null);
             var kept = Pushes.FindAll(push => push.HasDepth);
 
-            if (kept.Count == 0)
+            if (kept.Count == 0 && !isUndoGroupShared)
             {
                 Undo.RevertAllDownToGroup(undoGroup);
                 Pushes.Clear();

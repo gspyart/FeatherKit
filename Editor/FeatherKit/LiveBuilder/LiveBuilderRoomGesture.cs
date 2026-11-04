@@ -53,7 +53,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (!rectangle.HasArea || rectangle.BuildingContext != null)
             {
-                preview.Clear();
+                preview.Hide();
                 return;
             }
 

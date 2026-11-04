@@ -56,21 +56,36 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             isPassRunning = true;
             GeometryCutterLookup.BeginPass();
+            LiveBuilderMeshWriter.BeginPass();
 
             try
             {
-                SplineBuildingLinkSync.SyncAll();
-                SplineWallBuildingAnchors.SyncAll();
-                HoleCutterLineSync.SyncAll();
+                RunStep(SplineBuildingLinkSync.SyncAll);
+                RunStep(SplineWallBuildingAnchors.SyncAll);
+                RunStep(HoleCutterLineSync.SyncAll);
                 BoxModelRebuilder.ForgetCachedResults();
-                BoxModelRebuilder.RebuildChangedModels();
-                SplineBuildingRebuilder.RebuildChangedBuildings();
-                SplineWallRebuilder.RebuildChangedWalls();
+                RunStep(BoxModelRebuilder.RebuildChangedModels);
+                RunStep(SplineBuildingRebuilder.RebuildChangedBuildings);
+                RunStep(SplineWallRebuilder.RebuildChangedWalls);
             }
             finally
             {
+                LiveBuilderMeshWriter.EndPass();
                 GeometryCutterLookup.EndPass();
                 isPassRunning = false;
+            }
+        }
+
+        // Ошибка одного шага — в консоль; следующие шаги всё равно идут.
+        private static void RunStep(System.Action step)
+        {
+            try
+            {
+                step();
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogException(exception);
             }
         }
 

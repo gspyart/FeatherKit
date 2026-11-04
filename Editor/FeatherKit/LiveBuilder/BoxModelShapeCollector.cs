@@ -20,17 +20,56 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Толщина ската у лестницы из отдельных ступеней, м: тонкая полоса — под маршем остаётся место.
         private const float SeparateStepsRampThickness = 0.1f;
 
+        // Больше коробок расчёта у одного объекта не берём. Вложенные повторы перемножаются (200 × 200 — 40 000 коробок) и вешают редактор;
+        // 5000 — с запасом даже для большого уровня: повтор на 200 копий по 25 коробок в каждой.
+        private const int MaxSolverBoxes = 5000;
+
+        // Объекты, где уже предупредили о пределе: одно предупреждение, а не на каждую пересборку.
+        private static readonly HashSet<EntityId> ModelsWarnedAboutLimit = new();
+
 
         // Коробки расчёта и скаты лестниц объекта.
         public static List<BoxModelSolverBox> Collect(BoxModel model, List<BoxModelRampShape> ramps)
         {
             var boxes = new List<BoxModelSolverBox>();
             CollectChildren(model, model.transform, Vector3.zero, boxes, ramps);
+            WarnIfOverLimit(model, boxes.Count);
+            return boxes;
+        }
+
+        // Упёрлись в предел — предупредить один раз; стало меньше — снова предупредим, если упрётся опять.
+        private static void WarnIfOverLimit(BoxModel model, int boxCount)
+        {
+            var modelId = model.GetEntityId();
+
+            if (boxCount < MaxSolverBoxes)
+            {
+                ModelsWarnedAboutLimit.Remove(modelId);
+                return;
+            }
+
+            if (ModelsWarnedAboutLimit.Add(modelId))
+                Debug.LogWarning("Live Builder: у объекта «" + model.name + "» больше " + MaxSolverBoxes +
+                                 " коробок с учётом повторов — лишние не строятся. Уменьши число копий во вложенных повторах.", model);
+        }
+
+
+        // Коробки расчёта одной группы (например, повтора) так, как в её первой копии: сама группа и всё внутри, повторы внутри — со всеми копиями.
+        public static List<BoxModelSolverBox> CollectFirstCopy(BoxModel model, Transform group)
+        {
+            var boxes = new List<BoxModelSolverBox>();
+
+            if (!group.gameObject.activeInHierarchy)
+                return boxes;
+
+            var ramps = new List<BoxModelRampShape>();
+            CollectOwn(model, group, Vector3.zero, boxes, ramps);
+            CollectChildren(model, group, Vector3.zero, boxes, ramps);
             return boxes;
         }
 
 
-        // Дети узла по порядку; у повтора — его содержимое на каждый шаг.
+        // Дети узла по порядку; у повтора — его содержимое на каждый шаг. Дошли до предела коробок — дальше не идём.
         private static void CollectChildren(BoxModel model, Transform node, Vector3 offset, List<BoxModelSolverBox> boxes, List<BoxModelRampShape> ramps)
         {
             foreach (Transform child in node)
@@ -47,6 +86,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 for (var copy = 0; copy < count; copy++)
                 {
+                    if (boxes.Count >= MaxSolverBoxes)
+                        return;
+
                     var copyOffset = offset + step * copy;
                     CollectOwn(model, child, copyOffset, boxes, ramps);
                     CollectChildren(model, child, copyOffset, boxes, ramps);

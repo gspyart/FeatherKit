@@ -29,26 +29,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Числа всех точек линии разом. Ноль не бывает — он значит «ещё не сверяли».
+        // Числа всех точек линии разом, одинаковые на любом запуске. Ноль не бывает — он значит «ещё не сверяли».
         public static int LineHashOf(SplineContainer container)
         {
-            var hash = new System.HashCode();
-
-            foreach (var spline in container.Splines)
-            {
-                hash.Add(spline.Closed);
-
-                for (var index = 0; index < spline.Count; index++)
-                {
-                    hash.Add(spline[index].Position);
-                    hash.Add(spline[index].TangentIn);
-                    hash.Add(spline[index].TangentOut);
-                    hash.Add((int)spline.GetTangentMode(index));
-                }
-            }
-
-            var result = hash.ToHashCode();
-            return result != 0 ? result : 1;
+            var hash = new Hash128();
+            LiveBuilderStableHash.AppendSplines(ref hash, container);
+            return LiveBuilderStableHash.ToNonZeroInt(hash);
         }
 
 
@@ -66,7 +52,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 var spline = container.Splines[index];
 
-                if (spline.Count == 0)
+                if (spline.Count < 2)
                     continue;
 
                 var distance = SplineUtility.GetNearestPoint(spline, point, out _, out var normalized);

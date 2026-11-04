@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text;
 using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -23,6 +22,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // 4 — коробка во всю высоту стены её не режет; 5 — развёртка верха и низа по плану.
         private const int GeometryVersion = 5;
 
+        // Габарит стены до вырезов, в её осях: по нему ищут вырезы. По прорезанному мешу нельзя — стена целиком в вырезе пустая,
+        // её вырез «пропадает», подпись не сходится, и стена пересобиралась бы на каждой правке. Помнится до перезагрузки скриптов.
+        private static readonly Dictionary<EntityId, Bounds> UncutBoundsByWall = new();
+
 
         // ── Пересборка ───────────────────────────────────────────────────
 
@@ -30,20 +33,21 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // общий меш копий не перезаписывается — изменённая копия получает свой файл.
         public static void RebuildChangedWalls()
         {
-            var walls = StageUtility.GetCurrentStageHandle().FindComponentsOfType<SplineWall>();
-            var meshUserCounts = LiveBuilderMeshWriter.CountMeshUsers(walls);
-
-            foreach (var wall in walls)
+            foreach (var wall in StageUtility.GetCurrentStageHandle().FindComponentsOfType<SplineWall>())
             {
-                if (BoxModelPrefabInstances.TryUsePrefabGeometry(wall, () => IsPrefabMeshUpToDate(wall), () => PrefabStateOf(wall)))
-                    continue;
+                try
+                {
+                    if (BoxModelPrefabInstances.TryUsePrefabGeometry(wall, () => IsPrefabMeshUpToDate(wall), () => PrefabStateOf(wall)))
+                        continue;
 
-                // Пустой меш — тоже готовый: стена из одной точки или целиком в вырезе.
-                if (wall.GetComponent<MeshFilter>().sharedMesh != null && wall.BuiltSignature == SignatureOf(wall))
-                    continue;
-
-                LiveBuilderMeshWriter.ReleaseIfShared(wall, meshUserCounts);
-                Rebuild(wall);
+                    // Пустой меш — тоже готовый: стена из одной точки или целиком в вырезе.
+                    if (wall.GetComponent<MeshFilter>().sharedMesh == null || wall.BuiltSignature != SignatureOf(wall))
+                        Rebuild(wall);
+                }
+                catch (System.Exception exception)
+                {
+                    Debug.LogException(exception, wall);
+                }
             }
         }
 
@@ -72,6 +76,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var written = LiveBuilderMeshWriter.Write(wall, null, mesh =>
             {
                 SplineWallMeshBuilder.Fill(mesh, wall, paths, holesByPath);
+                UncutBoundsByWall[wall.GetEntityId()] = mesh.bounds;
                 return new[] { material };
             });
 
@@ -82,7 +87,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             wall.BuiltSignature = signature;
 
             if (isSceneChanged)
+            {
                 EditorUtility.SetDirty(wall);
+                LiveBuilderSyncEdits.RecordPrefabInstance(wall);
+            }
         }
 
         // ── Проёмы ───────────────────────────────────────────────────────
@@ -198,51 +206,64 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Вырезы — те, что режут нынешний меш стены.
         private static string SignatureOf(SplineWall wall)
         {
-            return SignatureOf(wall, GeometryCutterLookup.CuttersFor(wall, GeometryCutterLookup.WorldBoundsOf(wall.GetComponent<MeshRenderer>())));
+            return SignatureOf(wall, GeometryCutterLookup.CuttersFor(wall, UncutWorldBoundsOf(wall)));
         }
 
+        // Габарит до вырезов; не помнится (скрипты перезагрузились) — габарит готового меша.
+        private static Bounds UncutWorldBoundsOf(SplineWall wall)
+        {
+            return UncutBoundsByWall.TryGetValue(wall.GetEntityId(), out var uncutBounds)
+                ? GeometryCutterLookup.WorldBoundsOf(uncutBounds, wall.transform)
+                : GeometryCutterLookup.WorldBoundsOf(wall.GetComponent<MeshRenderer>());
+        }
+
+        // Всё, от чего зависит меш стены, — хешем, одинаковым на любом запуске и машине (<see cref="LiveBuilderStableHash"/>); в конце — вырезы.
         private static string SignatureOf(SplineWall wall, List<GeometryCutter> cutters)
         {
-            var signature = new StringBuilder();
-            signature.Append(GeometryVersion).Append('|').Append(wall.Thickness).Append(',').Append(wall.Height).Append(',').Append((int)wall.Alignment)
-                .Append(',').Append(wall.CopiesUp).Append(',').Append(wall.CopyStep)
-                .Append(',').Append(wall.CurveStep).Append(',').Append(wall.CornerSegments).Append(',').Append(BoxModelSideMaterials.KeyOf(wall.Material)).Append(wall.HasCollider ? "c" : "n")
-                .Append("|b").Append(SplineWallBuildingSides.BuildingKeyOf(wall));
-
-            foreach (var spline in wall.GetComponent<SplineContainer>().Splines)
-            {
-                signature.Append(spline.Closed ? "|closed" : "|open");
-
-                for (var index = 0; index < spline.Count; index++)
-                {
-                    var knot = spline[index];
-                    signature.Append(';').Append(knot.Position).Append(knot.TangentIn).Append(knot.TangentOut).Append(knot.Rotation)
-                        .Append('r').Append(LiveBuilderCornerRadii.RadiusOf(spline, index))
-                        .Append((int)spline.GetTangentMode(index));
-                }
-            }
+            var hash = new Hash128();
+            hash.Append(GeometryVersion);
+            hash.Append(wall.Thickness);
+            hash.Append(wall.Height);
+            hash.Append((int)wall.Alignment);
+            hash.Append(wall.CopiesUp);
+            hash.Append(wall.CopyStep);
+            hash.Append(wall.CurveStep);
+            hash.Append(wall.CornerSegments);
+            hash.Append(BoxModelSideMaterials.KeyOf(wall.Material));
+            hash.Append(wall.HasCollider ? 1 : 0);
+            SplineWallBuildingSides.AppendBuildingKey(ref hash, wall);
+            LiveBuilderStableHash.AppendSplines(ref hash, wall.GetComponent<SplineContainer>());
 
             var model = OuterModelOf(wall);
 
             if (model != null)
-                signature.Append("|m").Append(CutBoxesHashOf(model, false))
-                    .Append(model.transform.worldToLocalMatrix * wall.transform.localToWorldMatrix);
+            {
+                var cutBoxes = CutBoxesHashOf(model, false);
+                hash.Append(ref cutBoxes);
+                LiveBuilderStableHash.AppendMatrix(ref hash, model.transform.worldToLocalMatrix * wall.transform.localToWorldMatrix);
+            }
 
-            signature.Append(GeometryCutterLookup.KeyOf(wall, cutters));
-            return signature.ToString();
+            return hash + GeometryCutterLookup.KeyOf(wall, cutters);
         }
 
         // Вырезающие коробки объекта — для подписи стены или здания: правка добавляющих коробок, материалов и ступеней их не пересобирает.
         // Вырез над лестницей режет только перекрытия здания, стенам он не нужен.
         public static Hash128 CutBoxesHashOf(BoxModel model, bool includesStairsCuts)
         {
-            var key = new StringBuilder();
+            var hash = new Hash128();
 
             foreach (var box in BoxModelRebuilder.GetSolverBoxes(model))
-                if (box.Mode == BoxModelPartMode.Cut && (includesStairsCuts || box.Owner is not BoxModelStairs))
-                    key.Append(box.Box.Min).Append(box.Box.Max).Append('|');
+            {
+                if (box.Mode != BoxModelPartMode.Cut || !includesStairsCuts && box.Owner is BoxModelStairs)
+                    continue;
 
-            return Hash128.Compute(key.ToString());
+                var min = box.Box.Min;
+                var max = box.Box.Max;
+                hash.Append(ref min);
+                hash.Append(ref max);
+            }
+
+            return hash;
         }
     }
 }

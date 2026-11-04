@@ -65,6 +65,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Шаг отмены, с которого началось рисование: готовая линия схлопывается в один шаг — один Ctrl+Z убирает её целиком.
         private int undoGroupAtBegin;
 
+        // Группа «Interior», которую создала эта перегородка: отменили её — пустая группа уходит вместе с ней.
+        private Transform interiorCreatedByGesture;
+
 
         public LiveBuilderPathGesture(LiveBuilderPathKind kind)
         {
@@ -249,6 +252,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (Container.Spline.Count < minPoints)
             {
                 Undo.DestroyObjectImmediate(createdModel != null ? createdModel.gameObject : pathOwner.gameObject);
+
+                if (interiorCreatedByGesture != null && interiorCreatedByGesture.childCount == 0)
+                    Undo.DestroyObjectImmediate(interiorCreatedByGesture.gameObject);
             }
             else
             {
@@ -264,6 +270,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Undo.CollapseUndoOperations(undoGroupAtBegin);
             pathOwner = null;
             createdModel = null;
+            interiorCreatedByGesture = null;
             buildingContext = null;
             typedLength = "";
         }
@@ -277,6 +284,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Undo.IncrementCurrentGroup();
             undoGroupAtBegin = Undo.GetCurrentGroup();
             buildingContext = context;
+            var hadInterior = context != null && BoxModelFactory.HasInterior(context.Building);
 
             switch (kind)
             {
@@ -295,6 +303,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     pathOwner = BeginWall(worldPoint, context);
                     break;
             }
+
+            // Перегородка встаёт в группу «Interior» здания; не было её — создала эта перегородка.
+            var group = pathOwner.transform.parent;
+            interiorCreatedByGesture = context != null && !hadInterior && group != null && group.parent == context.Building.transform ? group : null;
         }
 
         // Здание — в выделенном объекте из коробок, а без него — в новом. Стоит низом ровно на том, где кликнул:
