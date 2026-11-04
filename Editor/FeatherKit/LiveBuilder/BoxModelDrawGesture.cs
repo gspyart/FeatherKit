@@ -267,8 +267,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             GetBox(out var min, out var max);
-            var mesh = BoxModelRebuilder.BuildPreviewMesh(plane.Model, MillimeterBox.FromMeters(min, max - min), mode, out var materials);
-            preview.Show(plane.Model, mesh, materials);
+            var box = MillimeterBox.FromMeters(min, max - min);
+            preview.Show(plane.Model, mesh => BoxModelRebuilder.FillPreviewMesh(mesh, plane.Model, box, mode));
         }
 
 

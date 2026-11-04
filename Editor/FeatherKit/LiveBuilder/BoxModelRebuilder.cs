@@ -209,23 +209,23 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Предпросмотр ─────────────────────────────────────────────────
 
-        // Меш объекта так, будто в конце списка стоит ещё одна коробка. В файл не пишется — вызывающий сам его уничтожает.
-        // Объекта нет — меш из одной этой коробки.
-        public static Mesh BuildPreviewMesh(BoxModel model, MillimeterBox extraBox, BoxModelPartMode extraMode, out Material[] materials)
+        // Заливает в меш предпросмотра объект так, будто в конце списка стоит ещё одна коробка. В файл не пишется.
+        // Объекта нет — меш из одной этой коробки. Возвращает материалы по частям меша.
+        public static Material[] FillPreviewMesh(Mesh mesh, BoxModel model, MillimeterBox extraBox, BoxModelPartMode extraMode)
         {
-            return BuildPreviewMesh(model, new[] { new BoxModelSolverBox(extraBox, extraMode, null, default) }, out materials);
+            return FillPreviewMesh(mesh, model, new[] { new BoxModelSolverBox(extraBox, extraMode, null, default) });
         }
 
 
         // То же для нескольких коробок сразу — комната со стенами, лестница.
-        public static Mesh BuildPreviewMesh(BoxModel model, IReadOnlyList<BoxModelSolverBox> extraBoxes, out Material[] materials)
+        public static Material[] FillPreviewMesh(Mesh mesh, BoxModel model, IReadOnlyList<BoxModelSolverBox> extraBoxes)
         {
             var boxes = model != null ? new List<BoxModelSolverBox>(GetSolverBoxes(model)) : new List<BoxModelSolverBox>();
             boxes.AddRange(extraBoxes);
 
             var defaultMaterial = model != null ? model.DefaultMaterial : BoxModelFactory.LoadDefaultMaterial();
             var surfaces = BoxModelSurfaceFinder.FindOuterSurfaces(BoxModelSolver.Solve(boxes.ConvertAll(box => box.Shape)));
-            return BoxModelMeshBuilder.Build("Box Model Preview", surfaces, boxes, defaultMaterial, out materials);
+            return BoxModelMeshBuilder.Fill(mesh, surfaces, boxes, defaultMaterial);
         }
 
 

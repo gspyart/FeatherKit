@@ -18,16 +18,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private const int MaxVerticesFor16BitIndex = 65000;
 
 
-        // Новый меш по поверхностям — для предпросмотра.
-        public static Mesh Build(string meshName, IReadOnlyList<BoxModelSurface> surfaces, IReadOnlyList<BoxModelSolverBox> boxes,
-            Material defaultMaterial, out Material[] materials)
-        {
-            var mesh = new Mesh { name = meshName };
-            materials = Fill(mesh, surfaces, boxes, defaultMaterial);
-            return mesh;
-        }
-
-
         // Заполняет готовый меш заново — тот же объект и тот же файл, окно сцены сразу видит изменение. Возвращает материалы по частям меша.
         // Материал прямоугольника — от стороны коробки, которая его создала; нет у неё своего — материал объекта.
         public static Material[] Fill(Mesh mesh, IReadOnlyList<BoxModelSurface> surfaces, IReadOnlyList<BoxModelSolverBox> boxes, Material defaultMaterial)

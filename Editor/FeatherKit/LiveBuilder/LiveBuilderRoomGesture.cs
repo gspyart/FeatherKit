@@ -57,8 +57,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return;
             }
 
-            var mesh = BoxModelRebuilder.BuildPreviewMesh(rectangle.TargetModel, BuildBoxes(), out var materials);
-            preview.Show(rectangle.TargetModel, mesh, materials);
+            var boxes = BuildBoxes();
+            preview.Show(rectangle.TargetModel, mesh => BoxModelRebuilder.FillPreviewMesh(mesh, rectangle.TargetModel, boxes));
         }
 
 
