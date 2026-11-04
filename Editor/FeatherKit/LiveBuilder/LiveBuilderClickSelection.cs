@@ -8,7 +8,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Выделение кликом в Live Builder — что ближе к камере под мышью (<see cref="LiveBuilderSceneHit"/>), если это правит выбранный инструмент
     /// (<see cref="LiveBuilderToolScope"/>): в «Выделении» — что угодно, в «Коробке» — только коробки и так далее:
-    /// - грань объекта из коробок — коробка, комната или лестница, которая её создала; в режиме «Грани» — сама грань
+    /// - грань объекта из коробок — коробка, комната или лестница, которая её создала;
+    ///   в режиме «Грани» — видимый кусок грани под мышью, двойной клик — грань коробки целиком
     /// - стена по линии или здание по контуру — они сами
     /// - дыра от выреза (<see cref="GeometryCutter"/>) или вырезающей коробки в здании — сам резчик:
     ///   он невидим, но его коробка ближе того, что за дырой, — и откос дыры тоже
@@ -17,15 +18,20 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public static class LiveBuilderClickSelection
     {
-        public static void Select(Event current, LiveBuilderTool tool)
+        public static void Select(Event current, LiveBuilderTool tool, bool isDoubleClick)
         {
             var hit = LiveBuilderSceneHit.Find(HandleUtility.GUIPointToWorldRay(current.mousePosition));
 
             if (hit.HasBoxSurface && !hit.IsHoleCutterInFront && !hit.IsPathOwnerCloser && BoxModelSelectionModeSetting.IsSelectingFaces
                 && LiveBuilderToolScope.CanEditFaces(tool))
             {
-                if (BoxModelPartFace.TryFindUnder(hit.BoxSurface, out var partFace))
-                    BoxModelFaceSelection.Select(partFace, current.shift);
+                if (!BoxModelPartFace.TryFindUnder(hit.BoxSurface, out var piece))
+                    return;
+
+                if (isDoubleClick)
+                    BoxModelFaceSelection.ReplaceWithWholeFace(piece);
+                else
+                    BoxModelFaceSelection.Select(piece, current.shift);
 
                 return;
             }

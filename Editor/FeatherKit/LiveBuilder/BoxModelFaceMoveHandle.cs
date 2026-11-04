@@ -10,6 +10,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Тянешь — все грани сдвигаются на одно и то же расстояние по сетке, каждая только поперёк себя:
     /// выделил верх трёх коробок, потянул вверх — все три выросли одинаково. Коробка не тоньше шага сетки, всё с Undo.
     /// С Ctrl — выдавить: от каждой грани новая коробка (<see cref="BoxModelPartExtrusion"/>).
+    /// Выделенные куски граней едут вместе со всеми, но по-своему: от каждого растёт коробка или вырез (<see cref="BoxModelFacePiecePushPull"/>).
     /// Тот же набор без режима «Грани»: у выделенной коробки Shift+клик по квадратам граней (<see cref="BoxModelPartHandles"/>) — подсветка здесь,
     /// а потянул квадрат любой из набранных — все грани уходят на то же расстояние наружу, каждая поперёк себя.
     /// </summary>
@@ -33,6 +34,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             BoxModelPartExtrusion.FinishIfReleased();
             BoxModelPartExtrusion.DrawDepthLabel();
+            BoxModelFacePiecePushPull.FinishIfReleased();
+            BoxModelFacePiecePushPull.DrawDepthLabel();
 
             var faces = BoxModelFaceSelection.Faces;
 
@@ -59,13 +62,24 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Прямоугольник грани коробки целиком — и для выделенных, и для той, что под мышью.
+        // Прямоугольник грани или её куска — и для выделенных, и для той, что под мышью.
         public static void DrawFace(BoxModelPartFace partFace, Color fillColor, Color outlineColor)
         {
             var model = partFace.Model;
 
             if (model == null)
                 return;
+
+            if (partFace.IsPiece)
+            {
+                var pieceCorners = partFace.Piece.Corners();
+
+                for (var index = 0; index < pieceCorners.Length; index++)
+                    pieceCorners[index] = model.transform.TransformPoint(pieceCorners[index]);
+
+                Handles.DrawSolidRectangleWithOutline(pieceCorners, fillColor, outlineColor);
+                return;
+            }
 
             var min = BoxModelRebuilder.LocalMinOf(model, partFace.Part);
             var max = min + partFace.Part.Size;
@@ -105,11 +119,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             handlePosition = movedPosition;
 
-            // С Ctrl грани стоят, а от каждой растёт новая коробка.
             var worldOffset = handlePosition - dragStartPosition;
 
-            if (!BoxModelPartExtrusion.TryExtrudeFaces(faces, worldOffset, EditorGUI.actionKey))
-                MoveFaces(faces, partFace => BoxModelGrid.Snap(partFace.Model.transform.InverseTransformVector(worldOffset)[BoxFaces.Axis(partFace.Face)],
+            // Куски: на сколько стрелки ушли поперёк куска, наружу — плюс.
+            BoxModelFacePiecePushPull.Drag(faces, piece => BoxModelGrid.Snap(
+                piece.Model.transform.InverseTransformVector(worldOffset)[piece.Piece.Axis], piece.Piece.Axis) * piece.Piece.OutwardSign);
+
+            // Цельные грани: с Ctrl стоят, а от каждой растёт новая коробка.
+            var wholeFaces = WholeFacesOf(faces);
+
+            if (!BoxModelPartExtrusion.TryExtrudeFaces(wholeFaces, worldOffset, EditorGUI.actionKey))
+                MoveFaces(wholeFaces, partFace => BoxModelGrid.Snap(partFace.Model.transform.InverseTransformVector(worldOffset)[BoxFaces.Axis(partFace.Face)],
                     BoxFaces.Axis(partFace.Face)));
         }
 
@@ -117,7 +137,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // faceCoordinate — где сейчас схваченная грань по своей оси, в осях объекта, без сетки.
         public static void DragCollectedFaces(BoxModelPartFace grabbed, float faceCoordinate, bool isExtruding)
         {
-            var faces = BoxModelFaceSelection.Faces;
+            var faces = WholeFacesOf(BoxModelFaceSelection.Faces);
             var axis = BoxFaces.Axis(grabbed.Face);
             var isPositive = BoxFaces.IsPositive(grabbed.Face);
 
@@ -228,6 +248,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             foreach (var partFace in faces)
             {
+                if (partFace.IsPiece)
+                {
+                    sum += partFace.Model.transform.TransformPoint(partFace.Piece.Center);
+                    continue;
+                }
+
                 var min = BoxModelRebuilder.LocalMinOf(partFace.Model, partFace.Part);
                 var center = min + partFace.Part.Size / 2f;
                 var axis = BoxFaces.Axis(partFace.Face);
@@ -236,6 +262,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             return sum / faces.Count;
+        }
+
+        // Грани целиком, без кусков: их двигают и выдавливают как коробки.
+        private static List<BoxModelPartFace> WholeFacesOf(IReadOnlyList<BoxModelPartFace> faces)
+        {
+            var wholeFaces = new List<BoxModelPartFace>();
+
+            foreach (var partFace in faces)
+                if (!partFace.IsPiece)
+                    wholeFaces.Add(partFace);
+
+            return wholeFaces;
         }
 
         // Стрелки — по осям объекта, если все грани из одного; из разных — по осям мира.

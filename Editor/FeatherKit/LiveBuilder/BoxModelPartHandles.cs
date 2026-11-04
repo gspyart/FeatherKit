@@ -24,7 +24,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Каркасы ──────────────────────────────────────────────────────
 
         // Каркасы всех коробок объекта, с копиями повторов и ступенями: добавляющие — голубые, вырезающие — красные; выделенные — ярче.
-        // Что целиком выше разреза над этажом — не рисуется.
+        // Что целиком выше разреза над этажом — не рисуется. Все коробки или только выделенные — <see cref="BoxModelWireframesSetting"/>.
         public static void DrawWireframes(BoxModel model)
         {
             using (new Handles.DrawingScope(model.transform.localToWorldMatrix))
@@ -36,11 +36,31 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     if (LiveBuilderStoreys.IsHiddenBySection(model.transform.TransformPoint(min)))
                         continue;
 
-                    var isSelected = box.Owner != null && Selection.Contains(box.Owner.gameObject);
+                    var isSelected = IsSelected(box);
+
+                    if (!isSelected && !BoxModelWireframesSetting.IsShowingAll)
+                        continue;
+
                     var color = box.Mode == BoxModelPartMode.Add ? AddColor : CutColor;
                     Handles.color = isSelected ? color : new Color(color.r, color.g, color.b, 0.45f);
                     Handles.DrawWireCube((min + max) / 2f, max - min);
                 }
+        }
+
+        // Выделена сама коробка или в режиме «Грани» выделена её грань.
+        private static bool IsSelected(BoxModelSolverBox box)
+        {
+            if (box.Owner == null)
+                return false;
+
+            if (Selection.Contains(box.Owner.gameObject))
+                return true;
+
+            foreach (var partFace in BoxModelFaceSelection.Faces)
+                if (partFace.Part == box.OwnerPart)
+                    return true;
+
+            return false;
         }
 
 

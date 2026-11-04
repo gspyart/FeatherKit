@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FeatherKit.Attributes;
 using UnityEngine;
 
@@ -15,6 +16,7 @@ namespace FeatherKit.LiveBuilder
     /// Одна коробка объекта из коробок (<see cref="BoxModel"/>): добавляет объём или вырезает дыру.
     /// Опора — угол с наименьшими координатами по всем осям объекта, размер — в метрах. Коробки не поворачиваются: всегда по осям объекта.
     /// Материал можно задать всей коробке или отдельно низу, верху и бокам — у вырезающей это пол, потолок и стены дыры.
+    /// У добавляющей рёбра можно скосить (<see cref="BoxModelEdgeChamfer"/>): пандус, склон, скат крыши.
     /// В игре не нужна: объект коробки помечен EditorOnly и в сборку не попадает.
     /// </summary>
     [FDescription("Коробка объекта из коробок: добавляет объём или вырезает дыру. Опора — угол с наименьшими координатами, размер — в метрах. " +
@@ -56,6 +58,9 @@ namespace FeatherKit.LiveBuilder
 
         [Tooltip("Бок сзади, по −Z объекта. Пусто — материал боков.")]
         [SerializeField] private Material backMaterial;
+
+        // Скосы рёбер. Правятся ручками на рёбрах в окне сцены и в окне Live Builder, поэтому в инспекторе не видны.
+        [SerializeField, HideInInspector] private List<BoxModelEdgeChamfer> chamfers = new();
 
 
         public BoxModelPartMode Mode
@@ -116,6 +121,40 @@ namespace FeatherKit.LiveBuilder
         {
             get => backMaterial;
             set => backMaterial = value;
+        }
+
+        public IReadOnlyList<BoxModelEdgeChamfer> Chamfers => chamfers;
+
+
+        // ── Скосы ────────────────────────────────────────────────────────
+
+        // Скос ребра: заменяет прежний на том же ребре; без среза (одна из сторон — ноль) — ребро снова прямое.
+        public void SetChamfer(BoxModelEdgeChamfer chamfer)
+        {
+            RemoveChamfer(chamfer.FirstFace, chamfer.SecondFace);
+
+            if (chamfer.HasCut)
+                chamfers.Add(chamfer);
+        }
+
+
+        public void RemoveChamfer(int firstFace, int secondFace)
+        {
+            chamfers.RemoveAll(chamfer => chamfer.IsOnEdge(firstFace, secondFace));
+        }
+
+
+        public bool TryGetChamfer(int firstFace, int secondFace, out BoxModelEdgeChamfer chamfer)
+        {
+            foreach (var candidate in chamfers)
+                if (candidate.IsOnEdge(firstFace, secondFace))
+                {
+                    chamfer = candidate;
+                    return true;
+                }
+
+            chamfer = default;
+            return false;
         }
     }
 }

@@ -5,13 +5,38 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Вкладка «Новое» окна Live Builder: настройки того, что нарисуешь выбранным инструментом, карточками —
-    /// как рисовать (форма, точки) → размер → материалы. Уже созданное не меняет: его числа — во вкладке выделенного.
+    /// Секция «Инструмент» окна Live Builder: настройки выбранного инструмента — только те, что на него действуют, карточками:
+    /// как рисовать (форма, точки) → размер → материалы; что выделяет клик — у «Выделения» и «Коробки»;
+    /// «в здании — этот этаж или все выше» — у инструментов, которые ставят своё в здание.
+    /// Уже созданное не меняет: его числа — в секции выделенного (<see cref="LiveBuilderSelectionPanel"/>).
     /// Числа хранятся у каждого человека свои — настройки инструментов, например <see cref="LiveBuilderRoomSettings"/>.
     /// </summary>
     public static class LiveBuilderToolSettingsPanel
     {
         public static void Draw()
+        {
+            DrawCurrentToolSettings();
+
+            if (CanPlaceIntoBuilding(LiveBuilderToolSetting.Current))
+                DrawBuildingStoreys();
+        }
+
+        // Эти инструменты, наведённые на здание по контуру, ставят своё в него, на его этажи (<see cref="LiveBuilderBuildingContext"/>).
+        private static bool CanPlaceIntoBuilding(LiveBuilderTool tool)
+        {
+            return tool is LiveBuilderTool.Box or LiveBuilderTool.Room or LiveBuilderTool.Wall or LiveBuilderTool.Stairs or LiveBuilderTool.Opening;
+        }
+
+        private static void DrawBuildingStoreys()
+        {
+            using (LiveBuilderWindowControls.Card("В здании"))
+                LiveBuilderBuildingContext.IsOnAllStoreys = LiveBuilderWindowControls.Switch(
+                    new GUIContent("Этажи", "Наведёшь на здание — поставленное встанет на этот этаж здания, до его потолка, с его толщинами. " +
+                                            "И все выше — то же на каждом этаже выше: перегородки, лестничная клетка, окна по фасаду. После перезапуска Unity — снова «только этот»"),
+                    LiveBuilderBuildingContext.IsOnAllStoreys, "Только этот", "И все выше");
+        }
+
+        private static void DrawCurrentToolSettings()
         {
             switch (LiveBuilderToolSetting.Current)
             {
@@ -77,24 +102,40 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     BoxModelDrawModeSetting.Current = drawMode;
 
                 DrawSelectionModeSwitch();
-
-                if (GUILayout.Button(new GUIContent("Следующая — новый объект", "Следующая коробка — отдельный объект, даже поверх другого")))
-                    BoxModelActions.BeginNewModelDrawing();
+                DrawTargetModel();
             }
 
-            LiveBuilderWindowControls.Note("Протяни по поверхности, мышью глубина, клик — готово. Клик по грани — выделить коробку. " +
-                                           "Здесь правятся только коробки; остальное — в своих инструментах или в «Выделении».");
+            LiveBuilderWindowControls.Note("Протяни по поверхности, мышью глубина, клик — готово. Клик по грани — выделить коробку или кусок грани, " +
+                                           "смотря что выбрано в «Клик выделяет». Здесь правятся только коробки; остальное — в своих инструментах или в «Выделении».");
         }
 
-        // Что выделяет клик: коробку целиком или грань — в «Выделении» и «Коробке».
-        private static void DrawSelectionModeSwitch()
+        // Куда встанет коробка на пустом месте: в выделенный объект, иначе — новый. По чужой поверхности — всегда в тот объект.
+        // «Новый объект» нажат — следующая коробка точно отдельным объектом; нажать ещё раз — отмена.
+        private static void DrawTargetModel()
         {
-            var selectionMode = (BoxModelSelectionMode)LiveBuilderWindowControls.Switch(
-                new GUIContent("Клик выделяет", "Коробку целиком — тянешь точки на её гранях. Грань — с Shift несколько, стрелки двигают все"),
-                (int)BoxModelSelectionModeSetting.Current, "Коробки", "Грани");
+            var selectedModel = BoxModelActions.SelectedModel();
+            var isNewRequested = BoxModelSceneTool.IsNewModelRequested;
+            var targetName = isNewRequested ? "новый, отдельный" : selectedModel != null ? selectedModel.name : "новый (ничего не выделено)";
 
-            if (selectionMode != BoxModelSelectionModeSetting.Current)
-                BoxModelSelectionModeSetting.Current = selectionMode;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.PrefixLabel(new GUIContent("Объект", "Куда встанет коробка, нарисованная на пустом месте. " +
+                                                                     "Рисуешь по поверхности другого объекта — она встанет в него"));
+                GUILayout.Label(new GUIContent(targetName, targetName), EditorStyles.miniBoldLabel, GUILayout.MinWidth(40f));
+
+                var isPressed = GUILayout.Toggle(isNewRequested, new GUIContent("Новый объект", "Следующая коробка — отдельный объект, даже поверх другого. " +
+                                                                                                "Нажать ещё раз — отмена"), EditorStyles.miniButton, GUILayout.Width(96f));
+
+                if (isPressed == isNewRequested)
+                    return;
+
+                if (isPressed)
+                    BoxModelActions.BeginNewModelDrawing();
+                else
+                    BoxModelSceneTool.IsNewModelRequested = false;
+
+                SceneView.RepaintAll();
+            }
         }
 
 
@@ -365,6 +406,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // ── Помощники ────────────────────────────────────────────────────
+
+        // Что выделяет клик — у «Выделения» и «Коробки»: коробку целиком или кусок грани.
+        private static void DrawSelectionModeSwitch()
+        {
+            var selectionMode = (BoxModelSelectionMode)LiveBuilderWindowControls.Switch(
+                new GUIContent("Клик выделяет", "Коробки — коробку целиком, тянешь точки на её гранях. " +
+                                                "Грани — видимый кусок грани, двойной клик — грань целиком, Shift — несколько; стрелки двигают все"),
+                (int)BoxModelSelectionModeSetting.Current, "Коробки", "Грани");
+
+            if (selectionMode != BoxModelSelectionModeSetting.Current)
+                BoxModelSelectionModeSetting.Current = selectionMode;
+        }
 
         // Угол или плавно — общий для стены, здания и комнаты по контуру.
         private static void DrawKnotModeSwitch()

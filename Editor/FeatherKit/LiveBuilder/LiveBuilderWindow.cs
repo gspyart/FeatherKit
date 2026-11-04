@@ -5,23 +5,19 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Окно Live Builder — пульт инструмента сборки уровня, сегментами сверху вниз:
-    /// - шапка — включён ли Live Builder, справка по клавишам
-    /// - палитра — инструменты плитками со значками, «Строить» и «Детали и мера»; цифра на плитке — клавиша в окне сцены
-    /// - этаж — на каком этаже строишь, сетка, что видно в окне сцены, «в здании — этот или все выше»
-    /// - вкладки: «Новое» — настройки того, что нарисуешь (<see cref="LiveBuilderToolSettingsPanel"/>), «Выделено» — числа выделенного
-    ///   (<see cref="LiveBuilderSelectionPanel"/>), «Уровень» — этажи уровня и типы стен (<see cref="LiveBuilderLevelPanel"/>)
+    /// Окно Live Builder — пульт инструмента сборки уровня, одной колонкой сверху вниз, по тому, от чего настройка зависит:
+    /// - шапка — включён ли Live Builder, справка по клавишам; палитра — инструменты плитками, цифра на плитке — клавиша в окне сцены
+    /// - «Общее» — действует всегда: этаж, сетка, вид (<see cref="LiveBuilderGlobalSettingsPanel"/>)
+    /// - «Инструмент» — настройки выбранного инструмента, только те, что на него действуют (<see cref="LiveBuilderToolSettingsPanel"/>)
+    /// - «Выделено» — числа и действия выделенного; секции нет, пока не выделено своё (<see cref="LiveBuilderSelectionPanel"/>)
+    /// - «Уровень» — этажи уровня, типы стен, уборка мешей; меняют редко, свёрнута (<see cref="LiveBuilderLevelPanel"/>)
     /// - внизу — подсказка, что делать сейчас, та же, что в окне сцены
-    /// Вкладка переключается сама: выделил объект — «Выделено», выбрал инструмент — «Новое». Рисование мышью — в окне сцены (<see cref="BoxModelSceneTool"/>).
+    /// Окно само ничего не переключает: секции сворачиваешь ты, они это помнят. Рисование мышью — в окне сцены (<see cref="BoxModelSceneTool"/>).
     /// </summary>
     public class LiveBuilderWindow : EditorWindow
     {
         private const float TileHeight = 46f;
         private const float TileGap = 4f;
-
-        private const int NewTab = 0;
-        private const int SelectedTab = 1;
-        private const int LevelTab = 2;
 
         // Отступы сегментов. Создаются при первом рисовании: при загрузке окна Unity их делать не даёт.
         private static GUIStyle topPadding;
@@ -30,7 +26,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private readonly LiveBuilderSelectionPanel selectionPanel = new();
         private Vector2 scrollPosition;
-        private int currentTab = NewTab;
         private bool isShowingHotkeys;
 
 
@@ -62,7 +57,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             // Подписи полей — не шире половины окна: в узком окне поля не уезжают за край.
             EditorGUIUtility.labelWidth = Mathf.Clamp(position.width * 0.42f, 110f, 160f);
 
-            // Подсказка прибита к низу, всё остальное — над ней; прокручивается только содержимое вкладки.
+            // Подсказка прибита к низу, шапка, палитра и «Общее» — сверху; прокручиваются секции инструмента, выделенного и уровня.
             var hint = HintText();
             var hintHeight = Mathf.Ceil(EditorStyles.wordWrappedMiniLabel.CalcHeight(new GUIContent(hint), position.width - 16f)) + 8f;
             GUILayout.BeginArea(new Rect(0f, 0f, position.width, position.height - hintHeight));
@@ -75,16 +70,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     DrawHotkeys();
 
                 DrawPalette();
-                LiveBuilderWindowControls.Separator();
-                DrawStoreyBar();
-                EditorGUILayout.Space(4f);
-                DrawTabs();
+
+                if (LiveBuilderWindowControls.Section("Общее", "Global"))
+                    LiveBuilderGlobalSettingsPanel.Draw();
             }
 
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, false, false);
 
             using (new EditorGUILayout.VerticalScope(ContentPadding))
-                DrawTabContent();
+                DrawSections();
 
             EditorGUILayout.EndScrollView();
             GUILayout.EndArea();
@@ -179,132 +173,29 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // ── Этаж ─────────────────────────────────────────────────────────
+        // ── Секции ───────────────────────────────────────────────────────
 
-        // Этаж и сетка — одной строкой; что видно и как строить в здании — переключателями.
-        private static void DrawStoreyBar()
+        // Инструмент — всегда; выделенное — только когда выделено своё; уровень — в конце.
+        private void DrawSections()
         {
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorGUILayout.PrefixLabel(new GUIContent("Этаж", "На каком этаже строишь — и в пустоте, и в зданиях: их этажи те же. PageUp и PageDown в окне сцены"));
+            var tool = LiveBuilderToolSetting.Current;
 
-                if (GUILayout.Button("◀", EditorStyles.miniButtonLeft, GUILayout.Width(22f)))
-                    LiveBuilderStoreys.CurrentStorey--;
+            if (LiveBuilderWindowControls.Section("Инструмент: " + LiveBuilderToolSetting.DisplayName(tool), "Tool"))
+                LiveBuilderToolSettingsPanel.Draw();
 
-                var storey = EditorGUILayout.IntField(LiveBuilderStoreys.CurrentStorey, EditorStyles.miniTextField, GUILayout.Width(30f));
+            if (LiveBuilderSelectionPanel.HasEditableSelection() && LiveBuilderWindowControls.Section(SelectionTitle(), "Selected"))
+                selectionPanel.Draw();
 
-                if (storey != LiveBuilderStoreys.CurrentStorey)
-                    LiveBuilderStoreys.CurrentStorey = storey;
-
-                if (GUILayout.Button("▶", EditorStyles.miniButtonRight, GUILayout.Width(22f)))
-                    LiveBuilderStoreys.CurrentStorey++;
-
-                GUILayout.Label("пол " + BoxModelSceneText.FormatMeters(LiveBuilderStoreys.CurrentFloorHeight) + " м", EditorStyles.miniLabel);
-            }
-
-            DrawGrid();
-            DrawVisibility();
-
-            LiveBuilderBuildingContext.IsOnAllStoreys = LiveBuilderWindowControls.Switch(
-                new GUIContent("В здании", "Наведёшь на здание — стена, комната, лестница и проём встанут на этот этаж здания, до его потолка, с его толщинами. " +
-                                           "И все выше — то же на каждом этаже выше: перегородки, лестничная клетка, окна по фасаду. После перезапуска Unity — снова «только этот»"),
-                LiveBuilderBuildingContext.IsOnAllStoreys, "Только этот", "И все выше");
+            if (LiveBuilderWindowControls.Section("Уровень: этажи, типы стен, меши", "Level", false))
+                LiveBuilderLevelPanel.Draw();
         }
 
-
-        private static void DrawGrid()
+        // «Выделено: Box Model» или «Выделено: Box Model и ещё 2».
+        private static string SelectionTitle()
         {
-            var steps = BoxModelGrid.Steps;
-            var names = new string[steps.Length];
-            var current = 0;
-
-            for (var index = 0; index < steps.Length; index++)
-            {
-                names[index] = BoxModelSceneText.FormatMeters(steps[index]);
-
-                if (Mathf.Abs(steps[index] - BoxModelGrid.CurrentStep) < 0.0001f)
-                    current = index;
-            }
-
-            var chosen = LiveBuilderWindowControls.Switch(new GUIContent("Сетка, м", "Всё прилипает к клеткам этого размера. Клавиши [ и ] в окне сцены"), current, names);
-
-            if (chosen != current)
-                BoxModelGrid.SetStep(steps[chosen]);
-        }
-
-
-        // Что видно в окне сцены: всё, этаж срезом на 3 м (комнаты) или на 1 м (стены вниз). Игру не меняет.
-        private static void DrawVisibility()
-        {
-            var isSectioned = LiveBuilderStoreys.IsSectionEnabled;
-            var height = LiveBuilderStoreys.SectionHeightAboveFloor;
-            var current = !isSectioned ? 0 : Mathf.Approximately(height, 1f) ? 2 : 1;
-
-            var chosen = LiveBuilderWindowControls.Switch(
-                new GUIContent("Показать", "Всё — как есть. Комнаты — выше 3 м над полом этажа спрятано, видно стены и проёмы. " +
-                                           "Стены вниз — выше 1 м: видно комнаты с любого угла. Только в окне сцены"),
-                current, "Всё", "Комнаты", "Стены вниз");
-
-            if (chosen == current)
-                return;
-
-            if (chosen > 0)
-                LiveBuilderStoreys.SectionHeightAboveFloor = chosen == 1 ? 3f : 1f;
-
-            LiveBuilderStoreys.IsSectionEnabled = chosen > 0;
-        }
-
-
-        // ── Вкладки ──────────────────────────────────────────────────────
-
-        private void DrawTabs()
-        {
-            var selected = Selection.activeGameObject;
-            var selectedTitle = LiveBuilderSelectionPanel.HasEditableSelection() && selected != null ? "Выделено: " + selected.name : "Выделено";
-
-            currentTab = LiveBuilderWindowControls.Tabs(currentTab,
-                new GUIContent("Новое: " + LiveBuilderToolSetting.DisplayName(LiveBuilderToolSetting.Current), "Настройки того, что нарисуешь дальше"),
-                new GUIContent(selectedTitle, "Числа выделенного — меняются сразу"),
-                new GUIContent("Уровень", "Этажи уровня и типы стен — общее на весь уровень"));
-        }
-
-
-        private void DrawTabContent()
-        {
-            EditorGUILayout.Space(4f);
-
-            switch (currentTab)
-            {
-                case SelectedTab:
-                    selectionPanel.Draw();
-                    break;
-
-                case LevelTab:
-                    LiveBuilderLevelPanel.Draw();
-                    break;
-
-                default:
-                    LiveBuilderToolSettingsPanel.Draw();
-                    break;
-            }
-        }
-
-
-        // Выделил объект — его числа; снял выделение — настройки нового. «Уровень» не трогаем: туда заходят нарочно.
-        private void ShowSelectionProperties()
-        {
-            if (currentTab != LevelTab)
-                currentTab = LiveBuilderSelectionPanel.HasEditableSelection() ? SelectedTab : NewTab;
-
-            Repaint();
-        }
-
-
-        // Выбрал инструмент — значит, сейчас будешь рисовать: настройки нового.
-        private void ShowNewSettings()
-        {
-            currentTab = NewTab;
-            Repaint();
+            var count = Selection.gameObjects.Length;
+            var title = "Выделено: " + Selection.activeGameObject.name;
+            return count > 1 ? title + " и ещё " + (count - 1) : title;
         }
 
 
@@ -334,21 +225,20 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private void OnEnable()
         {
             wantsMouseMove = true;
-            Selection.selectionChanged += ShowSelectionProperties;
+            Selection.selectionChanged += Repaint;
             LiveBuilderStoreys.Changed += Repaint;
-            LiveBuilderToolSetting.Changed += ShowNewSettings;
+            LiveBuilderToolSetting.Changed += Repaint;
             LiveBuilderRoomSettings.ShapeChanged += Repaint;
             BoxModelSceneTool.HintChanged += Repaint;
             LiveBuilderContourSelection.Changed += Repaint;
             ToolManager.activeToolChanged += Repaint;
-            ShowSelectionProperties();
         }
 
         private void OnDisable()
         {
-            Selection.selectionChanged -= ShowSelectionProperties;
+            Selection.selectionChanged -= Repaint;
             LiveBuilderStoreys.Changed -= Repaint;
-            LiveBuilderToolSetting.Changed -= ShowNewSettings;
+            LiveBuilderToolSetting.Changed -= Repaint;
             LiveBuilderRoomSettings.ShapeChanged -= Repaint;
             BoxModelSceneTool.HintChanged -= Repaint;
             LiveBuilderContourSelection.Changed -= Repaint;

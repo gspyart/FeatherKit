@@ -71,7 +71,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (node.TryGetComponent<BoxModelPart>(out var part))
             {
                 var min = LocalMinOf(model, node) + offset;
-                boxes.Add(new BoxModelSolverBox(MillimeterBox.FromMeters(min, part.Size), part.Mode, part, BoxModelSideMaterials.Of(part)));
+                boxes.Add(new BoxModelSolverBox(MillimeterBox.FromMeters(min, part.Size), part.Mode, part, BoxModelSideMaterials.Of(part), part.Chamfers));
             }
 
             if (node.TryGetComponent<BoxModelRoom>(out var room))

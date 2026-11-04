@@ -75,7 +75,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var result = GetBuildResult(instance);
 
             return source != null && source.BuiltSignature == result.Signature && sourceMesh != null
-                   && (HasBevel(instance) ? sourceMesh.vertexCount > 0 : BoxModelMeshBuilder.IsBuiltFrom(sourceMesh, result.Surfaces));
+                   && (IsCutAfterSurfaces(instance, result) ? sourceMesh.vertexCount > 0 : BoxModelMeshBuilder.IsBuiltFrom(sourceMesh, result.Surfaces));
         }
 
         // Чем сейчас собран префаб — если после пересборки он всё равно не сходится, второй раз его не трогаем.
@@ -99,7 +99,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (model.BuiltSignature != signature || mesh == null)
                 return false;
 
-            if (cutters.Count > 0 || HasBevel(model))
+            if (cutters.Count > 0 || IsCutAfterSurfaces(model, result))
                 return mesh.vertexCount > 0;
 
             var verifiedKey = result.Signature + "|" + mesh.vertexCount + "|" + mesh.bounds;
@@ -135,11 +135,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
             LiveBuilderRebuildQueue.RequestCheck();
         }
 
-        // Меш из наружных поверхностей, рёбра срезаны фаской, если она задана. Вырезы режут потом — уже готовую фаску.
+        // Меш из наружных поверхностей, рёбра срезаны фаской, если она задана, потом — скосы рёбер коробок. Вырезы режут потом — уже готовое.
         private static Material[] FillWithBevel(Mesh mesh, BoxModel model, BoxModelBuildResult result)
         {
             var materials = BoxModelMeshBuilder.Fill(mesh, result.Surfaces, result.Boxes, model.DefaultMaterial);
             BoxModelBevel.Apply(mesh, result.Surfaces, model.BevelSize, model.BevelSegments);
+            BoxModelChamferCutter.Apply(mesh, result.Boxes);
             return materials;
         }
 
@@ -310,9 +311,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
             signature.Append(BoxModelSideMaterials.KeyOf(model.DefaultMaterial)).Append(model.HasCollider ? "c" : "n");
 
             foreach (var box in boxes)
+            {
                 signature.Append('|').Append((int)box.Mode)
                     .Append(':').Append(box.Box.Min.ToString()).Append(box.Box.Max.ToString())
                     .Append(':').Append(box.Materials.Key);
+
+                // Без скосов подпись прежняя — старые объекты не пересобираются.
+                foreach (var chamfer in box.Chamfers)
+                    signature.Append(":s").Append(chamfer.FirstFace).Append(chamfer.SecondFace)
+                        .Append('x').Append(chamfer.SizeOnFirstFace).Append('x').Append(chamfer.SizeOnSecondFace);
+            }
 
             foreach (var ramp in ramps)
                 signature.Append("|r").Append(MillimeterBox.ToMillimeters(ramp.Corners[0]).ToString())
@@ -329,6 +337,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static bool HasBevel(BoxModel model)
         {
             return model.BevelSize > 0f;
+        }
+
+        // Меш срезан после поверхностей — фаской или скосами рёбер: по вершинам его с коробками уже не сверить.
+        private static bool IsCutAfterSurfaces(BoxModel model, BoxModelBuildResult result)
+        {
+            return HasBevel(model) || result.Boxes.Exists(box => box.Chamfers.Count > 0);
         }
 
 

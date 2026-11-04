@@ -4,13 +4,15 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Общие элементы окна Live Builder, чтобы всё выглядело одинаково: карточка с заголовком, переключатель из кнопок,
-    /// плитка инструмента, вкладки, разделитель, поле материала. Цвета — под светлую и тёмную тему редактора.
+    /// Общие элементы окна Live Builder, чтобы всё выглядело одинаково: секция со стрелкой, карточка с заголовком, переключатель из кнопок,
+    /// плитка инструмента, разделитель, поле материала. Цвета — под светлую и тёмную тему редактора.
     /// </summary>
     public static class LiveBuilderWindowControls
     {
+        private const string SectionPreferencePrefix = "FeatherKit.LiveBuilder.Section.";
+
         private static GUIStyle cardStyle;
-        private static GUIStyle tabStyle;
+        private static GUIStyle sectionStyle;
         private static GUIStyle tileLabelStyle;
         private static GUIStyle hotkeyStyle;
 
@@ -34,7 +36,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static GUIStyle CardStyle => cardStyle ??= new GUIStyle { padding = new RectOffset(8, 8, 6, 8), margin = new RectOffset(0, 0, 3, 3) };
 
-        private static GUIStyle TabStyle => tabStyle ??= new GUIStyle(EditorStyles.label) { alignment = TextAnchor.MiddleCenter, padding = new RectOffset(8, 8, 4, 6) };
+        private static GUIStyle SectionStyle => sectionStyle ??= new GUIStyle(EditorStyles.foldout) { fontStyle = FontStyle.Bold };
 
         private static GUIStyle TileLabelStyle => tileLabelStyle ??= new GUIStyle(EditorStyles.miniLabel) { alignment = TextAnchor.MiddleCenter, clipping = TextClipping.Clip };
 
@@ -123,38 +125,24 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // ── Вкладки ──────────────────────────────────────────────────────
+        // ── Секция ───────────────────────────────────────────────────────
 
-        // Вкладки с чертой под выбранной. Возвращает выбранную.
-        public static int Tabs(int selected, params GUIContent[] tabs)
+        // Заголовок секции окна с линией сверху и стрелкой: клик — свернуть или развернуть. Возвращает, развёрнута ли.
+        // Свёрнута или нет — помнится у каждого человека по key.
+        public static bool Section(string title, string key, bool isExpandedByDefault = true)
         {
-            var rect = EditorGUILayout.GetControlRect(false, 24f);
-            var width = rect.width / tabs.Length;
+            var preferenceKey = SectionPreferencePrefix + key;
+            var isExpanded = EditorPrefs.GetBool(preferenceKey, isExpandedByDefault);
 
-            for (var index = 0; index < tabs.Length; index++)
-            {
-                var tabRect = new Rect(rect.x + index * width, rect.y, width, rect.height);
-                var isSelected = index == selected;
+            EditorGUILayout.Space(4f);
+            Separator();
+            var rect = EditorGUILayout.GetControlRect(false, 20f);
+            var isNowExpanded = EditorGUI.Foldout(rect, isExpanded, title, true, SectionStyle);
 
-                if (Event.current.type == EventType.Repaint)
-                {
-                    var previous = GUI.contentColor;
-                    GUI.contentColor = isSelected ? GUI.contentColor : new Color(1f, 1f, 1f, 0.6f);
-                    TabStyle.Draw(tabRect, tabs[index], tabRect.Contains(Event.current.mousePosition), isSelected, false, false);
-                    GUI.contentColor = previous;
+            if (isNowExpanded != isExpanded)
+                EditorPrefs.SetBool(preferenceKey, isNowExpanded);
 
-                    if (isSelected)
-                        EditorGUI.DrawRect(new Rect(tabRect.x + 4f, tabRect.yMax - 2f, tabRect.width - 8f, 2f), AccentColor);
-                }
-
-                if (GUI.Button(tabRect, new GUIContent("", tabs[index].tooltip), GUIStyle.none))
-                    selected = index;
-            }
-
-            if (Event.current.type == EventType.Repaint)
-                EditorGUI.DrawRect(new Rect(rect.x, rect.yMax, rect.width, 1f), BorderColor);
-
-            return selected;
+            return isNowExpanded;
         }
 
 

@@ -7,8 +7,8 @@ using UnityEngine.Splines;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Часть окна Live Builder про выделенное: числа вместо прицеливания мышью.
-    /// - коробка — режим, угол и размер в осях объекта, материалы сторон
+    /// Секция «Выделено» окна Live Builder: числа вместо прицеливания мышью.
+    /// - коробка — режим, угол и размер в осях объекта, скосы рёбер (<see cref="BoxModelChamferPanel"/>), материалы сторон
     /// - коробки и лестницы — «повторить»: этажами вверх, вдоль X, вдоль Z
     /// - повтор — сколько копий и шаг, «убрать повтор»
     /// - комната, лестница, стена по линии, здание по контуру (и её точки: все углом, плавно, замкнуть), проём, объект из коробок — их собственные поля
@@ -67,7 +67,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Выделено что-то от Live Builder — есть что показать во вкладке выделенного.
+        // Выделено что-то от Live Builder — есть что показать в секции выделенного.
         public static bool HasEditableSelection()
         {
             var selected = Selection.activeGameObject;
@@ -174,6 +174,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (GUILayout.Button(new GUIContent("Добавить ⇄ Вырезать", "У выделенных коробок: добавляющие вырезают, вырезающие добавляют")))
                     BoxModelActions.ToggleModeOfSelectedParts();
             }
+
+            BoxModelChamferPanel.Draw(part);
 
             using (LiveBuilderWindowControls.Card("Материалы"))
             {

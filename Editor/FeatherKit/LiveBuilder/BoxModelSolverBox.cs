@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEngine;
@@ -92,15 +93,21 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Коробка расчёта — одна коробка так, как её видит решатель: с учётом повторов, ступень лестницы или вырез над ней.
     /// Помнит, откуда взялась (коробка или лестница на сцене): по ней грань выделяется кликом и берёт материал.
+    /// Скосы рёбер коробки (<see cref="BoxModelEdgeChamfer"/>) едут с ней и в копии повтора: их срезает <see cref="BoxModelChamferCutter"/>.
     /// </summary>
     public sealed class BoxModelSolverBox
     {
-        public BoxModelSolverBox(MillimeterBox box, BoxModelPartMode mode, Component owner, BoxModelSideMaterials materials)
+        private static readonly BoxModelEdgeChamfer[] NoChamfers = new BoxModelEdgeChamfer[0];
+
+
+        public BoxModelSolverBox(MillimeterBox box, BoxModelPartMode mode, Component owner, BoxModelSideMaterials materials,
+            IReadOnlyList<BoxModelEdgeChamfer> chamfers = null)
         {
             Box = box;
             Mode = mode;
             Owner = owner;
             Materials = materials;
+            Chamfers = chamfers ?? NoChamfers;
         }
 
 
@@ -110,6 +117,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Коробка (BoxModelPart) или лестница (BoxModelStairs), которая её дала.
         public Component Owner { get; }
         public BoxModelSideMaterials Materials { get; }
+        public IReadOnlyList<BoxModelEdgeChamfer> Chamfers { get; }
 
         public BoxModelPartShape Shape => new(Box, Mode);
 

@@ -27,7 +27,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private const string IdleHint = "Протяни по поверхности — новая коробка. Клик по грани — выделить коробку";
         private const string SelectHint = "Клик — выделить что угодно: коробку, комнату, лестницу, стену, здание, проём. Shift — добавить или убрать. " +
                                           "Тяни ручки выделенного. Esc — снять выделение";
-        private const string FaceSelectionHint = "Клик — выделить грань, Shift — добавить или убрать. Стрелки — двигать выделенные грани, с Ctrl — выдавить от каждой";
+        private const string FaceSelectionHint = "Клик — выделить кусок грани, двойной клик — грань целиком, Shift — добавить или убрать. " +
+                                                 "Стрелки — двигать выделенное: кусок тянешь — новая коробка, толкаешь — вырез; грань с Ctrl — выдавить";
         private const string NewModelHint = "Новый объект: протяни прямоугольник на поверхности или земле. Esc — отмена";
 
         private readonly BoxModelDrawGesture drawGesture = new();
@@ -44,6 +45,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private Vector2 mouseDownPosition;
         private bool isMouseDown;
+        private bool isDoubleClick;
         private BoxModelSurfaceHit? hoveredSurface;
 
         // Здание по контуру под мышью — для подсказки: где сейчас строишь.
@@ -333,6 +335,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             isMouseDown = true;
             mouseDownPosition = current.mousePosition;
+            isDoubleClick = current.clickCount == 2;
             GUIUtility.hotControl = controlId;
             current.Use();
         }
@@ -412,7 +415,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             else if (CurrentTool == LiveBuilderTool.Opening && CanPlaceOpening(current))
                 openingPlacer.Commit();
             else
-                LiveBuilderClickSelection.Select(current, CurrentTool);
+                LiveBuilderClickSelection.Select(current, CurrentTool, isDoubleClick);
 
             current.Use();
         }
@@ -563,7 +566,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (hoveredSurface is { } hover && hover.Model != null)
             {
-                // В режиме «Грани» видно грань коробки целиком — ровно то, что выделит клик.
+                // В режиме «Грани» видно кусок грани под мышью — ровно то, что выделит клик.
                 if (BoxModelSelectionModeSetting.IsSelectingFaces && LiveBuilderToolScope.CanEditFaces(CurrentTool) && BoxModelPartFace.TryFindUnder(hover, out var partFace))
                     BoxModelFaceMoveHandle.DrawFace(partFace, new Color(1f, 0.85f, 0.2f, 0.08f), new Color(1f, 0.85f, 0.2f, 0.6f));
                 else

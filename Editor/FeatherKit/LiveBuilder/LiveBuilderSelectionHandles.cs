@@ -7,6 +7,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Ручки того, что выделено, в инструменте «Live Builder» (<see cref="BoxModelSceneTool"/>): каркасы коробок у объектов в выделении — всегда,
     /// а ручки — только у того, что правит выбранный инструмент (<see cref="LiveBuilderToolScope"/>): у коробок, комнат, лестниц (<see cref="BoxModelPartHandles"/>),
+    /// скосы рёбер коробок (<see cref="BoxModelChamferHandles"/>),
     /// вырезов (<see cref="GeometryCutterHandles"/>), в режиме «Грани» — стрелки выделенных граней, ручка повтора у группы повтора.
     /// Контур стен и зданий — у <see cref="LiveBuilderContourHandles"/>.
     /// </summary>
@@ -57,7 +58,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     continue;
 
                 if (selected.TryGetComponent<BoxModelPart>(out var part))
+                {
+                    BoxModelChamferHandles.Draw(model, part);
                     BoxModelPartHandles.DrawHandles(model, part);
+                }
                 else if (selected.TryGetComponent<BoxModelRoom>(out var room))
                     BoxModelPartHandles.DrawHandles(model, room);
                 else if (selected.TryGetComponent<BoxModelStairs>(out var stairs))
