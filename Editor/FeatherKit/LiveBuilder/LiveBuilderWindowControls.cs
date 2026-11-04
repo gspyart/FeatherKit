@@ -314,13 +314,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (Event.current.type == EventType.Repaint)
                 DrawToolTileLook(rect, tool, isSelected, isHovered);
 
-            var content = new GUIContent("", LiveBuilderToolSetting.DisplayName(tool) + " (" + LiveBuilderToolSetting.HotkeyOf(tool) + ") — " + LiveBuilderToolSetting.Tooltip(tool));
+            var content = new GUIContent("", tool.DisplayName + " (" + LiveBuilderToolPalette.HotkeyOf(tool) + ") — " + tool.Tooltip);
             return GUI.Button(rect, content, GUIStyle.none);
         }
 
         private static void DrawToolTileLook(Rect rect, LiveBuilderTool tool, bool isSelected, bool isHovered)
         {
-            var fill = isSelected ? LiveBuilderWindowZones.ColorOf(LiveBuilderWindowZone.Tool) : isHovered ? HoverColor : TileColor;
+            var fill = isSelected ? LiveBuilderWindowZones.ColorOf(LiveBuilderZoneColor.Tool) : isHovered ? HoverColor : TileColor;
             GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, fill, 0f, 4f);
 
             if (!isSelected)
@@ -331,8 +331,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             LiveBuilderToolIcons.Draw(iconRect, tool, isSelected ? Color.white : isHovered ? IconColor : DimIconColor);
 
             var labelStyle = isSelected ? SelectedTileLabelStyle : TileLabelStyle;
-            labelStyle.Draw(new Rect(rect.x + 2f, rect.yMax - 17f, rect.width - 4f, 14f), LiveBuilderToolSetting.DisplayName(tool), false, false, false, false);
-            (isSelected ? SelectedHotkeyStyle : HotkeyStyle).Draw(rect, LiveBuilderToolSetting.HotkeyOf(tool), false, false, false, false);
+            labelStyle.Draw(new Rect(rect.x + 2f, rect.yMax - 17f, rect.width - 4f, 14f), tool.DisplayName, false, false, false, false);
+            (isSelected ? SelectedHotkeyStyle : HotkeyStyle).Draw(rect, LiveBuilderToolPalette.HotkeyOf(tool), false, false, false, false);
         }
 
 

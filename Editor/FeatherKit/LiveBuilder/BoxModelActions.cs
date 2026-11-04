@@ -12,7 +12,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public static class BoxModelActions
     {
-        public static bool IsToolActive => ToolManager.activeToolType == typeof(BoxModelSceneTool);
+        public static bool IsToolActive => ToolManager.activeToolType == typeof(LiveBuilderSceneTool);
 
         // Без ProBuilder в проекте замораживать не во что — кнопки нет.
         public static bool CanFreezeToProBuilder
@@ -33,7 +33,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public static void SetToolActive(bool isActive)
         {
             if (isActive)
-                ToolManager.SetActiveTool<BoxModelSceneTool>();
+                ToolManager.SetActiveTool<LiveBuilderSceneTool>();
             else if (IsToolActive)
                 ToolManager.RestorePreviousPersistentTool();
         }
@@ -45,7 +45,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public static void BeginNewModelDrawing()
         {
             Selection.activeObject = null;
-            BoxModelSceneTool.IsNewModelRequested = true;
+            LiveBuilderBoxTool.IsNewModelRequested = true;
             SetToolActive(true);
         }
 

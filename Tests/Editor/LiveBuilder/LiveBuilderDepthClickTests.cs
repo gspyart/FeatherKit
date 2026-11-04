@@ -19,6 +19,9 @@ namespace FeatherKit.Tests.LiveBuilder
         private BoxModelSelectionMode previousSelectionMode;
 
 
+        private static LiveBuilderTool SelectTool => LiveBuilderToolPalette.Get<LiveBuilderSelectTool>();
+
+
         [SetUp]
         public void OpenScene()
         {
@@ -63,12 +66,12 @@ namespace FeatherKit.Tests.LiveBuilder
             var (upper, lower) = CreateStackedBoxes();
             var mouse = new Vector2(100f, 100f);
             Selection.activeGameObject = upper.gameObject;
-            LiveBuilderDepthClick.RememberClick(mouse, DownRay(), cameraObject.transform, LiveBuilderTool.Select);
+            LiveBuilderDepthClick.RememberClick(mouse, DownRay(), cameraObject.transform, SelectTool);
 
-            Assert.IsTrue(LiveBuilderDepthClick.TrySelectDeeper(mouse, DownRay(), cameraObject.transform, LiveBuilderTool.Select));
+            Assert.IsTrue(LiveBuilderDepthClick.TrySelectDeeper(mouse, DownRay(), cameraObject.transform, SelectTool));
             Assert.AreSame(lower.gameObject, Selection.activeGameObject, "второй клик — коробка глубже");
 
-            Assert.IsTrue(LiveBuilderDepthClick.TrySelectDeeper(mouse, DownRay(), cameraObject.transform, LiveBuilderTool.Select));
+            Assert.IsTrue(LiveBuilderDepthClick.TrySelectDeeper(mouse, DownRay(), cameraObject.transform, SelectTool));
             Assert.AreSame(upper.gameObject, Selection.activeGameObject, "после дальней — снова ближняя");
         }
 
@@ -79,11 +82,11 @@ namespace FeatherKit.Tests.LiveBuilder
             var (upper, _) = CreateStackedBoxes();
             var mouse = new Vector2(100f, 100f);
             Selection.activeGameObject = upper.gameObject;
-            LiveBuilderDepthClick.RememberClick(mouse, DownRay(), cameraObject.transform, LiveBuilderTool.Select);
+            LiveBuilderDepthClick.RememberClick(mouse, DownRay(), cameraObject.transform, SelectTool);
 
             cameraObject.transform.position += Vector3.right;
 
-            Assert.IsFalse(LiveBuilderDepthClick.TrySelectDeeper(mouse, DownRay(), cameraObject.transform, LiveBuilderTool.Select));
+            Assert.IsFalse(LiveBuilderDepthClick.TrySelectDeeper(mouse, DownRay(), cameraObject.transform, SelectTool));
             Assert.AreSame(upper.gameObject, Selection.activeGameObject);
         }
 

@@ -158,14 +158,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static void AddObject(List<DepthClickTarget> targets, LiveBuilderTool tool, GameObject target, float distance)
         {
-            if (LiveBuilderToolScope.CanEdit(tool, target))
+            if (tool.CanEdit(target))
                 targets.Add(DepthClickTarget.ForObject(target, distance));
         }
 
         // Режим «Грани» и инструмент правит грани — клик выделяет куски граней.
         private static bool IsSelectingFacesWith(LiveBuilderTool tool)
         {
-            return BoxModelSelectionModeSetting.IsSelectingFaces && LiveBuilderToolScope.CanEditFaces(tool);
+            return BoxModelSelectionModeSetting.IsSelectingFaces && tool.CanEditFaces;
         }
 
         // Одна коробка или стена под лучом дважды (вход и выход, несколько граней) — остаётся ближняя.

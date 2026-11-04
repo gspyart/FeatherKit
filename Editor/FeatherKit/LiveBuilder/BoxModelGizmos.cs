@@ -10,7 +10,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         [DrawGizmo(GizmoType.Selected | GizmoType.InSelectionHierarchy)]
         private static void DrawPartsOfSelectedModel(BoxModel model, GizmoType gizmoType)
         {
-            if (ToolManager.activeToolType == typeof(BoxModelSceneTool))
+            if (ToolManager.activeToolType == typeof(LiveBuilderSceneTool))
                 return;
 
             BoxModelPartHandles.DrawWireframes(model);
@@ -23,7 +23,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var model = part.GetComponentInParent<BoxModel>();
 
-            if (model != null && ToolManager.activeToolType != typeof(BoxModelSceneTool))
+            if (model != null && ToolManager.activeToolType != typeof(LiveBuilderSceneTool))
                 BoxModelPartHandles.DrawWireframes(model);
         }
     }

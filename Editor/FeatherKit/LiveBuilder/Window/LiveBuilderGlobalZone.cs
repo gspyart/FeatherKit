@@ -5,10 +5,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Зона «Общее» окна Live Builder — то, что действует всегда, при любом инструменте и выделении:
-    /// на каком этаже строишь, сетка, что видно в окне сцены (срез этажа, каркасы коробок).
-    /// Настройки конкретного инструмента — в <see cref="LiveBuilderToolSettingsPanel"/>.
+    /// на каком этаже строишь, сетка, что видно в окне сцены (срез этажа, каркасы коробок). Не прокручивается — всегда под палитрой.
+    /// Настройки конкретного инструмента — в <see cref="LiveBuilderToolZone"/>.
     /// </summary>
-    public static class LiveBuilderGlobalSettingsPanel
+    public sealed class LiveBuilderGlobalZone : LiveBuilderWindowZone
     {
         // Виды окна сцены — общие с панелью над сценой (<see cref="LiveBuilderSceneOverlay"/>). Своя высота среза (панель «Уровень») —
         // ViewCustom: не горит ни одна кнопка, даже «Всё», ведь срез включён.
@@ -22,7 +22,24 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private const float WallsDownSectionHeight = 1f;
 
 
-        public static void Draw()
+        // ── Зона ─────────────────────────────────────────────────────────
+
+        public override string Title => "Общее";
+
+        public override string Detail => "этаж, сетка, вид";
+
+        public override Texture2D Icon => LiveBuilderOptionIcons.White(LiveBuilderOptionIcon.Global);
+
+        public override LiveBuilderZoneColor ZoneColor => LiveBuilderZoneColor.Global;
+
+        public override int Order => 0;
+
+        public override string PreferenceKey => "Global";
+
+        public override bool IsScrolled => false;
+
+
+        public override void Draw()
         {
             DrawStorey();
             DrawGrid();

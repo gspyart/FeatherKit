@@ -885,7 +885,8 @@ DebugPanel.Watch(this, "Игрок", "Скорость", () => speed.ToString("0
 | `SplineWall`, `SplineWallType` | Стена по линии и тип стены — толщина и материал на много стен |
 | `SplineBuilding`, `SplineBuildingPart`, `SplineBuildingStoreyLink` | Здание по контуру, его собранные части, привязка к этажам здания |
 | `GeometryCutter` | Проём: прямоугольник, арка, круг; режет коробки, стены и здания |
-| `LiveBuilderWindow`, `BoxModelSceneTool` | Окно и инструмент окна сцены |
+| `LiveBuilderWindow`, `LiveBuilderSceneTool` | Окно и инструмент окна сцены |
+| `LiveBuilderTool`, `LiveBuilderWindowZone`, `LiveBuilderSelectionCard` | Инструмент палитры, зона окна, карточка «Выделено» — новый наследник находится сам |
 | `LiveBuilderWindowZones`, `LiveBuilderWindowControls` | Цветные зоны окна и его общие элементы: переключатели со значками, пояснения, плитки |
 | `LiveBuilderToolIcons`, `LiveBuilderOptionIcons` | Значки инструментов и настроек — рисуются кодом из линий (`LiveBuilderIconRasterizer`), без картинок |
 | `LiveBuilderRebuildQueue` | Одна очередь пересборки на все постройки |

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEngine;
@@ -7,14 +8,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Окно Live Builder — пульт инструмента сборки уровня, одной колонкой сверху вниз, по тому, от чего настройка зависит:
     /// - шапка — включён ли Live Builder, «i» — все пояснения сразу, клавиатура — клавиши
-    /// - палитра — инструменты плитками в два ряда, выбранная залита синим; цифра на плитке — клавиша в окне сцены
-    /// - цветные зоны (<see cref="LiveBuilderWindowZones"/>):
-    ///   серая «Общее» — действует всегда: этаж, сетка, вид (<see cref="LiveBuilderGlobalSettingsPanel"/>);
-    ///   синяя — настройки выбранного инструмента, только те, что на него действуют (<see cref="LiveBuilderToolSettingsPanel"/>);
-    ///   оранжевая «Выделено» — числа и действия выделенного; зоны нет, пока не выделено своё (<see cref="LiveBuilderSelectionPanel"/>);
-    ///   фиолетовая «Уровень» — этажи уровня, типы стен, уборка мешей; меняют редко, свёрнута (<see cref="LiveBuilderLevelPanel"/>)
+    /// - палитра — инструменты плитками в два ряда (<see cref="LiveBuilderToolPalette"/>), выбранная залита синим; цифра на плитке — клавиша в окне сцены
+    /// - цветные зоны (<see cref="LiveBuilderWindowZone"/>, вид — <see cref="LiveBuilderWindowZones"/>) — окно находит их само и ставит по порядку:
+    ///   серая «Общее» — действует всегда: этаж, сетка, вид; не прокручивается (<see cref="LiveBuilderGlobalZone"/>);
+    ///   синяя — настройки выбранного инструмента, только те, что на него действуют (<see cref="LiveBuilderToolZone"/>);
+    ///   оранжевая «Выделено» — числа и действия выделенного; зоны нет, пока не выделено своё (<see cref="LiveBuilderSelectionZone"/>);
+    ///   фиолетовая «Уровень» — этажи уровня, типы стен, уборка мешей; меняют редко, свёрнута (<see cref="LiveBuilderLevelZone"/>)
     /// - внизу — подсказка, что делать сейчас, та же, что в окне сцены, со значком инструмента
-    /// Окно само ничего не переключает: зоны сворачиваешь ты, они это помнят. Рисование мышью — в окне сцены (<see cref="BoxModelSceneTool"/>).
+    /// Окно само ничего не переключает: зоны сворачиваешь ты, они это помнят. Рисование мышью — в окне сцены (<see cref="LiveBuilderSceneTool"/>).
     /// </summary>
     public class LiveBuilderWindow : EditorWindow
     {
@@ -31,7 +32,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static GUIStyle hintPadding;
         private static GUIStyle hintTextStyle;
 
-        private readonly LiveBuilderSelectionPanel selectionPanel = new();
+        // Зоны по порядку: создаются, когда окно открывается, и отпускаются, когда закрывается.
+        private readonly List<LiveBuilderWindowZone> zones = new();
         private Vector2 scrollPosition;
         private bool isShowingHotkeys;
 
@@ -47,7 +49,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public static void Open()
         {
             var window = GetWindow<LiveBuilderWindow>();
-            window.titleContent = new GUIContent("Live Builder", LiveBuilderToolIcons.Themed(LiveBuilderTool.Box));
+            window.titleContent = new GUIContent("Live Builder", LiveBuilderToolIcons.Themed(LiveBuilderToolPalette.Get<LiveBuilderBoxTool>()));
             window.minSize = new Vector2(280f, 420f);
             window.Show();
         }
@@ -79,13 +81,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 DrawPalette();
             }
 
-            using (var zone = LiveBuilderWindowZones.Begin(LiveBuilderWindowZone.Global, "Общее", "этаж, сетка, вид",
-                       LiveBuilderOptionIcons.White(LiveBuilderOptionIcon.Global), "Global"))
-                if (zone.IsExpanded)
-                    LiveBuilderGlobalSettingsPanel.Draw();
+            DrawZones(false);
 
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, false, false);
-            DrawZones();
+            DrawZones(true);
             EditorGUILayout.Space(6f);
             EditorGUILayout.EndScrollView();
 
@@ -139,7 +138,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             using (LiveBuilderWindowControls.Card("Клавиши в окне сцены"))
             {
                 DrawHotkey("B", "включить Live Builder");
-                DrawHotkey("1 – " + LiveBuilderToolSetting.PaletteOrder.Length, "инструмент, пока ничего не рисуешь");
+                DrawHotkey("1 – " + LiveBuilderToolPalette.Tools.Count, "инструмент, пока ничего не рисуешь");
                 DrawHotkey("PageUp / PageDown", "этаж выше / ниже");
                 DrawHotkey("[  ]", "сетка мельче / крупнее");
                 DrawHotkey("Shift + клик", "рисуешь линию — точка наоборот: угол или плавно");
@@ -171,17 +170,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Промежуток в обоих рядах на одном месте: «Здание» замыкает группу «Строить», начатую в верхнем ряду.
         private static void DrawPalette()
         {
-            var tools = LiveBuilderToolSetting.PaletteOrder;
-            var columns = (tools.Length + 1) / 2;
+            var tools = LiveBuilderToolPalette.Tools;
+            var columns = (tools.Count + 1) / 2;
             EditorGUILayout.Space(4f);
 
-            for (var start = 0; start < tools.Length; start += columns)
-                DrawToolRow(tools, start, Mathf.Min(columns, tools.Length - start), columns);
+            for (var start = 0; start < tools.Count; start += columns)
+                DrawToolRow(tools, start, Mathf.Min(columns, tools.Count - start), columns);
 
             EditorGUILayout.Space(2f);
         }
 
-        private static void DrawToolRow(LiveBuilderTool[] tools, int start, int count, int columns)
+        private static void DrawToolRow(IReadOnlyList<LiveBuilderTool> tools, int start, int count, int columns)
         {
             var row = EditorGUILayout.GetControlRect(false, TileHeight);
             var tileWidth = (row.width - GroupGap - TileGap * (columns - 2)) / columns;
@@ -192,10 +191,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var x = row.x + index * (tileWidth + TileGap) + (index > 0 ? GroupGap - TileGap : 0f);
                 var tile = new Rect(x, row.y, tileWidth, row.height);
 
-                if (!LiveBuilderWindowControls.ToolTile(tile, tool, tool == LiveBuilderToolSetting.Current))
+                if (!LiveBuilderWindowControls.ToolTile(tile, tool, tool == LiveBuilderToolPalette.Current))
                     continue;
 
-                LiveBuilderToolSetting.Current = tool;
+                LiveBuilderToolPalette.Current = tool;
                 BoxModelActions.SetToolActive(true);
             }
 
@@ -205,34 +204,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Зоны ─────────────────────────────────────────────────────────
 
-        // Инструмент — всегда; выделенное — только когда выделено своё; уровень — в конце.
-        private void DrawZones()
+        // Прибитые сверху или прокручиваемые — по порядку. Зоны, которой сейчас нечего показать, нет совсем.
+        private void DrawZones(bool isScrolled)
         {
-            var tool = LiveBuilderToolSetting.Current;
+            foreach (var zone in zones)
+            {
+                if (zone.IsScrolled != isScrolled || !zone.IsVisible)
+                    continue;
 
-            using (var zone = LiveBuilderWindowZones.Begin(LiveBuilderWindowZone.Tool, LiveBuilderToolSetting.DisplayName(tool), "инструмент",
-                       LiveBuilderToolIcons.White(tool), "Tool"))
-                if (zone.IsExpanded)
-                    LiveBuilderToolSettingsPanel.Draw();
-
-            if (LiveBuilderSelectionPanel.HasEditableSelection())
-                using (var zone = LiveBuilderWindowZones.Begin(LiveBuilderWindowZone.Selection, "Выделено", SelectionDetail(),
-                           LiveBuilderToolIcons.White(LiveBuilderTool.Select), "Selected"))
-                    if (zone.IsExpanded)
-                        selectionPanel.Draw();
-
-            using (var zone = LiveBuilderWindowZones.Begin(LiveBuilderWindowZone.Level, "Уровень", "этажи, типы стен, меши",
-                       LiveBuilderOptionIcons.White(LiveBuilderOptionIcon.Level), "Level", false))
-                if (zone.IsExpanded)
-                    LiveBuilderLevelPanel.Draw();
-        }
-
-        // «Box Model» или «Box Model и ещё 2».
-        private static string SelectionDetail()
-        {
-            var count = Selection.gameObjects.Length;
-            var name = Selection.activeGameObject.name;
-            return count > 1 ? name + " и ещё " + (count - 1) : name;
+                using (var scope = LiveBuilderWindowZones.Begin(zone.ZoneColor, zone.Title, zone.Detail, zone.Icon, zone.PreferenceKey, zone.IsExpandedByDefault))
+                    if (scope.IsExpanded)
+                        zone.Draw();
+            }
         }
 
 
@@ -244,8 +227,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (!BoxModelActions.IsToolActive)
                 return "Live Builder выключен — B в окне сцены или кнопка вверху";
 
-            var text = BoxModelSceneTool.CurrentHintText;
-            return string.IsNullOrEmpty(text) ? LiveBuilderToolSetting.Tooltip(LiveBuilderToolSetting.Current) : text;
+            var text = LiveBuilderSceneTool.CurrentHintText;
+            return string.IsNullOrEmpty(text) ? LiveBuilderToolPalette.Current.Tooltip : text;
         }
 
         private float HintHeight(string hint)
@@ -264,9 +247,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 if (isActive)
                 {
-                    EditorGUI.DrawRect(rect, LiveBuilderWindowZones.TintOf(LiveBuilderWindowZone.Tool, 0.14f));
-                    EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), LiveBuilderWindowZones.ColorOf(LiveBuilderWindowZone.Tool));
-                    LiveBuilderToolIcons.Draw(new Rect(inner.x, inner.y + 1f, HintIconSize, HintIconSize), LiveBuilderToolSetting.Current, LiveBuilderWindowControls.IconColor);
+                    EditorGUI.DrawRect(rect, LiveBuilderWindowZones.TintOf(LiveBuilderZoneColor.Tool, 0.14f));
+                    EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), LiveBuilderWindowZones.ColorOf(LiveBuilderZoneColor.Tool));
+                    LiveBuilderToolIcons.Draw(new Rect(inner.x, inner.y + 1f, HintIconSize, HintIconSize), LiveBuilderToolPalette.Current, LiveBuilderWindowControls.IconColor);
                 }
                 else
                     LiveBuilderWindowControls.DrawLine(new Rect(rect.x, rect.y, rect.width, 1f));
@@ -282,11 +265,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private void OnEnable()
         {
             wantsMouseMove = true;
+            zones.AddRange(LiveBuilderTypeCatalog.CreateAll<LiveBuilderWindowZone>());
+            zones.Sort((first, second) => first.Order.CompareTo(second.Order));
             Selection.selectionChanged += Repaint;
             LiveBuilderStoreys.Changed += Repaint;
-            LiveBuilderToolSetting.Changed += Repaint;
+            LiveBuilderToolPalette.Changed += Repaint;
             LiveBuilderRoomSettings.ShapeChanged += Repaint;
-            BoxModelSceneTool.HintChanged += Repaint;
+            LiveBuilderSceneTool.HintChanged += Repaint;
             LiveBuilderContourSelection.Changed += Repaint;
             ToolManager.activeToolChanged += Repaint;
         }
@@ -295,12 +280,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             Selection.selectionChanged -= Repaint;
             LiveBuilderStoreys.Changed -= Repaint;
-            LiveBuilderToolSetting.Changed -= Repaint;
+            LiveBuilderToolPalette.Changed -= Repaint;
             LiveBuilderRoomSettings.ShapeChanged -= Repaint;
-            BoxModelSceneTool.HintChanged -= Repaint;
+            LiveBuilderSceneTool.HintChanged -= Repaint;
             LiveBuilderContourSelection.Changed -= Repaint;
             ToolManager.activeToolChanged -= Repaint;
-            selectionPanel.Dispose();
+
+            foreach (var zone in zones)
+                zone.Dispose();
+
+            zones.Clear();
         }
     }
 }

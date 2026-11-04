@@ -6,7 +6,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Значки окна Live Builder из линий, без файлов картинок: ломаные в квадрате 24 × 24 (y вниз) превращаются в текстуру с гладкими краями.
-    /// Здесь же — заготовки для рисунков: ломаная по числам, дуга, кривая. Сами рисунки — в <see cref="LiveBuilderToolIcons"/> и <see cref="LiveBuilderOptionIcons"/>.
+    /// Здесь же — заготовки для рисунков: ломаная по числам, дуга, кривая. Сами рисунки — у инструментов (<see cref="LiveBuilderTool.IconLines"/>) и в <see cref="LiveBuilderOptionIcons"/>.
     /// Текстуры не сохраняются со сценой и сами не удаляются: перед перезагрузкой скриптов их удаляем здесь — запомненные значки к тому времени уже забыты.
     /// </summary>
     [InitializeOnLoad]

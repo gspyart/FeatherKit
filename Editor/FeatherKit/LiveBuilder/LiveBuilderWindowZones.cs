@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Цветные зоны окна Live Builder (<see cref="LiveBuilderWindowZone"/>): чтобы глаз сразу видел, где общее, где выбранный инструмент,
+    /// Цветные зоны окна Live Builder (<see cref="LiveBuilderWindowZone"/>, цвет — <see cref="LiveBuilderZoneColor"/>): чтобы глаз сразу видел, где общее, где выбранный инструмент,
     /// где выделенное. У зоны — цветная полоса слева, лёгкая подкраска фона и заголовок: стрелка, цветной квадрат со значком, название
     /// и серое пояснение. Клик по заголовку сворачивает зону, свёрнута или нет — помнится у каждого человека.
     /// Цвета — под светлую и тёмную тему редактора.
@@ -23,22 +23,22 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Цвета ────────────────────────────────────────────────────────
 
-        public static Color ColorOf(LiveBuilderWindowZone zone)
+        public static Color ColorOf(LiveBuilderZoneColor zone)
         {
             var isDark = EditorGUIUtility.isProSkin;
 
             return zone switch
             {
-                LiveBuilderWindowZone.Tool => isDark ? new Color(0.23f, 0.46f, 0.78f) : new Color(0.16f, 0.42f, 0.82f),
-                LiveBuilderWindowZone.Selection => isDark ? new Color(0.8f, 0.52f, 0.17f) : new Color(0.85f, 0.5f, 0.1f),
-                LiveBuilderWindowZone.Level => isDark ? new Color(0.46f, 0.4f, 0.76f) : new Color(0.42f, 0.35f, 0.75f),
+                LiveBuilderZoneColor.Tool => isDark ? new Color(0.23f, 0.46f, 0.78f) : new Color(0.16f, 0.42f, 0.82f),
+                LiveBuilderZoneColor.Selection => isDark ? new Color(0.8f, 0.52f, 0.17f) : new Color(0.85f, 0.5f, 0.1f),
+                LiveBuilderZoneColor.Level => isDark ? new Color(0.46f, 0.4f, 0.76f) : new Color(0.42f, 0.35f, 0.75f),
                 _ => isDark ? new Color(0.45f, 0.45f, 0.45f) : new Color(0.5f, 0.5f, 0.5f)
             };
         }
 
 
         // Лёгкая подкраска фона зоны её цветом.
-        public static Color TintOf(LiveBuilderWindowZone zone, float alpha = 0.07f)
+        public static Color TintOf(LiveBuilderZoneColor zone, float alpha = 0.07f)
         {
             var color = ColorOf(zone);
             color.a = alpha;
@@ -64,7 +64,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // Зона окна. Использовать в using; рисовать содержимое, только если IsExpanded.
         // key — под ним помнится, свёрнута ли зона; icon — белый значок для цветного квадрата.
-        public static LiveBuilderWindowZoneScope Begin(LiveBuilderWindowZone zone, string title, string detail, Texture2D icon, string key,
+        public static LiveBuilderWindowZoneScope Begin(LiveBuilderZoneColor zone, string title, string detail, Texture2D icon, string key,
                                                        bool isExpandedByDefault = true)
         {
             return new LiveBuilderWindowZoneScope(zone, title, detail, icon, key, isExpandedByDefault);
@@ -72,7 +72,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public readonly struct LiveBuilderWindowZoneScope : System.IDisposable
         {
-            public LiveBuilderWindowZoneScope(LiveBuilderWindowZone zone, string title, string detail, Texture2D icon, string key, bool isExpandedByDefault)
+            public LiveBuilderWindowZoneScope(LiveBuilderZoneColor zone, string title, string detail, Texture2D icon, string key, bool isExpandedByDefault)
             {
                 var rect = EditorGUILayout.BeginVertical(ZoneStyle);
 
@@ -96,7 +96,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Стрелка, цветной квадрат со значком, название и пояснение; клик по всей строке — свернуть или развернуть.
-        private static bool DrawHeader(LiveBuilderWindowZone zone, string title, string detail, Texture2D icon, string key, bool isExpandedByDefault)
+        private static bool DrawHeader(LiveBuilderZoneColor zone, string title, string detail, Texture2D icon, string key, bool isExpandedByDefault)
         {
             var preferenceKey = ExpandedPreferencePrefix + key;
             var isExpanded = EditorPrefs.GetBool(preferenceKey, isExpandedByDefault);
@@ -114,7 +114,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return !isExpanded;
         }
 
-        private static void DrawHeaderLook(Rect rect, LiveBuilderWindowZone zone, string title, string detail, Texture2D icon, bool isExpanded)
+        private static void DrawHeaderLook(Rect rect, LiveBuilderZoneColor zone, string title, string detail, Texture2D icon, bool isExpanded)
         {
             if (rect.Contains(Event.current.mousePosition))
                 EditorGUI.DrawRect(new Rect(rect.x - 7f, rect.y, rect.width + 15f, rect.height), TintOf(zone, 0.1f));

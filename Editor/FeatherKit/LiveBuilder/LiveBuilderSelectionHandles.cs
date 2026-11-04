@@ -5,8 +5,8 @@ using UnityEditor;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Ручки того, что выделено, в инструменте «Live Builder» (<see cref="BoxModelSceneTool"/>): каркасы коробок у объектов в выделении — всегда,
-    /// а ручки — только у того, что правит выбранный инструмент (<see cref="LiveBuilderToolScope"/>): у коробок, комнат, лестниц (<see cref="BoxModelPartHandles"/>),
+    /// Ручки того, что выделено, в инструменте «Live Builder» (<see cref="LiveBuilderSceneTool"/>): каркасы коробок у объектов в выделении — всегда,
+    /// а ручки — только у того, что правит выбранный инструмент (<see cref="LiveBuilderTool.CanEdit(UnityEngine.GameObject)"/>): у коробок, комнат, лестниц (<see cref="BoxModelPartHandles"/>),
     /// скосы рёбер коробок (<see cref="BoxModelChamferHandles"/>),
     /// вырезов (<see cref="GeometryCutterHandles"/>), в режиме «Грани» — стрелки выделенных граней, ручка повтора у группы повтора.
     /// Контур стен и зданий — у <see cref="LiveBuilderContourHandles"/>.
@@ -29,10 +29,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 BoxModelPartHandles.DrawWireframes(model);
 
             foreach (var selected in Selection.gameObjects)
-                if (selected.TryGetComponent<GeometryCutter>(out var cutter) && LiveBuilderToolScope.CanEdit(tool, cutter))
+                if (selected.TryGetComponent<GeometryCutter>(out var cutter) && tool.CanEdit(cutter))
                     GeometryCutterHandles.Draw(cutter);
 
-            if (BoxModelSelectionModeSetting.IsSelectingFaces && LiveBuilderToolScope.CanEditFaces(tool))
+            if (BoxModelSelectionModeSetting.IsSelectingFaces && tool.CanEditFaces)
             {
                 BoxModelFaceMoveHandle.DrawSelection();
                 return;
@@ -40,10 +40,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             DrawBoxHandles(tool);
 
-            if (LiveBuilderToolScope.CanEditFaces(tool))
+            if (tool.CanEditFaces)
                 BoxModelFaceMoveHandle.DrawCollectedFaces();
 
-            if (LiveBuilderToolScope.CanEditRepeats(tool))
+            if (tool.CanEditRepeats)
                 LiveBuilderRepeatHandle.DrawForSelection();
         }
 
@@ -54,7 +54,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 var model = selected.GetComponentInParent<BoxModel>();
 
-                if (model == null || !LiveBuilderToolScope.CanEdit(tool, selected))
+                if (model == null || !tool.CanEdit(selected))
                     continue;
 
                 if (selected.TryGetComponent<BoxModelPart>(out var part))

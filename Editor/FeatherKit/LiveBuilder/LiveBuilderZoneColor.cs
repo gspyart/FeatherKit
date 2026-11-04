@@ -1,10 +1,10 @@
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Смысловая зона окна Live Builder — у каждой свой цвет (<see cref="LiveBuilderWindowZones"/>):
+    /// Цвет смысловой зоны окна Live Builder (<see cref="LiveBuilderWindowZones"/>):
     /// общее — серая, выбранный инструмент — синяя, выделенное — оранжевая, уровень — фиолетовая.
     /// </summary>
-    public enum LiveBuilderWindowZone
+    public enum LiveBuilderZoneColor
     {
         Global,
         Tool,

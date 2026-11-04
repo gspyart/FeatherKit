@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FeatherKit.Tests.LiveBuilder
 {
     /// <summary>
-    /// Кто что правит (<see cref="LiveBuilderToolScope"/>): «Выделение» — всё, «Коробка» — только коробки, «Стена» — только стены по линии,
+    /// Кто что правит (<see cref="LiveBuilderTool.CanEdit(UnityEngine.GameObject)"/>): «Выделение» — всё, «Коробка» — только коробки, «Стена» — только стены по линии,
     /// «Здание» — здания и их части, «Комната» — комнаты, в том числе по контуру, «Проём» — вырезы и вырезающие коробки, «Линейка» — ничего.
     /// </summary>
     public class LiveBuilderToolScopeTests
@@ -39,27 +39,27 @@ namespace FeatherKit.Tests.LiveBuilder
             var wall = testScene.CreateWall(new Vector3(10f, 0f, 0f), new Vector3(16f, 0f, 0f));
             var building = testScene.CreateBuilding(3, new Vector3(30f, 0f, 0f), new Vector3(38f, 0f, 0f), new Vector3(38f, 0f, 8f), new Vector3(30f, 0f, 8f));
 
-            Assert.IsTrue(LiveBuilderToolScope.CanEdit(LiveBuilderTool.Select, wall));
-            Assert.IsTrue(LiveBuilderToolScope.CanEdit(LiveBuilderTool.Select, model.gameObject), "объект из коробок целиком — только в «Выделении»");
+            Assert.IsTrue(Tool<LiveBuilderSelectTool>().CanEdit(wall));
+            Assert.IsTrue(Tool<LiveBuilderSelectTool>().CanEdit(model.gameObject), "объект из коробок целиком — только в «Выделении»");
 
-            Assert.IsTrue(LiveBuilderToolScope.CanEdit(LiveBuilderTool.Box, box));
-            Assert.IsFalse(LiveBuilderToolScope.CanEdit(LiveBuilderTool.Box, wall), "«Коробка» не правит стены");
-            Assert.IsFalse(LiveBuilderToolScope.CanEdit(LiveBuilderTool.Box, model.gameObject));
+            Assert.IsTrue(Tool<LiveBuilderBoxTool>().CanEdit(box));
+            Assert.IsFalse(Tool<LiveBuilderBoxTool>().CanEdit(wall), "«Коробка» не правит стены");
+            Assert.IsFalse(Tool<LiveBuilderBoxTool>().CanEdit(model.gameObject));
 
-            Assert.IsTrue(LiveBuilderToolScope.CanEdit(LiveBuilderTool.Wall, wall));
-            Assert.IsFalse(LiveBuilderToolScope.CanEdit(LiveBuilderTool.Wall, box));
-            Assert.IsFalse(LiveBuilderToolScope.CanEdit(LiveBuilderTool.Wall, building));
+            Assert.IsTrue(Tool<LiveBuilderWallTool>().CanEdit(wall));
+            Assert.IsFalse(Tool<LiveBuilderWallTool>().CanEdit(box));
+            Assert.IsFalse(Tool<LiveBuilderWallTool>().CanEdit(building));
 
-            Assert.IsTrue(LiveBuilderToolScope.CanEdit(LiveBuilderTool.Building, building));
-            Assert.IsTrue(LiveBuilderToolScope.CanEdit(LiveBuilderTool.Building, building.GetComponentInChildren<SplineBuildingPart>()), "часть здания — как здание");
-            Assert.IsFalse(LiveBuilderToolScope.CanEdit(LiveBuilderTool.Room, building), "здание в три этажа — не комната");
+            Assert.IsTrue(Tool<LiveBuilderBuildingTool>().CanEdit(building));
+            Assert.IsTrue(Tool<LiveBuilderBuildingTool>().CanEdit(building.GetComponentInChildren<SplineBuildingPart>()), "часть здания — как здание");
+            Assert.IsFalse(Tool<LiveBuilderRoomTool>().CanEdit(building), "здание в три этажа — не комната");
 
-            Assert.IsTrue(LiveBuilderToolScope.CanEdit(LiveBuilderTool.Opening, cutBox), "вырезающая коробка — проём");
-            Assert.IsFalse(LiveBuilderToolScope.CanEdit(LiveBuilderTool.Opening, box));
+            Assert.IsTrue(Tool<LiveBuilderOpeningTool>().CanEdit(cutBox), "вырезающая коробка — проём");
+            Assert.IsFalse(Tool<LiveBuilderOpeningTool>().CanEdit(box));
 
-            Assert.IsFalse(LiveBuilderToolScope.CanEdit(LiveBuilderTool.Ruler, box));
-            Assert.IsTrue(LiveBuilderToolScope.CanEditFaces(LiveBuilderTool.Box));
-            Assert.IsFalse(LiveBuilderToolScope.CanEditFaces(LiveBuilderTool.Wall));
+            Assert.IsFalse(Tool<LiveBuilderRulerTool>().CanEdit(box));
+            Assert.IsTrue(Tool<LiveBuilderBoxTool>().CanEditFaces);
+            Assert.IsFalse(Tool<LiveBuilderWallTool>().CanEditFaces);
         }
 
 
@@ -70,8 +70,14 @@ namespace FeatherKit.Tests.LiveBuilder
             var closedWall = testScene.CreateWall(new Vector3(10f, 0f, 0f), new Vector3(14f, 0f, 0f), new Vector3(14f, 0f, 4f));
             closedWall.GetComponent<UnityEngine.Splines.SplineContainer>().Spline.Closed = true;
 
-            Assert.IsTrue(LiveBuilderToolScope.CanEdit(LiveBuilderTool.Room, room), "комната по контуру в пустоте — здание в один этаж");
-            Assert.IsTrue(LiveBuilderToolScope.CanEdit(LiveBuilderTool.Room, closedWall), "в здании и доме — замкнутая стена");
+            Assert.IsTrue(Tool<LiveBuilderRoomTool>().CanEdit(room), "комната по контуру в пустоте — здание в один этаж");
+            Assert.IsTrue(Tool<LiveBuilderRoomTool>().CanEdit(closedWall), "в здании и доме — замкнутая стена");
+        }
+
+
+        private static T Tool<T>() where T : LiveBuilderTool
+        {
+            return LiveBuilderToolPalette.Get<T>();
         }
     }
 }

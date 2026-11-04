@@ -36,16 +36,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Показан ли контур: выделено одно здание, стена или комната по контуру.
-        public bool IsShown => LiveBuilderContourSelection.Owner != null;
+        public static bool IsShown => LiveBuilderContourSelection.Owner != null;
 
-        // Тянут точку, ус или рамку — мышь занята правкой контура.
-        public bool IsGestureActive => drag.IsDragging || boxSelect.IsSelecting;
-
-        public string Hint => LiveBuilderContourSelection.Knots.Count > 0
+        public static string Hint => LiveBuilderContourSelection.Knots.Count > 0
             ? "Выбрано точек: " + LiveBuilderContourSelection.Knots.Count + ". Тяни — двигать, стрелки — на шаг сетки, Delete — убрать, " +
               "двойной клик — угол, плавно или Безье, у Безье — тяни усы, у угла — голубая ручка: скругление, Esc — снять выбор"
             : "Точки контура: тяни — двигать, «+» — новая точка, Shift+клик или Shift+рамка — выбрать несколько, двойной клик — угол, плавно или Безье" +
               (LiveBuilderContourSelection.Owner is SplineWall ? ", C — замкнуть или разомкнуть" : "");
+
+        // Тянут точку, ус или рамку — мышь занята правкой контура.
+        public bool IsGestureActive => drag.IsDragging || boxSelect.IsSelecting;
 
 
         // ── Окно сцены ───────────────────────────────────────────────────

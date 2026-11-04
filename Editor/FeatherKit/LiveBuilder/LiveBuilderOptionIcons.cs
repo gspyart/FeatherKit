@@ -87,7 +87,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderOptionIcon.BoxAuto => BoxAutoLines(),
                 LiveBuilderOptionIcon.BoxAdd => BoxAddLines(),
                 LiveBuilderOptionIcon.BoxCut => BoxCutLines(),
-                LiveBuilderOptionIcon.Boxes => LiveBuilderToolIcons.LinesOf(LiveBuilderTool.Box),
+                LiveBuilderOptionIcon.Boxes => LiveBuilderToolPalette.Get<LiveBuilderBoxTool>().IconLines,
                 LiveBuilderOptionIcon.Faces => FacesLines(),
                 LiveBuilderOptionIcon.NewObject => NewObjectLines(),
                 LiveBuilderOptionIcon.Corner => CornerLines(),
@@ -100,7 +100,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderOptionIcon.OpeningCircle => new List<Vector2[]> { Arc(new Vector2(12, 12), 7.5f, 0f, 360f) },
                 LiveBuilderOptionIcon.AtCursor => AtCursorLines(),
                 LiveBuilderOptionIcon.SeparateSteps => SeparateStepsLines(),
-                LiveBuilderOptionIcon.SolidSteps => LiveBuilderToolIcons.LinesOf(LiveBuilderTool.Stairs),
+                LiveBuilderOptionIcon.SolidSteps => LiveBuilderToolPalette.Get<LiveBuilderStairsTool>().IconLines,
                 LiveBuilderOptionIcon.ThisStorey => ThisStoreyLines(),
                 LiveBuilderOptionIcon.AllStoreysAbove => AllStoreysAboveLines(),
                 LiveBuilderOptionIcon.Floor => FloorLines(),
@@ -193,7 +193,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Кубик со всеми рёбрами, и видимыми, и задними.
         private static List<Vector2[]> WireframeLines()
         {
-            var lines = LiveBuilderToolIcons.LinesOf(LiveBuilderTool.Box);
+            var lines = LiveBuilderToolPalette.Get<LiveBuilderBoxTool>().IconLines;
             lines.Add(Points(12, 12, 12, 3));
             lines.Add(Points(12, 12, 4, 16.5f));
             lines.Add(Points(12, 12, 20, 16.5f));
@@ -239,7 +239,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Кубик со штриховкой на одной грани.
         private static List<Vector2[]> FacesLines()
         {
-            var lines = LiveBuilderToolIcons.LinesOf(LiveBuilderTool.Box);
+            var lines = LiveBuilderToolPalette.Get<LiveBuilderBoxTool>().IconLines;
 
             foreach (var t in new[] { 0.25f, 0.5f, 0.75f })
                 lines.Add(Points(12, 12 + 9f * t, 20, 7.5f + 9f * t));

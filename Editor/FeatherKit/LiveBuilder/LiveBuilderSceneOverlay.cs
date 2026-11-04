@@ -43,18 +43,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Значки инструментов, как в окне; название, клавиша и что делает — во всплывающей подсказке.
         private static void DrawTools()
         {
-            var tools = LiveBuilderToolSetting.PaletteOrder;
-            var current = System.Array.IndexOf(tools, LiveBuilderToolSetting.Current);
-            var contents = new GUIContent[tools.Length];
+            var tools = LiveBuilderToolPalette.Tools;
+            var current = LiveBuilderToolPalette.IndexOf(LiveBuilderToolPalette.Current);
+            var contents = new GUIContent[tools.Count];
 
-            for (var index = 0; index < tools.Length; index++)
+            for (var index = 0; index < tools.Count; index++)
                 contents[index] = new GUIContent(LiveBuilderToolIcons.Themed(tools[index]),
-                    LiveBuilderToolSetting.DisplayName(tools[index]) + " (" + LiveBuilderToolSetting.HotkeyOf(tools[index]) + ") — " + LiveBuilderToolSetting.Tooltip(tools[index]));
+                    tools[index].DisplayName + " (" + LiveBuilderToolPalette.HotkeyOf(tools[index]) + ") — " + tools[index].Tooltip);
 
-            var chosen = GUILayout.Toolbar(current, contents, EditorStyles.miniButton, GUILayout.Height(22f), GUILayout.Width(tools.Length * 28f));
+            var chosen = GUILayout.Toolbar(current, contents, EditorStyles.miniButton, GUILayout.Height(22f), GUILayout.Width(tools.Count * 28f));
 
             if (chosen != current)
-                LiveBuilderToolSetting.Current = tools[chosen];
+                LiveBuilderToolPalette.Current = tools[chosen];
         }
 
 
@@ -72,20 +72,20 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Всё, комнаты (разрез на 3 м над полом этажа), стены вниз (на 1 м). Только в окне сцены.
-        // Виды — общие с окном (<see cref="LiveBuilderGlobalSettingsPanel"/>); своя высота среза — не горит ни одна кнопка.
+        // Виды — общие с окном (<see cref="LiveBuilderGlobalZone"/>); своя высота среза — не горит ни одна кнопка.
         private static void DrawVisibility()
         {
-            DrawViewButton(LiveBuilderGlobalSettingsPanel.ViewAll, new GUIContent("Всё", "Всё как есть"), EditorStyles.miniButtonLeft);
-            DrawViewButton(LiveBuilderGlobalSettingsPanel.ViewRooms, new GUIContent("Комнаты", "Выше 3 м над полом этажа спрятано"), EditorStyles.miniButtonMid);
-            DrawViewButton(LiveBuilderGlobalSettingsPanel.ViewWallsDown, new GUIContent("Стены вниз", "Выше 1 м над полом этажа спрятано"), EditorStyles.miniButtonRight);
+            DrawViewButton(LiveBuilderGlobalZone.ViewAll, new GUIContent("Всё", "Всё как есть"), EditorStyles.miniButtonLeft);
+            DrawViewButton(LiveBuilderGlobalZone.ViewRooms, new GUIContent("Комнаты", "Выше 3 м над полом этажа спрятано"), EditorStyles.miniButtonMid);
+            DrawViewButton(LiveBuilderGlobalZone.ViewWallsDown, new GUIContent("Стены вниз", "Выше 1 м над полом этажа спрятано"), EditorStyles.miniButtonRight);
         }
 
         private static void DrawViewButton(int preset, GUIContent content, GUIStyle style)
         {
-            var isCurrent = LiveBuilderGlobalSettingsPanel.CurrentViewPreset() == preset;
+            var isCurrent = LiveBuilderGlobalZone.CurrentViewPreset() == preset;
 
             if (GUILayout.Toggle(isCurrent, content, style) && !isCurrent)
-                LiveBuilderGlobalSettingsPanel.ApplyViewPreset(preset);
+                LiveBuilderGlobalZone.ApplyViewPreset(preset);
         }
     }
 }

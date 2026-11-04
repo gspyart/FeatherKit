@@ -7,7 +7,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Выделение кликом в Live Builder — что ближе к камере под мышью (<see cref="LiveBuilderSceneHit"/>), если это правит выбранный инструмент
-    /// (<see cref="LiveBuilderToolScope"/>): в «Выделении» — что угодно, в «Коробке» — только коробки и так далее:
+    /// (<see cref="LiveBuilderTool.CanEdit(UnityEngine.GameObject)"/>): в «Выделении» — что угодно, в «Коробке» — только коробки и так далее:
     /// - грань объекта из коробок — коробка, комната или лестница, которая её создала;
     ///   в режиме «Грани» — видимый кусок грани под мышью, двойной клик — грань коробки целиком
     /// - стена по линии или здание по контуру — они сами
@@ -44,7 +44,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var hit = LiveBuilderSceneHit.Find(HandleUtility.GUIPointToWorldRay(current.mousePosition));
 
             if (hit.HasBoxSurface && !hit.IsHoleCutterInFront && !hit.IsPathOwnerCloser && BoxModelSelectionModeSetting.IsSelectingFaces
-                && LiveBuilderToolScope.CanEditFaces(tool))
+                && tool.CanEditFaces)
             {
                 if (!BoxModelPartFace.TryFindUnder(hit.BoxSurface, out var piece))
                     return;
@@ -59,7 +59,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var clicked = ClickedObject(hit);
 
-            if (clicked != null && LiveBuilderToolScope.CanEdit(tool, clicked))
+            if (clicked != null && tool.CanEdit(clicked))
             {
                 Apply(clicked, current.shift);
                 return;
@@ -79,7 +79,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var clicked = ClickedObject(LiveBuilderSceneHit.Find(HandleUtility.GUIPointToWorldRay(current.mousePosition)));
 
-            if (clicked == null || !LiveBuilderToolScope.CanEdit(tool, clicked))
+            if (clicked == null || !tool.CanEdit(clicked))
                 return false;
 
             Apply(clicked, false);

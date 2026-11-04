@@ -8,11 +8,28 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Зона «Уровень» окна Live Builder — общее на весь уровень, что меняют редко:
     /// этажи уровня (высота этажа, пол нулевого, высота разреза) и библиотека типов стен — все типы проекта списком,
     /// толщина и материал правятся прямо здесь, стены этих типов перестраиваются сами.
-    /// Внизу — уборка файлов мешей, которые больше никому не нужны.
+    /// Внизу — уборка файлов мешей, которые больше никому не нужны. Свёрнута, пока не развернёшь.
     /// </summary>
-    public static class LiveBuilderLevelPanel
+    public sealed class LiveBuilderLevelZone : LiveBuilderWindowZone
     {
-        public static void Draw()
+        // ── Зона ─────────────────────────────────────────────────────────
+
+        public override string Title => "Уровень";
+
+        public override string Detail => "этажи, типы стен, меши";
+
+        public override Texture2D Icon => LiveBuilderOptionIcons.White(LiveBuilderOptionIcon.Level);
+
+        public override LiveBuilderZoneColor ZoneColor => LiveBuilderZoneColor.Level;
+
+        public override int Order => 3;
+
+        public override string PreferenceKey => "Level";
+
+        public override bool IsExpandedByDefault => false;
+
+
+        public override void Draw()
         {
             DrawStoreys();
             DrawWallTypes();

@@ -1,0 +1,137 @@
+using System.Collections.Generic;
+using FeatherKit.LiveBuilder;
+using UnityEditor;
+using UnityEngine;
+using static FeatherKit.EditorTools.LiveBuilder.LiveBuilderIconRasterizer;
+
+namespace FeatherKit.EditorTools.LiveBuilder
+{
+    /// <summary>
+    /// «Здание»: кликами контур — по нему встаёт здание по контуру: стены на все этажи, перекрытия и крыша (<see cref="LiveBuilderPathGesture"/>).
+    /// Правит только здания. Строит новое, а не внутри другого здания: в подсказке — этаж уровня.
+    /// </summary>
+    public sealed class LiveBuilderBuildingTool : LiveBuilderTool
+    {
+        private readonly LiveBuilderPathGesture buildingGesture = new(LiveBuilderPathKind.Building);
+
+
+        // ── Описание ─────────────────────────────────────────────────────
+
+        public override string Id => "Building";
+
+        public override string DisplayName => "Здание";
+
+        public override string Tooltip => "Кликами ставишь контур — по нему встаёт здание: стены на все этажи, перекрытия и крыша. " +
+                                          "Угол или плавно — переключатель или Shift. Клик по первой точке или Enter — готово";
+
+        public override int PaletteOrder => 4;
+
+        // Дом с окнами и дверью.
+        public override List<Vector2[]> IconLines
+        {
+            get
+            {
+                var lines = new List<Vector2[]> { Points(6, 21, 6, 3, 18, 3, 18, 21, 4, 21, 20, 21), Points(10.5f, 21, 10.5f, 17, 13.5f, 17, 13.5f, 21) };
+
+                foreach (var y in new[] { 6.5f, 11.5f })
+                    foreach (var x in new[] { 9f, 13f })
+                        lines.Add(Points(x, y, x + 2, y, x + 2, y + 2.5f, x, y + 2.5f, x, y));
+
+                return lines;
+            }
+        }
+
+
+        // ── Окно сцены ───────────────────────────────────────────────────
+
+        public override LiveBuilderPathGesture PathGesture => buildingGesture;
+
+        public override string Hint => PathHint(buildingGesture);
+
+
+        // ── Что правит ───────────────────────────────────────────────────
+
+        protected override bool CanEditTarget(Component target)
+        {
+            return target is SplineBuilding;
+        }
+
+
+        // ── Окно ─────────────────────────────────────────────────────────
+
+        public override void DrawSettings()
+        {
+            using (LiveBuilderWindowControls.Card("Контур"))
+            {
+                LiveBuilderToolSettingsFields.DrawKnotModeSwitch();
+
+                LiveBuilderBuildingSettings.ContourSide = (SplineBuildingContourSide)LiveBuilderWindowControls.Switch(
+                    new GUIContent("Контур — это", "Снаружи — контур это габарит здания. Внутри — стены комнаты изнутри. Середина — ось стен"),
+                    (int)LiveBuilderBuildingSettings.ContourSide, "Снаружи", "Внутри", "Середина");
+            }
+
+            using (LiveBuilderWindowControls.Card("Этажи"))
+            {
+                LiveBuilderBuildingSettings.StoreyCount = EditorGUILayout.IntSlider(new GUIContent("Этажей", "Перекрытия между этажами ставятся сами"),
+                    LiveBuilderBuildingSettings.StoreyCount, 1, SplineBuilding.MaxStoreys);
+                LiveBuilderWindowControls.Computed("Высота этажа", BoxModelSceneText.FormatMeters(LiveBuilderStoreys.StoreyHeight) + " м",
+                    "Как у этажей уровня — в зоне «Уровень»");
+            }
+
+            DrawWallsAndSlabs();
+            DrawMaterials();
+
+            LiveBuilderWindowControls.Explanation("Building", "Здание встанет на выбранный этаж: его пол — на полу этажа, этажи — те же, что в окне.");
+        }
+
+        private static void DrawWallsAndSlabs()
+        {
+            using (LiveBuilderWindowControls.Card("Стены и перекрытия"))
+            {
+                LiveBuilderBuildingSettings.WallType = LiveBuilderWallTypes.Popup(
+                    new GUIContent("Тип стен", "Толщина и материал снаружи — из типа, общие со всеми стенами этого типа. Без типа — свои числа"),
+                    LiveBuilderBuildingSettings.WallType);
+
+                if (LiveBuilderBuildingSettings.WallType == null)
+                    LiveBuilderBuildingSettings.WallThickness = EditorGUILayout.FloatField(new GUIContent("Толщина стен, м", "Наружная — 0,3"),
+                        LiveBuilderBuildingSettings.WallThickness);
+
+                LiveBuilderBuildingSettings.SlabThickness = EditorGUILayout.FloatField(new GUIContent("Толщина перекрытий, м", "Пол, перекрытия и крыша"),
+                    LiveBuilderBuildingSettings.SlabThickness);
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    LiveBuilderWindowControls.PrefixLabel(new GUIContent("Есть", "Нажата — есть, бледная — нет"));
+                    LiveBuilderBuildingSettings.HasFloor = LiveBuilderWindowControls.IconToggle(LiveBuilderBuildingSettings.HasFloor, LiveBuilderOptionIcon.Floor,
+                        "Пол", "Плита пола первого этажа");
+                    LiveBuilderBuildingSettings.HasRoof = LiveBuilderWindowControls.IconToggle(LiveBuilderBuildingSettings.HasRoof, LiveBuilderOptionIcon.Roof,
+                        "Крыша", "Плоская крыша сверху. Нет — сверху видно этажи");
+                }
+            }
+        }
+
+        private static void DrawMaterials()
+        {
+            using (LiveBuilderWindowControls.Card("Материалы"))
+            {
+                if (LiveBuilderBuildingSettings.WallType == null)
+                    LiveBuilderBuildingSettings.OuterWallMaterial = LiveBuilderWindowControls.MaterialField("Стены снаружи", "Пусто — серый материал набора",
+                        LiveBuilderBuildingSettings.OuterWallMaterial);
+
+                LiveBuilderBuildingSettings.InnerWallMaterial = LiveBuilderWindowControls.MaterialField("Стены изнутри", "Пусто — как снаружи", LiveBuilderBuildingSettings.InnerWallMaterial);
+                LiveBuilderBuildingSettings.FloorMaterial = LiveBuilderWindowControls.MaterialField("Пол", "Пусто — как стены снаружи", LiveBuilderBuildingSettings.FloorMaterial);
+                LiveBuilderBuildingSettings.CeilingMaterial = LiveBuilderWindowControls.MaterialField("Потолок", "Пусто — как стены снаружи", LiveBuilderBuildingSettings.CeilingMaterial);
+                LiveBuilderBuildingSettings.RoofMaterial = LiveBuilderWindowControls.MaterialField("Крыша", "Пусто — как стены снаружи", LiveBuilderBuildingSettings.RoofMaterial);
+            }
+        }
+
+
+        // ── Окно сцены ───────────────────────────────────────────────────
+
+        // Здание строится новым, не внутри другого — в подсказке этаж уровня.
+        public override string BuildingStoreyHint(LiveBuilderBuildingContext context)
+        {
+            return null;
+        }
+    }
+}
