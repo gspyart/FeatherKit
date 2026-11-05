@@ -12,7 +12,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Внутри группы — свои коробки, стены, здания, вырезы, вложенные группы и любые объекты (мебель). Вырезающие коробки и вырезы снаружи
     /// в группу не заходят, её вырезы режут только внутри (правило вырезов — <see cref="GeometryCutterLookup"/>, коробок — <see cref="SplineWallRebuilder.OuterModelOf"/>).
     /// Здесь — в какой группе лежит объект и две команды с Undo: «Новая группа» внутри выделенного и «В группу» для выделенного.
-    /// В здании группа встаёт в его «Interior» и привязывается к этажу: этаж — выбранный в окне, «И все выше» — из окна.
+    /// В здании группа встаёт в его «Interior» и привязывается к этажу: этаж — выбранный в окне, «И этажи выше» — из окна.
     /// Пункты меню — GameObject → FeatherKit, в окне — карточка «Группа» (<see cref="LiveBuilderGroupCard"/>).
     /// </summary>
     public static class LiveBuilderGroups
@@ -77,15 +77,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (selected.GetComponent<BoxModel>() != null)
                 return true;
 
-            var isPiece = selected.GetComponent<BoxModelPart>() != null || selected.GetComponent<BoxModelRoom>() != null
-                || selected.GetComponent<BoxModelStairs>() != null || selected.GetComponent<BoxModelRepeat>() != null
+            var isPiece = BoxModelShapeCollector.IsPiece(selected) || selected.GetComponent<BoxModelRepeat>() != null
                 || selected.GetComponent<GeometryCutter>() != null || selected.GetComponent<SplineWall>() != null;
 
             return !isPiece && selected.GetComponent<Renderer>() == null;
         }
 
         // Группа в здании — на пол этажа, выбранного в окне (у здания такого нет — ближайшего), и привязана к нему целиком:
-        // с «И все выше» — её коробки на всех этажах выше, одним мешем.
+        // с «И этажи выше» — её коробки на всех этажах выше, одним мешем.
         private static void AttachToWindowStorey(BoxModel group, SplineBuilding building)
         {
             var storey = Mathf.Clamp(LiveBuilderStoreys.CurrentStorey - SplineBuildingLevelAlignment.BaseStoreyOf(building), 0, building.StoreyCount - 1);
@@ -130,7 +129,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             foreach (var item in items)
                 Undo.SetTransformParent(item, group.transform, true, WrapUndoName);
 
-            // Свои привязки внутри (коробка «до верха») привязка группы погасила бы — тогда группа без неё.
+            // Свои привязки внутри (коробка «И этажи выше») привязка группы погасила бы — тогда группа без неё.
             if (building != null && !BoxModelShapeCollector.HasStoreyLinksInside(group.transform))
                 SplineBuildingLinkSync.Attach(group.gameObject, building, LiveBuilderBuildingContext.IsOnAllStoreys);
 
@@ -241,8 +240,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Коробка, комната, лестница или повтор — часть объекта из коробок.
         private static bool IsModelPiece(GameObject selected)
         {
-            return selected.GetComponent<BoxModel>() == null && (selected.GetComponent<BoxModelPart>() != null || selected.GetComponent<BoxModelRoom>() != null
-                || selected.GetComponent<BoxModelStairs>() != null || selected.GetComponent<BoxModelRepeat>() != null);
+            return selected.GetComponent<BoxModel>() == null && (BoxModelShapeCollector.IsPiece(selected) || selected.GetComponent<BoxModelRepeat>() != null);
         }
 
         // Группа встанет внутри объекта, которому принадлежит коробка: иначе коробка уедет из своего объекта и его осей.

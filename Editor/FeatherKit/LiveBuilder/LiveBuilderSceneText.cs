@@ -18,6 +18,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private const float LabelEdgeMargin = 4f;
 
         private static readonly Color BackgroundColor = new(0.1f, 0.1f, 0.1f, 0.9f);
+        private static readonly string[] AxisNames = { "X", "Y", "Z" };
 
         private static Texture2D background;
         private static GUIStyle labelStyle;
@@ -114,6 +115,19 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public static string FormatMeters(float meters)
         {
             return Mathf.Abs(meters).ToString("0.##");
+        }
+
+
+        // Сдвиг по осям для надписи у стрелок переноса: «X +2 · Z −1 м»; без сдвига — null.
+        public static string FormatOffset(Vector3 offset)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+
+            for (var axis = 0; axis < 3; axis++)
+                if (!Mathf.Approximately(offset[axis], 0f))
+                    parts.Add(AxisNames[axis] + " " + (offset[axis] > 0f ? "+" : "−") + FormatMeters(offset[axis]));
+
+            return parts.Count > 0 ? string.Join(" · ", parts) + " м" : null;
         }
     }
 }

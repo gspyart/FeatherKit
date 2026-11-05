@@ -10,6 +10,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public readonly struct LiveBuilderSelectionInfo
     {
+        // Габарит мешей последней спрошенной стены, здания или объекта — до правки сцены: рамку и строку рисуют каждый кадр,
+        // а обойти все меши большого здания — дорого.
+        private static GameObject cachedMeshesTarget;
+        private static int cachedMeshesSceneVersion = -1;
+        private static Bounds cachedMeshesBounds;
+        private static bool cachedHasMeshesBounds;
+
         // Что это: «Коробка», «Здание», «Проём».
         public readonly string KindName;
 
@@ -110,8 +117,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static bool TryDescribeMeshes(string kindName, GameObject target, out LiveBuilderSelectionInfo info)
         {
             info = default;
+
+            if (target != cachedMeshesTarget || BoxModelRebuilder.SceneVersion != cachedMeshesSceneVersion)
+            {
+                cachedMeshesTarget = target;
+                cachedMeshesSceneVersion = BoxModelRebuilder.SceneVersion;
+                cachedHasMeshesBounds = TryMeasureMeshes(target, out cachedMeshesBounds);
+            }
+
+            if (cachedHasMeshesBounds)
+                info = new LiveBuilderSelectionInfo(kindName, target, target.transform.localToWorldMatrix, cachedMeshesBounds);
+
+            return cachedHasMeshesBounds;
+        }
+
+        // Габарит всех мешей объекта и того, что внутри, в его осях. Мешей нет — false.
+        private static bool TryMeasureMeshes(GameObject target, out Bounds bounds)
+        {
             var worldToTarget = target.transform.worldToLocalMatrix;
-            var bounds = new Bounds();
+            bounds = new Bounds();
             var hasBounds = false;
 
             foreach (var filter in target.GetComponentsInChildren<MeshFilter>())
@@ -136,9 +160,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     hasBounds = true;
                 }
             }
-
-            if (hasBounds)
-                info = new LiveBuilderSelectionInfo(kindName, target, target.transform.localToWorldMatrix, bounds);
 
             return hasBounds;
         }

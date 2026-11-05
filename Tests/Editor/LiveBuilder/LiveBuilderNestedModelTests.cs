@@ -84,7 +84,7 @@ namespace FeatherKit.Tests.LiveBuilder
                 "и третьего");
         }
 
-        // Объект из коробок в интерьере здания, на полу первого этажа: коробка 2 × 3 × 2, привязан «до верха».
+        // Объект из коробок в интерьере здания, на полу первого этажа: коробка 2 × 3 × 2, привязан «И этажи выше».
         private static BoxModel CreateShaft(SplineBuilding building)
         {
             var shaft = BoxModelFactory.CreateModel(new Vector3(Origin.x + 2f, building.FirstFloorWorldHeight, Origin.z + 2f));

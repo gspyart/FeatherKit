@@ -237,6 +237,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             hash.Append(building.SlabThickness);
             hash.Append(building.HasFloor ? 1 : 0);
             hash.Append(building.HasRoof ? 1 : 0);
+
+            // Парапет — только если есть: у прежних зданий подпись та же.
+            if (building.HasParapet)
+                hash.Append(building.ParapetHeight);
             hash.Append(building.HasCollider ? 1 : 0);
             hash.Append(building.CurveStep);
             hash.Append(building.CornerSegments);

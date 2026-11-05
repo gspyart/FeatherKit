@@ -18,8 +18,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Квадрат переноса в плане — доля размера ручки.
         private const float PlaneHandleSize = 0.15f;
 
-        private static readonly string[] AxisNames = { "X", "Y", "Z" };
-
         // Выбранные точки и где они были в начале: сдвиг считается от начала, без накопления округлений.
         private readonly List<(int Spline, int Knot)> movedKnots = new();
         private readonly List<float3> startPositions = new();
@@ -204,13 +202,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (!isDragging || Event.current.type != EventType.Repaint)
                 return;
 
-            var parts = new List<string>();
-
-            for (var axis = 0; axis < 3; axis++)
-                if (!Mathf.Approximately(snappedOffset[axis], 0f))
-                    parts.Add(AxisNames[axis] + " " + (snappedOffset[axis] > 0f ? "+" : "−") + LiveBuilderSceneText.FormatMeters(snappedOffset[axis]));
-
-            var text = "точек: " + movedKnots.Count + " · " + (parts.Count > 0 ? string.Join(" · ", parts) + " м" : "0 м");
+            var text = "точек: " + movedKnots.Count + " · " + (LiveBuilderSceneText.FormatOffset(snappedOffset) ?? "0 м");
             LiveBuilderSceneText.DrawLabel(startCenter + axes * snappedOffset, text);
         }
     }

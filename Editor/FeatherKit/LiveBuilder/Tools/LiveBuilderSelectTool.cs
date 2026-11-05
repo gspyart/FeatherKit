@@ -53,6 +53,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public override bool ShowsDepthClickHint => true;
 
+        public override string[] KeyHints { get; } = new[]
+        {
+            "клик — выделить, Shift — добавить; клик ещё раз — глубже",
+            "стрелки в середине — перенести, Shift + тянуть — копия",
+            "Delete — удалить, Shift+H — изолировать"
+        };
+
 
         // ── Что правит: проверка ─────────────────────────────────────────
 

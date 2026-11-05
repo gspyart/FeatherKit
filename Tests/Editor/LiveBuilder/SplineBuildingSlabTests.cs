@@ -123,5 +123,15 @@ namespace FeatherKit.Tests.LiveBuilder
             PlanPolygons.Triangulate(new List<Vector2> { new(8f, 1f), new(8f, 2f), new(0f, 5f), new(0f, 4f), new(6f, 5f) }, out var isCrossedComplete);
             Assert.IsFalse(isCrossedComplete, "пересекает сам себя — не целиком");
         }
+
+
+        [Test]
+        public void SelfCrossingCheck_FindsBowTieButNotSquareOrLShape()
+        {
+            Assert.IsFalse(PlanPolygons.IsSelfCrossing(new List<Vector2> { new(0f, 0f), new(4f, 0f), new(4f, 4f), new(0f, 4f) }), "квадрат");
+            Assert.IsFalse(PlanPolygons.IsSelfCrossing(new List<Vector2> { new(0f, 0f), new(6f, 0f), new(6f, 2f), new(2f, 2f), new(2f, 6f), new(0f, 6f) }), "буква Г");
+            Assert.IsTrue(PlanPolygons.IsSelfCrossing(new List<Vector2> { new(0f, 0f), new(4f, 4f), new(4f, 0f), new(0f, 4f) }), "бабочка");
+            Assert.IsTrue(PlanPolygons.IsSelfCrossing(new List<Vector2> { new(8f, 1f), new(8f, 2f), new(0f, 5f), new(0f, 4f), new(6f, 5f) }), "контур из теста выше");
+        }
     }
 }

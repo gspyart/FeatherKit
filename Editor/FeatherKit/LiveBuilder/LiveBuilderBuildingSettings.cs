@@ -54,6 +54,19 @@ namespace FeatherKit.EditorTools.LiveBuilder
             set => LiveBuilderPreferences.SetBool("Building.HasRoof", value);
         }
 
+        // Парапет у нового здания: стены над крышей бортиком.
+        public static bool HasParapet
+        {
+            get => LiveBuilderPreferences.GetBool("Building.HasParapet", false);
+            set => LiveBuilderPreferences.SetBool("Building.HasParapet", value);
+        }
+
+        public static float ParapetHeight
+        {
+            get => LiveBuilderPreferences.GetFloat("Building.ParapetHeight", 1f);
+            set => LiveBuilderPreferences.SetFloat("Building.ParapetHeight", Mathf.Max(0.05f, value));
+        }
+
         public static Material OuterWallMaterial
         {
             get => LiveBuilderPreferences.GetMaterial("Building.OuterWallMaterial");

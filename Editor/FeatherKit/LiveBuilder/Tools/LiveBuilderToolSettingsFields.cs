@@ -65,14 +65,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // «В здании» — у инструментов, которые ставят своё в здание (<see cref="LiveBuilderTool.PlacesIntoBuilding"/>): этот этаж или и все выше.
+        // «В здании» — у инструментов, которые ставят своё в здание (<see cref="LiveBuilderTool.PlacesIntoBuilding"/>): этот этаж или «И этажи выше».
         public static void DrawBuildingStoreysCard()
         {
             using (LiveBuilderWindowControls.Card("В здании"))
                 LiveBuilderBuildingContext.IsOnAllStoreys = LiveBuilderWindowControls.Switch(
                     new GUIContent("Этажи", "Наведёшь на здание — поставленное встанет на этот этаж здания, до его потолка, с его толщинами. " +
-                                            "И все выше — то же на каждом этаже выше: перегородки, лестничная клетка, окна по фасаду. После перезапуска Unity — снова «только этот»"),
-                    LiveBuilderBuildingContext.IsOnAllStoreys, ("Только этот", LiveBuilderOptionIcon.ThisStorey), ("И все выше", LiveBuilderOptionIcon.AllStoreysAbove));
+                                            "И этажи выше — то же на каждом этаже выше: перегородки, лестничная клетка, окна по фасаду. После перезапуска Unity — снова «только этот»"),
+                    LiveBuilderBuildingContext.IsOnAllStoreys, ("Только этот", LiveBuilderOptionIcon.ThisStorey), ("И этажи выше", LiveBuilderOptionIcon.AllStoreysAbove));
         }
     }
 }

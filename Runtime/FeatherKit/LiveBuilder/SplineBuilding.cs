@@ -67,6 +67,13 @@ namespace FeatherKit.LiveBuilder
         [Tooltip("Плоская крыша сверху. Выключено — открытая коробка, сверху видно этажи.")]
         [SerializeField] private bool hasRoof = true;
 
+        [Tooltip("Парапет — стены продолжаются над крышей бортиком по всему краю: за него цепляются, с крыши не скатиться.")]
+        [SerializeField] private bool hasParapet;
+
+        [Tooltip("Высота парапета над крышей, м. По пояс — 1, низкий бортик — 0,4.")]
+        [Min(0.05f)]
+        [SerializeField] private float parapetHeight = 1f;
+
         [Space]
         [Header("Изгибы")]
         [Tooltip("Длина одного прямого кусочка на плавном изгибе, м. Меньше — глаже, но тяжелее меш. 0,5 — заметно гладко.")]
@@ -151,6 +158,21 @@ namespace FeatherKit.LiveBuilder
             get => hasRoof;
             set => hasRoof = value;
         }
+
+        public bool HasParapet
+        {
+            get => hasParapet;
+            set => hasParapet = value;
+        }
+
+        public float ParapetHeight
+        {
+            get => parapetHeight;
+            set => parapetHeight = Mathf.Max(0.05f, value);
+        }
+
+        // На сколько стены выходят над крышей: парапет или ноль.
+        public float ParapetRise => hasParapet ? parapetHeight : 0f;
 
         public float CurveStep => curveStep;
 

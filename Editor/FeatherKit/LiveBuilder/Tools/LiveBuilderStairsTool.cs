@@ -44,6 +44,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public override string Hint => stairsGesture.IsActive ? stairsGesture.Hint : "Протяни по полу прямоугольник лестницы, потом мышью высоту. Клик — выделить";
 
+        public override string[] KeyHints { get; } = new[]
+        {
+            "протянуть — марш, потом мышью высоту",
+            "цифры + Enter — точная высота; клик или Enter — готово",
+            "Tab — повернуть подъём, Esc — отмена"
+        };
+
 
         // ── Окно: редкие настройки ───────────────────────────────────────
 
@@ -55,7 +62,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
              && !Mathf.Approximately(LiveBuilderStairsSettings.StepThickness, LiveBuilderStairsSettings.FactoryStepThickness))
             || !LiveBuilderStairsSettings.IsStoreyHigh
             || !Mathf.Approximately(LiveBuilderStairsSettings.DefaultWidth, LiveBuilderStairsSettings.FactoryDefaultWidth)
-            || LiveBuilderStairsSettings.CutsAbove;
+            || !LiveBuilderStairsSettings.CutsAbove;
 
 
         // ── Что правит: проверка ─────────────────────────────────────────
@@ -107,7 +114,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     LiveBuilderStairsSettings.DefaultWidth);
 
                 LiveBuilderStairsSettings.CutsAbove = LiveBuilderWindowControls.Switch(
-                    new GUIContent("Перекрытие над", "Не пробивать — проём в полу ставишь сам вырезающей коробкой. Пробивать — режет над маршем от 2,1 м над полом лестницы до её верха"),
+                    new GUIContent("Перекрытие над", "Пробивать — режет перекрытие над маршем от 2,1 м над полом лестницы до её верха: проём в полу этажа выше готов сразу. Не пробивать — проём ставишь сам"),
                     LiveBuilderStairsSettings.CutsAbove, "Не пробивать", "Пробивать");
             }
         }
@@ -161,9 +168,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно сцены: клавиши, отмена, вид ─────────────────────────────
 
-        // Tab — повернуть подъём, Enter — готово, пока выбираешь высоту.
+        // Цифры — точная высота, Tab — повернуть подъём, Enter — готово, пока выбираешь высоту.
         public override bool OnKeyDown(Event current)
         {
+            if (stairsGesture.HandleKey(current.keyCode))
+                return true;
+
             if (current.keyCode == KeyCode.Tab && stairsGesture.IsActive)
                 stairsGesture.RotateDirection();
             else if (current.keyCode is KeyCode.Return or KeyCode.KeypadEnter && stairsGesture.IsChoosingHeight)

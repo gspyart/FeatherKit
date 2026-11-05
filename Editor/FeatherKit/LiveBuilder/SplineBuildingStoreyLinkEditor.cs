@@ -5,8 +5,8 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Инспектор привязки к этажам здания — вместо сырых полей одна понятная строка, как этажи у Revit:
-    /// на каком этаже стоит и на каких повторяется — только этот, «с … по …» или до верха здания; у лестницы — ещё «и на последнем этаже».
+    /// Инспектор привязки к этажам здания — вместо сырых полей «Этаж» и «На этажах», как этажи у Revit:
+    /// на каком этаже стоит и на каких повторяется — «Только этот», «По этаж…» или «И этажи выше»; у лестницы — ещё «и на последнем этаже».
     /// Тот же блок показывает окно Live Builder у выделенного.
     /// </summary>
     [CustomEditor(typeof(SplineBuildingStoreyLink))]
@@ -63,7 +63,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Только этот / по этаж … / до верха. Последний этаж с копией — как у самой привязки: у лестницы — без верхнего этажа.
+        // Только этот / по этаж … / и этажи выше. Последний этаж с копией — как у самой привязки: у лестницы — без верхнего этажа.
         private static void DrawSpan(SplineBuildingStoreyLink link, int count)
         {
             var isRange = !link.IsToBuildingTop && link.HasLastStorey;
@@ -72,8 +72,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.PrefixLabel(new GUIContent("Повтор", "Только этот — уникальное. По этаж — копии выше, до выбранного этажа. " +
-                                                                    "До верха — на всех этажах выше: сами добавляются и убираются вместе с этажами здания"));
+                EditorGUILayout.PrefixLabel(new GUIContent("На этажах", "Только этот — уникальное. По этаж — копии выше, до выбранного этажа. " +
+                                                                    "И этажи выше — на всех этажах выше: сами добавляются и убираются вместе с этажами здания"));
 
                 if (GUILayout.Toggle(isThisOnly, "Только этот", "ButtonLeft") && !isThisOnly)
                     SetSpan(link, false, false, link.LastStorey);
@@ -81,7 +81,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (GUILayout.Toggle(isRange, "По этаж…", "ButtonMid") && !isRange)
                     SetSpan(link, false, true, Mathf.Min(link.Storey + 1, highestCopyStorey));
 
-                if (GUILayout.Toggle(link.IsToBuildingTop, "До верха", "ButtonRight") && !link.IsToBuildingTop)
+                if (GUILayout.Toggle(link.IsToBuildingTop, "И этажи выше", "ButtonRight") && !link.IsToBuildingTop)
                     SetSpan(link, true, false, link.LastStorey);
             }
 

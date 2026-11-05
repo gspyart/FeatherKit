@@ -69,8 +69,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return false;
 
             return selected.GetComponent<SplineWall>() != null || selected.GetComponent<GeometryCutter>() != null
-                || selected.GetComponent<BoxModelStairs>() != null || selected.GetComponent<BoxModelPart>() != null || selected.GetComponent<BoxModelRoom>() != null
-                || selected.GetComponent<BoxModel>() != null;
+                || BoxModelShapeCollector.IsPiece(selected) || selected.GetComponent<BoxModel>() != null;
         }
 
         // Почему привязать нельзя: копии по этажам уже даёт привязка выше или внутри — своя их перемножила бы. Можно — null.
@@ -81,9 +80,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     ? "Внутри уже привязаны свои коробки, комнаты или лестницы. Целиком — сначала сними их привязки."
                     : null;
 
-            var isModelPiece = selected.GetComponent<BoxModelPart>() != null || selected.GetComponent<BoxModelRoom>() != null
-                               || selected.GetComponent<BoxModelStairs>() != null;
-            var ownerModel = isModelPiece && selected.transform.parent != null ? selected.transform.parent.GetComponentInParent<BoxModel>() : null;
+            var ownerModel = BoxModelShapeCollector.IsPiece(selected) && selected.transform.parent != null ? selected.transform.parent.GetComponentInParent<BoxModel>() : null;
 
             return ownerModel != null && BoxModelShapeCollector.IsInsideStoreyCopies(ownerModel, selected.transform.parent)
                 ? "Уже повторяется по этажам вместе с объектом или группой, в которой стоит."

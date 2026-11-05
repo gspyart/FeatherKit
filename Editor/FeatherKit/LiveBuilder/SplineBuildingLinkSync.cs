@@ -8,7 +8,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Сверяет привязанное к зданию (<see cref="SplineBuildingStoreyLink"/>) с самим зданием перед каждой пересборкой. Копий по этажам —
-    /// всегда сколько задано в привязке (только свой, «по этаж …», «до верха»):
+    /// всегда сколько задано в привязке (только свой, «по этаж …», «И этажи выше»):
     /// - копии вверх (<see cref="IStoreyCopies"/>: перегородка, вырез) — по числу этажей в повторе, шаг — этаж; у перегородки ещё и высота — до потолка этажа
     /// - лестница и коробка во весь этаж — высота этажа, комната до потолка — до потолка (своя высота остаётся); новая лестница — без верхнего этажа,
     ///   «и на последнем этаже» включают в инспекторе привязки
@@ -71,7 +71,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Новая привязка: к какому зданию, «до верха» ли, и запомнить, где объект стоит сейчас.
+        // Новая привязка: к какому зданию, «И этажи выше» ли, и запомнить, где объект стоит сейчас.
         public static SplineBuildingStoreyLink Attach(GameObject target, SplineBuilding building, bool isToBuildingTop, bool skipsTopStorey = false)
         {
             var link = target.GetComponent<SplineBuildingStoreyLink>();
@@ -198,7 +198,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Место на этаже ───────────────────────────────────────────────
 
         // Запомнить, где объект сейчас: этаж и высота над его полом. Что лежит в перекрытии над этажом — уже этаж выше, чуть ниже его пола:
-        // вырез в потолке едет за перекрытием, а «до верха» не пробивает крышу.
+        // вырез в потолке едет за перекрытием, а «И этажи выше» не пробивает крышу.
         private static void RememberPlace(SplineBuildingStoreyLink link, SplineBuilding building)
         {
             var worldHeight = link.transform.position.y;

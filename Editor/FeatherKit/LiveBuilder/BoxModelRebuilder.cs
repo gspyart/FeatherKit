@@ -33,6 +33,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static readonly Dictionary<EntityId, Bounds> UncutBoundsByModel = new();
 
 
+        // Номер правки сцены: поменялся — всё, что посчитано по сцене, устарело (например, что под мышью — <see cref="BoxModelPicker"/>).
+        public static int SceneVersion => sceneVersion;
+
+
         // ── Пересборка ───────────────────────────────────────────────────
 
         // Пересобирает объекты, у которых меш не совпадает с коробками.
@@ -234,7 +238,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Габарит наружных поверхностей объекта в его осях — отсев по лучу до перебора поверхностей.
+        public static Bounds GetSurfaceBounds(BoxModel model)
+        {
+            return GetBuildResult(model).SurfaceBounds;
+        }
+
+
         // Сцена поменялась — все результаты пересчитать при следующем вопросе. Зовёт очередь пересборки на любую правку.
+        // Решатель при этом заново считает только объект с новой подписью коробок; остальные лишь собирают список коробок и сверяют подпись.
         public static void ForgetCachedResults()
         {
             sceneVersion++;
@@ -326,6 +338,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Boxes = boxes;
             Ramps = ramps;
             Surfaces = surfaces;
+            SurfaceBounds = BoundsOf(surfaces);
         }
 
 
@@ -333,5 +346,42 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public List<BoxModelSolverBox> Boxes { get; }
         public List<BoxModelRampShape> Ramps { get; }
         public List<BoxModelSurface> Surfaces { get; }
+
+        // Габарит всех наружных поверхностей в осях объекта, м: луч мимо него — ни одной поверхности не задевает.
+        public Bounds SurfaceBounds { get; }
+
+
+        private static Bounds BoundsOf(List<BoxModelSurface> surfaces)
+        {
+            var bounds = new Bounds();
+            var hasBounds = false;
+
+            foreach (var surface in surfaces)
+            {
+                var axis = BoxFaces.Axis(surface.Face);
+                var axisU = BoxFaces.SurfaceAxisU(surface.Face);
+                var axisV = BoxFaces.SurfaceAxisV(surface.Face);
+                var min = Vector3.zero;
+                var max = Vector3.zero;
+                min[axis] = max[axis] = MillimeterBox.ToMeters(surface.Plane);
+                min[axisU] = MillimeterBox.ToMeters(surface.Area.xMin);
+                max[axisU] = MillimeterBox.ToMeters(surface.Area.xMax);
+                min[axisV] = MillimeterBox.ToMeters(surface.Area.yMin);
+                max[axisV] = MillimeterBox.ToMeters(surface.Area.yMax);
+
+                if (!hasBounds)
+                {
+                    bounds.SetMinMax(min, max);
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(min);
+                    bounds.Encapsulate(max);
+                }
+            }
+
+            return bounds;
+        }
     }
 }

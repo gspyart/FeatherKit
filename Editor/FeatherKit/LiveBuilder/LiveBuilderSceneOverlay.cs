@@ -63,7 +63,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (GUILayout.Button(new GUIContent("◀", "Этаж ниже (PageDown)"), EditorStyles.miniButtonLeft, GUILayout.Width(22f)))
                 LiveBuilderStoreys.CurrentStorey--;
 
-            GUILayout.Label(new GUIContent("Этаж " + LiveBuilderStoreys.CurrentStorey, "Пол " + LiveBuilderSceneText.FormatMeters(LiveBuilderStoreys.CurrentFloorHeight) + " м"),
+            GUILayout.Label(new GUIContent("Этаж " + LiveBuilderStoreys.CurrentStoreyNumber, "Пол " + LiveBuilderSceneText.FormatMeters(LiveBuilderStoreys.CurrentFloorHeight) + " м"),
                 EditorStyles.miniLabel, GUILayout.ExpandWidth(false));
 
             if (GUILayout.Button(new GUIContent("▶", "Этаж выше (PageUp)"), EditorStyles.miniButtonRight, GUILayout.Width(22f)))

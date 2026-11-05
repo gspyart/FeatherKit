@@ -174,15 +174,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 DrawHotkey("1 – " + LiveBuilderToolPalette.Tools.Count, "инструмент, пока ничего не рисуешь");
                 DrawHotkey("PageUp / PageDown", "этаж выше / ниже");
                 DrawHotkey("[  ]", "сетка мельче / крупнее");
+                DrawHotkey("S", "прилипание к углам, серединам и рёбрам построек: выключить / включить");
                 DrawHotkey("Esc", "ничего не начато — на «Выделение», в нём — снять выделение");
                 DrawHotkey("Shift + H", "изолировать выделенное вместе с его объектом");
+                DrawHotkey("/", "шпаргалка клавиш в углу окна сцены: спрятать или показать");
 
                 LiveBuilderWindowControls.Note("Пока рисуешь:");
                 DrawHotkey("клик", "готово: коробка на выбранной глубине, лестница на высоте");
                 DrawHotkey("Enter", "готово: лестница; линия — замкнуть контур или закончить стену");
-                DrawHotkey("Esc", "коробка, лестница, проём — отменить; линия — готово, как нарисована");
+                DrawHotkey("Esc", "бросить то, что ещё не поставлено: коробку, лестницу, проём целиком; у линии — отрезок за мышью, поставленные точки остаются");
                 DrawHotkey("Shift + клик", "линия — точка наоборот: угол или плавно");
-                DrawHotkey("цифры, Enter", "линия — точная длина отрезка в сторону мыши");
+                DrawHotkey("цифры, Enter", "точно: длина отрезка линии, глубина коробки, высота лестницы");
+                DrawHotkey("4 X 3, Enter", "коробка на шаге глубины — стороны прямоугольника; «4 X 3 X 2» — и глубина");
                 DrawHotkey("Ctrl + Z", "линия — убрать последнюю точку");
                 DrawHotkey("Tab", "лестница — повернуть на четверть");
 
@@ -326,9 +329,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Пояснения сначала видны: новичку они нужнее всего; кто привык — спрячет «?», и это запомнится.
         private static bool IsHelpShown(LiveBuilderWindowTab tab)
         {
-            return EditorPrefs.GetBool(HelpPreferencePrefix + tab.PreferenceKey, false);
+            return EditorPrefs.GetBool(HelpPreferencePrefix + tab.PreferenceKey, true);
         }
 
 

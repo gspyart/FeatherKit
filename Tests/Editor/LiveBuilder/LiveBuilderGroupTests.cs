@@ -59,8 +59,16 @@ namespace FeatherKit.Tests.LiveBuilder
             Assert.AreEqual(groupFloor, rectangle.ToWorld(rectangle.Start).y, 0.001f, "на пол этажа группы");
             rectangle.Cancel();
 
+            Assert.That(LiveBuilderFloorRectangle.DescribeTargetAt(new Ray(outsideWalls, Vector3.down)), Does.StartWith("в группу"),
+                "подсказка «Комнаты» заранее говорит: в группу");
+
             Selection.activeGameObject = building.gameObject;
             Assert.AreEqual(BoxModelFactory.InteriorOf(building), BoxModelFactory.InteriorTargetOf(building), "выделено само здание — в «Interior»");
+
+            var intoBuilding = new Ray(new Vector3(Origin.x + 4f, building.FirstFloorWorldHeight + 20f, Origin.z + 4f), Vector3.down);
+
+            if (LiveBuilderBuildingContext.TryFind(intoBuilding, out _))
+                Assert.That(LiveBuilderFloorRectangle.DescribeTargetAt(intoBuilding), Does.StartWith("перегородками здания"), "над зданием — перегородки, и подсказка так и говорит");
         }
 
 

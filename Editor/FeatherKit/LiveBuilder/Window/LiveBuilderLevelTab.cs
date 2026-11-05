@@ -6,7 +6,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Вкладка «Уровень» окна Live Builder — общее на весь уровень, что меняют редко:
-    /// этажи уровня (высота этажа, пол нулевого, высота разреза) и библиотека типов стен — все типы проекта списком,
+    /// этажи уровня (высота этажа, пол первого, высота разреза) и библиотека типов стен — все типы проекта списком,
     /// толщина и материал правятся прямо здесь, стены этих типов перестраиваются сами.
     /// Ниже — уборка файлов мешей, которые больше никому не нужны, и как ведёт себя само окно: переключать ли вкладки самим.
     /// </summary>
@@ -51,7 +51,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (!Mathf.Approximately(storeyHeight, LiveBuilderStoreys.StoreyHeight))
                     LiveBuilderStoreys.StoreyHeight = storeyHeight;
 
-                var groundLevel = EditorGUILayout.FloatField(new GUIContent("Пол нулевого этажа, м", "Высота в мире, от которой считаются этажи. Дом на цоколе 1 м — 1"),
+                var groundLevel = EditorGUILayout.FloatField(new GUIContent("Пол первого этажа, м", "Высота в мире, от которой считаются этажи. Дом на цоколе 1 м — 1"),
                     LiveBuilderStoreys.GroundLevel);
 
                 if (!Mathf.Approximately(groundLevel, LiveBuilderStoreys.GroundLevel))

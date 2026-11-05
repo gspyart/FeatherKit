@@ -12,7 +12,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// почти не протянул поперёк — ширина по умолчанию. Глубина ступени подгоняется под длину.
     /// Перекрытие не пробивает: проём над лестницей ставят вручную вырезающей коробкой.
     /// Лестница встаёт в объект, на чьём полу начали, или в выделенный; иначе — новым объектом (его можно повернуть на любой угол).
-    /// В здании по контуру — в его объект, высота сначала — его этаж; «этот и все выше» — лестничная клетка до верхнего этажа.
+    /// В здании по контуру — в его объект, высота сначала — его этаж; «И этажи выше» — лестничная клетка до верхнего этажа.
     /// </summary>
     public sealed class LiveBuilderStairsGesture
     {
@@ -28,6 +28,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private const float StandardStepDepth = 0.3f;
 
         private readonly LiveBuilderFloorRectangle rectangle = new();
+
+        // Точная высота с клавиатуры: набрал «2,4», Enter — лестница ровно такой высоты.
+        private readonly LiveBuilderTypedLength typedHeight = new();
+
         private BoxModelStairsDirection? lockedDirection;
 
         // Второй шаг: прямоугольник готов, мышью выбирается высота.
@@ -47,9 +51,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Высота лестницы сейчас: выбранная мышью или та, с которой начнём.
         private float StairsHeight => isChoosingHeight ? chosenHeight : StoreyStairsHeight;
 
-        public string Hint => isChoosingHeight
+        public string Hint => isChoosingHeight && typedHeight.IsTyping
+            ? "Высота " + typedHeight.Text + " м: Enter — готово, Backspace — стереть цифру, Esc — стереть число"
+            : isChoosingHeight
             ? "Мышь вверх-вниз — высота: " + LiveBuilderSceneText.FormatMeters(chosenHeight) + " м (этаж — " + LiveBuilderSceneText.FormatMeters(StoreyStairsHeight) +
-              "). Клик или Enter — готово, Tab — повернуть, Esc — отмена"
+              "); цифры + Enter — точно. Клик или Enter — готово, Tab — повернуть, Esc — отмена"
             : "Вверх — " + DirectionName(CurrentDirection) + ". Тяни прямоугольник — длина и ширина лестницы. Tab — повернуть. Отпусти — дальше высота. Esc — отмена";
 
         // Куда пойдёт вверх: запомненное, а пока не запомнилось — куда тянут сильнее.
@@ -93,10 +99,39 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Пока выбираешь высоту: цифры — точная высота, Esc при наборе — стереть число. Enter с набранным — эта высота и готово.
+        // Возвращает, забрал ли клавишу.
+        public bool HandleKey(KeyCode key)
+        {
+            if (!IsChoosingHeight)
+                return false;
+
+            if (typedHeight.TryType(key))
+                return true;
+
+            if (key == KeyCode.Escape && typedHeight.IsTyping)
+            {
+                typedHeight.Clear();
+                return true;
+            }
+
+            if (key is not (KeyCode.Return or KeyCode.KeypadEnter) || !typedHeight.IsTyping)
+                return false;
+
+            // Набрано не то — набор стёрт, лестница ждёт дальше, как и коробка.
+            if (!typedHeight.TryTake(out var meters))
+                return true;
+
+            chosenHeight = Mathf.Max(StandardStepHeight, meters);
+            Commit();
+            return true;
+        }
+
+
         // Мышь вверх-вниз от точки, где отпустил, — высота по подъёму ступени.
         public void UpdateHeight(Vector2 mousePosition)
         {
-            if (!IsChoosingHeight || !TryGetShape(out var min, out _, out _, out _))
+            if (!IsChoosingHeight || typedHeight.IsTyping || !TryGetShape(out var min, out _, out _, out _))
                 return;
 
             var worldStart = rectangle.ToWorld(min);
@@ -152,11 +187,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public void Cancel()
         {
             rectangle.Cancel();
+            typedHeight.Clear();
             lockedDirection = null;
             isChoosingHeight = false;
         }
 
-        // В здании: лестница в его объекте; «все выше» — повтором до верхнего этажа. Высота во весь этаж следит за зданием, своя — остаётся. Проём в полу — вручную.
+        // В здании: лестница в его объекте; «И этажи выше» — повтором до верхнего этажа. Высота во весь этаж следит за зданием, своя — остаётся. Проём в полу — «Перекрытие над» (сразу включено).
         private static void CommitInBuilding(LiveBuilderBuildingContext context, Vector3 buildingLocalMin, BoxModelStairsDirection direction, float width,
             float height, float stepDepth)
         {

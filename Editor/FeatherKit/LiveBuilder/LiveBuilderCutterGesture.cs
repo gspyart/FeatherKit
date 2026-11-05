@@ -77,7 +77,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Вырез лёг в стену по линии или здание: на боку стены (не на полу и не на крыше) — едет за их точками;
-        // в здании или его перегородке — к этажам здания, как проём кликом: с «И все выше» — на этом и всех этажах выше.
+        // в здании или его перегородке — к этажам здания, как проём кликом: с «И этажи выше» — на этом и всех этажах выше.
         public static void AttachToOwner(GeometryCutter cutter, Vector3 surfaceNormal)
         {
             var owner = cutter.transform.parent;

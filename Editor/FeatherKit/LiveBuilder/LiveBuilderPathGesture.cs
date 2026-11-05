@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEngine;
@@ -19,7 +20,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// (коробки, крыши, перекрытия), а под мышью пусто или стена сбоку — на пол текущего этажа; дальше линия идёт на высоте первой точки,
     /// и по ним сразу встаёт стена (<see cref="SplineWall"/>), здание (<see cref="SplineBuilding"/>) или комната.
     /// Точка — угол или плавный изгиб: по переключателю в окне, Shift на клике — наоборот.
-    /// Клик по первой точке — замкнуть; Enter или Esc — готово (здание и комната замыкаются сами); Ctrl+Z, пока рисуешь, — убрать последнюю точку.
+    /// Клик по первой точке — замкнуть; Enter — готово, Esc — бросить отрезок за мышью (здание и комната замыкаются сами); Ctrl+Z, пока рисуешь, — убрать последнюю точку.
+    /// Отрезок, с которым контур здания или комнаты перекрестит сам себя, — красный, с подписью.
     /// Точная длина, как в SketchUp (<see cref="LiveBuilderTypedLength"/>): набрал цифры — Enter ставит следующую точку на этом расстоянии в сторону мыши.
     /// У мыши подпись, к чему прилипло: «к стене» здания, «замкнуть» у первой точки.
     /// Готовая линия — один шаг отмены: Ctrl+Z после неё убирает всю стену, здание или комнату, без пустых объектов.
@@ -44,6 +46,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Здание и комната — замкнутый контур хотя бы из трёх точек, стена — хотя бы из двух.
         private const int MinClosedPoints = 3;
         private const int MinWallPoints = 2;
+
+        // Отрезок к мыши, с которым контур здания или комнаты перекрестит сам себя.
+        private static readonly Color CrossingColor = new(1f, 0.3f, 0.25f);
 
         private readonly LiveBuilderPathKind kind;
 
@@ -87,7 +92,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 ? "Длина " + typedLength.Text + " м: Enter — точка на этом расстоянии в сторону мыши, Backspace — стереть цифру, Esc — отмена длины"
                 : IsClosedShape
                     ? "Клик — следующая точка контура, цифры + Enter — точная длина. По первой точке или Enter — замкнуть и готово. Esc — тоже готово, Ctrl+Z — убрать последнюю"
-                    : "Клик — следующая точка, цифры + Enter — точная длина, по первой — замкнуть. Enter или Esc — готово, Ctrl+Z — убрать последнюю";
+                    : "Клик — следующая точка, цифры + Enter — точная длина, по первой — замкнуть. Enter — готово; Esc — бросить отрезок за мышью, точки остаются; Ctrl+Z — убрать последнюю";
 
         private string ShapeName => kind switch
         {
@@ -367,8 +372,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 var gridPoint = floor.SnapOnPlane(floorPoint);
                 var wallPoint = context.SnapToWalls(gridPoint);
-                snapLabel = (wallPoint - gridPoint).sqrMagnitude > 0.000001f ? "к стене" : null;
                 worldPoint = floor.FrameToWorld.MultiplyPoint3x4(wallPoint);
+                snapLabel = (wallPoint - gridPoint).sqrMagnitude > 0.000001f ? "к стене" : LiveBuilderPointSnap.LabelAt(worldPoint);
                 return true;
             }
 
@@ -388,6 +393,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             worldPoint = plane.FrameToWorld.MultiplyPoint3x4(plane.SnapOnPlane(localPoint));
+            snapLabel = LiveBuilderPointSnap.LabelAt(worldPoint);
             return true;
         }
 
@@ -435,15 +441,40 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var first = pathOwner.transform.TransformPoint((Vector3)spline[0].Position);
             var last = pathOwner.transform.TransformPoint((Vector3)spline[spline.Count - 1].Position);
+            var isCrossing = IsClosedShape && !isClosing && IsCrossingOwnSides(hovered);
+
+            if (isCrossing)
+                Handles.color = CrossingColor;
+
             Handles.DrawLine(last, hovered, 2f);
 
-            var lengthLabel = typedLength.IsTyping
-                ? typedLength.Text + " м ↵"
-                : LiveBuilderSceneText.FormatMeters(Vector3.Distance(last, hovered)) + " м · цифры — точно";
+            var lengthLabel = isCrossing
+                ? "стороны перекрестятся — пол и крыша не построятся"
+                : typedLength.IsTyping
+                    ? typedLength.Text + " м ↵"
+                    : LiveBuilderSceneText.FormatMeters(Vector3.Distance(last, hovered)) + " м · цифры — точно";
             LiveBuilderSceneText.DrawLabel((last + hovered) / 2f, lengthLabel);
 
             if (IsClosedShape && spline.Count >= 2)
                 Handles.DrawDottedLine(hovered, first, 4f);
+        }
+
+        // Новая точка там, где мышь, — и контур перекрестит сам себя: отрезок к ней или замыкающий к первой точке крест-накрест со сторонами.
+        private bool IsCrossingOwnSides(Vector3 hovered)
+        {
+            var spline = Container.Spline;
+            var points = new List<Vector2>();
+
+            for (var index = 0; index < spline.Count; index++)
+                points.Add(Flat(pathOwner.transform.TransformPoint((Vector3)spline[index].Position)));
+
+            points.Add(Flat(hovered));
+            return points.Count >= 4 && PlanPolygons.IsSelfCrossing(points);
+        }
+
+        private static Vector2 Flat(Vector3 point)
+        {
+            return new Vector2(point.x, point.z);
         }
     }
 }

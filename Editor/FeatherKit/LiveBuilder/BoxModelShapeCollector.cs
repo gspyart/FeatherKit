@@ -137,6 +137,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Коробка, комната или лестница — кусок, из которого объект собирает коробки расчёта. Одна проверка на всех, кто спрашивает «это кусок?».
+        public static bool IsPiece(GameObject gameObject)
+        {
+            return gameObject.TryGetComponent<BoxModelPart>(out _) || gameObject.TryGetComponent<BoxModelRoom>(out _) || gameObject.TryGetComponent<BoxModelStairs>(out _);
+        }
+
+
         // Коробку, комнату или лестницу уже повторяет по этажам объект или группа, в которой она стоит.
         public static bool IsPieceInsideStoreyCopies(Transform piece)
         {

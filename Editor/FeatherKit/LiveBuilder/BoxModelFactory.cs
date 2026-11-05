@@ -201,7 +201,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Перегородка в здании без точек: в его объекте, в группе интерьера (или в выделенной группе здания), толщиной и типом перегородки,
-        // привязана к его этажам («только этот» или «и все выше» — как выбрано в окне). Высоту и копии потом берёт от здания сверка привязки.
+        // привязана к его этажам («только этот» или «И этажи выше» — как выбрано в окне). Высоту и копии потом берёт от здания сверка привязки.
         public static SplineWall CreatePartition(LiveBuilderBuildingContext context, Vector3 worldPosition, string name)
         {
             var building = context.Building;
@@ -228,6 +228,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             building.SlabThickness = LiveBuilderBuildingSettings.SlabThickness;
             building.HasFloor = LiveBuilderBuildingSettings.HasFloor;
             building.HasRoof = LiveBuilderBuildingSettings.HasRoof;
+            building.HasParapet = LiveBuilderBuildingSettings.HasParapet;
+            building.ParapetHeight = LiveBuilderBuildingSettings.ParapetHeight;
             building.OuterWallMaterial = LiveBuilderBuildingSettings.OuterWallMaterial;
             building.InnerWallMaterial = LiveBuilderBuildingSettings.InnerWallMaterial;
             building.FloorMaterial = LiveBuilderBuildingSettings.FloorMaterial;

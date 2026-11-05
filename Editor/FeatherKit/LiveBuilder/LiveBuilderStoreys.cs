@@ -6,7 +6,7 @@ using UnityEngine.Rendering;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Этажи Live Builder: высота этажа, где нулевой этаж и на каком этаже работаешь сейчас.
+    /// Этажи Live Builder: высота этажа, где первый этаж и на каком этаже работаешь сейчас (людям — с единицы, <see cref="CurrentStoreyNumber"/>).
     /// Рисование в пустоте идёт от пола текущего этажа. Разрез прячет в окне сцены всё выше плоскости над полом этажа —
     /// видно этаж сверху, как план, и можно работать внутри дома. Разрез — ключевое слово и высота для шейдера проекта
     /// (имена — в настройках проекта, <see cref="LiveBuilderProjectSettings"/>), только для камер окна сцены: игра не меняется.
@@ -64,7 +64,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
         }
 
-        // Высота пола нулевого этажа в мире, м.
+        // Высота пола первого этажа в мире, м.
         public static float GroundLevel
         {
             get => groundLevel;
@@ -84,6 +84,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 EditorPrefs.SetInt(PreferencePrefix + "CurrentStorey", currentStorey);
                 NotifyChanged();
             }
+        }
+
+        // Номер текущего этажа для людей — как в жизни и у зданий: первый этаж — 1, подвалы — −1, −2. Сам этаж хранится с нуля.
+        public static int CurrentStoreyNumber
+        {
+            get => currentStorey >= 0 ? currentStorey + 1 : currentStorey;
+            set => CurrentStorey = value > 0 ? value - 1 : value;
         }
 
         public static bool IsSectionEnabled

@@ -5,10 +5,10 @@ using UnityEngine.Splines;
 
 namespace FeatherKit.LiveBuilder
 {
-    /// <summary>Где стена стоит относительно линии: линия посередине стены, по её левому или правому краю.</summary>
+    /// <summary>Где стена стоит относительно линии: линия по оси стены (посередине), по её левому или правому краю.</summary>
     public enum SplineWallAlignment
     {
-        [InspectorName("По центру")] Center,
+        [InspectorName("По оси")] Center,
         [InspectorName("Слева от линии")] Left,
         [InspectorName("Справа от линии")] Right
     }
@@ -74,7 +74,7 @@ namespace FeatherKit.LiveBuilder
 
         [Space]
         [Header("Копии вверх")]
-        [Tooltip("Сколько всего таких стен друг над другом, вместе с этой. Перегородка на все этажи здания — по числу этажей.")]
+        [Tooltip("Сколько всего таких стен друг над другом, вместе с этой. В здании задаёт привязка («На этажах»).")]
         [Range(1, 60)]
         [SerializeField] private int copiesUp = 1;
 

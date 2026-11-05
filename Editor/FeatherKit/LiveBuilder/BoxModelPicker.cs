@@ -35,11 +35,58 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Запас у границы тела выреза, м: дно ниши и откос лежат ровно на ней.
         private const float CutterHoleMargin = 0.01f;
 
+        // Запас габарита объекта при отсеве лучом, м: поверхность ровно на краю габарита не теряется.
+        private const float BoundsMargin = 0.01f;
+
         // Поверхности одного объекта под лучом — один список на все вызовы: поиск идёт на каждое движение мыши.
         private static readonly List<BoxModelSurfaceHit> ModelHitsScratch = new();
 
+        // Последний ответ: подсветка грани и прицел спрашивают про тот же луч дважды за одно движение мыши — второй раз из памяти.
+        // Только в пределах одного события окна сцены (тот же тип, место мыши, номер правки сцены, этаж и разрез): без окна сцены памяти нет.
+        private static Ray lastRay;
+        private static EventType lastEventType;
+        private static Vector2 lastMousePosition;
+        private static int lastSceneVersion = -1;
+        private static int lastSectionKey;
+        private static bool lastIsFound;
+        private static BoxModelSurfaceHit lastHit;
+
+        // Все попадания луча по коллайдерам, по дальности, — тоже на одно событие: подсветка, прицел и разбор под мышью пускают тот же луч.
+        private static RaycastHit[] lastPhysicsHits;
+        private static Ray lastPhysicsRay;
+        private static EventType lastPhysicsEventType;
+        private static Vector2 lastPhysicsMousePosition;
+        private static int lastPhysicsSceneVersion = -1;
+
 
         public static bool TryPickSurface(Ray worldRay, out BoxModelSurfaceHit hit)
+        {
+            var current = Event.current;
+
+            if (current == null)
+                return PickSurface(worldRay, out hit);
+
+            var sectionKey = LiveBuilderStoreys.IsSectionEnabled ? LiveBuilderStoreys.CurrentStorey + 1 : 0;
+            var isSameQuestion = lastSceneVersion == BoxModelRebuilder.SceneVersion && lastSectionKey == sectionKey && lastEventType == current.type
+                                 && lastMousePosition == current.mousePosition && lastRay.origin == worldRay.origin && lastRay.direction == worldRay.direction;
+
+            if (isSameQuestion && (!lastIsFound || lastHit.Model != null))
+            {
+                hit = lastHit;
+                return lastIsFound;
+            }
+
+            lastIsFound = PickSurface(worldRay, out hit);
+            lastHit = hit;
+            lastRay = worldRay;
+            lastEventType = current.type;
+            lastMousePosition = current.mousePosition;
+            lastSceneVersion = BoxModelRebuilder.SceneVersion;
+            lastSectionKey = sectionKey;
+            return lastIsFound;
+        }
+
+        private static bool PickSurface(Ray worldRay, out BoxModelSurfaceHit hit)
         {
             hit = default;
             var bestDistance = float.MaxValue;
@@ -71,18 +118,55 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Луч по коллайдерам сцены, пропуская спрятанное разрезом над этажом.
         public static bool TryRaycastVisible(Ray worldRay, float maxDistance, out RaycastHit visibleHit)
         {
-            var hits = Physics.RaycastAll(worldRay, maxDistance, ~0, QueryTriggerInteraction.Ignore);
-            System.Array.Sort(hits, (first, second) => first.distance.CompareTo(second.distance));
+            foreach (var hit in SortedPhysicsHits(worldRay))
+            {
+                if (hit.distance > maxDistance)
+                    break;
 
-            foreach (var hit in hits)
-                if (!LiveBuilderStoreys.IsHiddenBySection(hit.point))
-                {
-                    visibleHit = hit;
-                    return true;
-                }
+                if (LiveBuilderStoreys.IsHiddenBySection(hit.point))
+                    continue;
+
+                visibleHit = hit;
+                return true;
+            }
 
             visibleHit = default;
             return false;
+        }
+
+        // Все попадания луча, ближние первыми; в пределах одного события окна сцены — из памяти, без окна сцены (проверки) — каждый раз заново.
+        private static RaycastHit[] SortedPhysicsHits(Ray worldRay)
+        {
+            var current = Event.current;
+            var isSameQuestion = current != null && lastPhysicsHits != null && lastPhysicsSceneVersion == BoxModelRebuilder.SceneVersion
+                                 && lastPhysicsEventType == current.type && lastPhysicsMousePosition == current.mousePosition
+                                 && lastPhysicsRay.origin == worldRay.origin && lastPhysicsRay.direction == worldRay.direction;
+
+            if (isSameQuestion && AreCollidersAlive(lastPhysicsHits))
+                return lastPhysicsHits;
+
+            var hits = Physics.RaycastAll(worldRay, float.MaxValue, ~0, QueryTriggerInteraction.Ignore);
+            System.Array.Sort(hits, (first, second) => first.distance.CompareTo(second.distance));
+
+            if (current == null)
+                return hits;
+
+            lastPhysicsHits = hits;
+            lastPhysicsRay = worldRay;
+            lastPhysicsEventType = current.type;
+            lastPhysicsMousePosition = current.mousePosition;
+            lastPhysicsSceneVersion = BoxModelRebuilder.SceneVersion;
+            return hits;
+        }
+
+        // Коллайдер из памяти удалили в том же событии (клик удалил или пересобрал объект) — ответ уже не годится.
+        private static bool AreCollidersAlive(RaycastHit[] hits)
+        {
+            foreach (var hit in hits)
+                if (hit.collider == null)
+                    return false;
+
+            return true;
         }
 
 
@@ -137,6 +221,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var origin = modelTransform.InverseTransformPoint(worldRay.origin);
             // С масштабом, как и точка: при неравном масштабе без него луч в осях объекта уходит вбок. Расстояние меряется в мире — ниже.
             var direction = modelTransform.InverseTransformVector(worldRay.direction);
+
+            // Луч мимо габарита объекта — ни одной его поверхности не задевает: поверхности не перебираем.
+            var bounds = BoxModelRebuilder.GetSurfaceBounds(model);
+            bounds.Expand(BoundsMargin);
+
+            if (!bounds.IntersectRay(new Ray(origin, direction)))
+                return;
+
             IReadOnlyList<BoxModelSurface> surfaces = BoxModelRebuilder.GetSurfaces(model);
             // Вырезы ищутся, только когда луч попал хоть в одну поверхность: поиск идёт на каждое движение мыши.
             List<GeometryCutter> cutters = null;

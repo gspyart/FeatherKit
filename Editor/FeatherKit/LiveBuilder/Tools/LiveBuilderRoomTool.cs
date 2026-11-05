@@ -14,8 +14,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public sealed class LiveBuilderRoomTool : LiveBuilderTool
     {
+        private static readonly string[] RectangleKeyHints = { "протянуть по полу — комната, отпустил — готово", "что встанет — в подсказке внизу", "Esc — отмена" };
+
         private readonly LiveBuilderRoomGesture rectangleGesture = new();
         private readonly LiveBuilderPathGesture contourGesture = new(LiveBuilderPathKind.Room);
+
+        // Что встанет прямоугольником под мышью — для подсказки; ещё не искали — null.
+        private string placeUnderMouse;
 
 
         // ── Описание ─────────────────────────────────────────────────────
@@ -56,7 +61,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public override string Hint => PathGesture != null ? PathHint(PathGesture)
             : rectangleGesture.IsActive ? rectangleGesture.Hint
-            : "Протяни по полу — комната. Клик — выделить";
+            : "Протяни по полу — комната встанет " + (placeUnderMouse ?? "со своими стенами") + ". Клик — выделить";
+
+        public override string[] KeyHints => PathGesture != null
+            ? PathKeyHints
+            : RectangleKeyHints;
 
 
         // ── Окно: редкие настройки ───────────────────────────────────────
@@ -175,6 +184,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // ── Окно сцены: мышь ─────────────────────────────────────────────
+
+        // Прямоугольником, пока не начат, — что встанет под мышью: перегородки здания, комната из коробок или вырез в доме.
+        // Сюрпризов «нарисовал комнату, а встали перегородки» нет: подсказка говорит заранее.
+        public override bool OnMouseMove(Ray worldRay, Event current)
+        {
+            if (PathGesture != null)
+                return base.OnMouseMove(worldRay, current);
+
+            placeUnderMouse = rectangleGesture.IsActive ? null : LiveBuilderFloorRectangle.DescribeTargetAt(worldRay);
+            return false;
+        }
+
 
         // По контуру мышь и клавиши ведут линию — крючки основы; здесь — прямоугольник.
         public override void OnMouseDrag(Ray downRay, Ray worldRay, bool canBeginGesture)

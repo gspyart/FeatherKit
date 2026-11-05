@@ -15,10 +15,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static readonly Color PointColor = new(1f, 0.85f, 0.2f);
         private static readonly Color GridColor = new(1f, 0.85f, 0.2f, 0.5f);
+        private static readonly Color SnappedColor = new(0.3f, 0.85f, 1f);
 
 
+        // Прилипла к углу или середине постройки — голубое кольцо и подпись, к чему (<see cref="LiveBuilderPointSnap"/>).
         public static void Draw(BoxModelDrawPlane plane, Vector3 snappedLocalPoint)
         {
+            var snapLabel = LiveBuilderPointSnap.LabelAt(plane.FrameToWorld.MultiplyPoint3x4(snappedLocalPoint));
+
             using (new Handles.DrawingScope(plane.FrameToWorld))
             {
                 DrawGridPatch(plane, snappedLocalPoint);
@@ -26,7 +30,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 Handles.color = PointColor;
                 var size = HandleUtility.GetHandleSize(snappedLocalPoint) * PointSize;
                 Handles.DotHandleCap(0, snappedLocalPoint, Quaternion.identity, size, EventType.Repaint);
+
+                if (snapLabel == null)
+                    return;
+
+                Handles.color = SnappedColor;
+                Handles.DrawWireDisc(snappedLocalPoint, plane.OutwardDirection, size * 2.5f, 2f);
             }
+
+            LiveBuilderSceneText.DrawLabel(plane.FrameToWorld.MultiplyPoint3x4(snappedLocalPoint), snapLabel);
         }
 
         // Линии сетки по двум осям плоскости; к краям гаснут.

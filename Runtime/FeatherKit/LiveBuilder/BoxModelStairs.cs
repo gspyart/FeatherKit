@@ -72,7 +72,7 @@ namespace FeatherKit.LiveBuilder
         [Space]
         [Header("Вокруг")]
         [Tooltip("Проём в перекрытии над маршем, чтобы не биться головой: режет над лестницей от 2,1 м над её полом до её верха. Стены по бокам не режет.")]
-        [SerializeField] private bool cutsAbove;
+        [SerializeField] private bool cutsAbove = true;
 
         [Tooltip("Материал ступеней. Пусто — материал объекта.")]
         [SerializeField] private Material material;

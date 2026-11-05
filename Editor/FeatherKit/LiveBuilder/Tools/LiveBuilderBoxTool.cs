@@ -84,6 +84,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public override bool ShowsDepthClickHint => true;
 
+        public override string[] KeyHints { get; } = new[]
+        {
+            "протянуть — прямоугольник, потом мышью глубина",
+            "цифры + Enter — глубина; «4 X 3» — стороны, «4 X 3 X 2» — всё",
+            "клик или Enter — готово",
+            "Esc — отмена; «Новый» в окне — отдельный объект"
+        };
+
 
         // ── Что правит: проверка ─────────────────────────────────────────
 
@@ -218,9 +226,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно сцены: клавиши, отмена и вид ────────────────────────────
 
-        // Esc при нажатом «Новый», пока ничего не рисуешь, — снять «Новый» и остаться в «Коробке».
+        // Глубина: цифры — точно, Enter — готово. Esc при нажатом «Новый», пока ничего не рисуешь, — снять «Новый» и остаться в «Коробке».
         public override bool OnKeyDown(Event current)
         {
+            if (drawGesture.HandleKey(current.keyCode, out var isCommitted))
+            {
+                if (isCommitted)
+                    IsNewModelRequested = false;
+
+                return true;
+            }
+
             if (current.keyCode != KeyCode.Escape || !IsNewModelRequested || IsBusy)
                 return false;
 

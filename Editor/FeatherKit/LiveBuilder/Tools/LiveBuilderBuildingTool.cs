@@ -91,6 +91,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderBuildingSettings.WallType = LiveBuilderWallTypes.Popup(
                     new GUIContent("Тип стен", "Толщина и материал снаружи — из типа, общие со всеми стенами этого типа. Без типа — свои числа в «Ещё»"),
                     LiveBuilderBuildingSettings.WallType);
+
+                LiveBuilderBuildingSettings.HasParapet = EditorGUILayout.Toggle(
+                    new GUIContent("Парапет", "Стены продолжаются над крышей бортиком по всему краю: за него цепляются, с крыши не скатиться"),
+                    LiveBuilderBuildingSettings.HasParapet);
+
+                if (LiveBuilderBuildingSettings.HasParapet)
+                    LiveBuilderBuildingSettings.ParapetHeight = EditorGUILayout.FloatField(new GUIContent("Высота парапета, м", "По пояс — 1, низкий бортик — 0,4"),
+                        LiveBuilderBuildingSettings.ParapetHeight);
             }
 
             LiveBuilderWindowControls.Explanation("Здание встанет на выбранный этаж: его пол — на полу этажа, этажи — те же, что в окне.");

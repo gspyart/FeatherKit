@@ -60,6 +60,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderOptionIcon.Level => LevelLines(),
                 LiveBuilderOptionIcon.Storey => StoreyLines(),
                 LiveBuilderOptionIcon.Grid => GridLines(),
+                LiveBuilderOptionIcon.SnapPoints => SnapPointsLines(),
                 LiveBuilderOptionIcon.Wireframe => WireframeLines(),
                 LiveBuilderOptionIcon.ViewAll => ViewAllLines(),
                 LiveBuilderOptionIcon.ViewRooms => SectionLines(10f),
@@ -141,6 +142,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 Points(9.33f, 4, 9.33f, 20), Points(14.67f, 4, 14.67f, 20),
                 Points(4, 9.33f, 20, 9.33f), Points(4, 14.67f, 20, 14.67f)
             };
+        }
+
+        // Угол двух рёбер и кольцо прицела на нём — прилипание к точкам.
+        private static List<Vector2[]> SnapPointsLines()
+        {
+            return new List<Vector2[]> { Points(9, 21, 9, 9, 21, 9), Arc(new Vector2(9, 9), 4.5f, 0f, 360f) };
         }
 
         // Кубик со всеми рёбрами, и видимыми, и задними.

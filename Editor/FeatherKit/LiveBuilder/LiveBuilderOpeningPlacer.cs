@@ -14,7 +14,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// (у копий вверх — низа копии под мышью), у объекта из коробок — пола этажа уровня.
     /// - стена объекта из коробок — прямоугольник: вырезающая коробка в конце списка, глубиной ровно в толщину стены; арка и круг — вырез в объекте
     /// - стена по линии и здание по контуру — вырез (<see cref="GeometryCutter"/>) в них: прямой, вдоль стены в этом месте, насквозь с запасом,
-    ///   едет за точками линии; у здания — к его этажам, с «И все выше» — копии вверх до крыши
+    ///   едет за точками линии; у здания — к его этажам, с «И этажи выше» — копии вверх до крыши
     /// </summary>
     public sealed class LiveBuilderOpeningPlacer
     {
@@ -69,7 +69,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             ? "Клик — проём «" + LiveBuilderOpeningPresets.Selected.DisplayName + "»" + CopiesHint + ". Протяни — свой размер"
             : "Наведи на стену — рамка проёма «" + LiveBuilderOpeningPresets.Selected.DisplayName + "». Протяни по любой поверхности — свой размер";
 
-        // Сколько проёмов встанет одним кликом: в здании или его перегородке с «И все выше» — этот и все этажи выше.
+        // Сколько проёмов встанет одним кликом: в здании или его перегородке с «И этажи выше» — этот и все этажи выше.
         private int CopiesForTarget => LiveBuilderPathOwners.LinkedBuildingOf(targetPathOwner) != null && LiveBuilderBuildingContext.IsOnAllStoreys ? storeysAbove : 1;
 
         private string CopiesHint => CopiesForTarget > 1
@@ -190,7 +190,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var hasStoreys = wall is SplineBuilding;
             storeysAbove = 1;
 
-            // Перегородка в здании: проём привяжется к зданию — «и все выше» считается от этажа копии под мышью, как и при создании.
+            // Перегородка в здании: проём привяжется к зданию — «И этажи выше» считается от этажа копии под мышью, как и при создании.
             if (wall.TryGetComponent<SplineBuildingStoreyLink>(out var wallLink) && wallLink.IsValid)
             {
                 var copy = Mathf.RoundToInt((floorLocal - nearestPath.BaseHeightAt(along)) / Mathf.Max(0.1f, wallLink.Building.StoreyHeight));
@@ -414,7 +414,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
         }
 
-        // Форма проёма спереди и сзади стены; у здания с «И все выше» — на каждом этаже выше.
+        // Форма проёма спереди и сзади стены; у здания с «И этажи выше» — на каждом этаже выше.
         private void DrawWallFrame()
         {
             var size = LiveBuilderOpeningPresets.Selected;

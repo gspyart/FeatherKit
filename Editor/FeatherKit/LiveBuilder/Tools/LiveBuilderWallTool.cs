@@ -98,8 +98,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderToolSettingsFields.DrawKnotModeSwitch();
 
                 LiveBuilderWallSettings.Alignment = (SplineWallAlignment)LiveBuilderWindowControls.Switch(
-                    new GUIContent("Где стена", "Линия посередине стены или по её краю — удобно обводить по краю пола"),
-                    (int)LiveBuilderWallSettings.Alignment, "По центру", "Слева", "Справа");
+                    new GUIContent("Где стена", "По оси — линия посередине стены, как «По оси» у здания и комнаты. Слева или справа — по краю: удобно обводить по краю пола"),
+                    (int)LiveBuilderWallSettings.Alignment, "По оси", "Слева", "Справа");
             }
 
             using (LiveBuilderWindowControls.Card("Размер"))

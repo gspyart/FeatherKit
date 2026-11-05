@@ -1,6 +1,7 @@
 using FeatherKit.EditorTools.LiveBuilder;
 using FeatherKit.LiveBuilder;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.Splines;
 
@@ -9,7 +10,8 @@ namespace FeatherKit.Tests.LiveBuilder
     /// <summary>
     /// Правка уже построенного не ломает поставленное в него: сменил толщину стен здания — окна остались сквозными;
     /// сменил высоту этажа — шахта во весь этаж выросла с ним; повернул стену здания и вернул — конец перегородки на прежнем месте;
-    /// выключил у комнаты потолок или пол — там открыто, стены на месте; у замкнутой стены — свои пол и потолок, у открытой их нет.
+    /// выключил у комнаты потолок или пол — там открыто, стены на месте; у замкнутой стены — свои пол и потолок, у открытой их нет;
+    /// парапет — бортик над крышей; набранная с клавиатуры глубина — ровно такая.
     /// </summary>
     public class LiveBuilderEditingTests
     {
@@ -150,6 +152,74 @@ namespace FeatherKit.Tests.LiveBuilder
             wall.GetComponent<SplineContainer>().Spline.Closed = false;
             SplineWallRebuilder.Rebuild(wall);
             Assert.AreEqual(1, wall.GetComponent<MeshFilter>().sharedMesh.subMeshCount, "открытая линия — без плит");
+        }
+
+
+        // ── Здание ───────────────────────────────────────────────────────
+
+        [Test]
+        public void BuildingParapet_RisesAboveRoof()
+        {
+            var building = testScene.CreateBuilding(1, Vector3.zero, new Vector3(8f, 0f, 0f), new Vector3(8f, 0f, 8f), new Vector3(0f, 0f, 8f));
+            var aboveRoof = Origin + new Vector3(-2f, building.TotalHeight + 0.5f, 4f);
+
+            Assert.IsTrue(LiveBuilderTestScene.IsOpen(aboveRoof, Vector3.right, 6f), "без парапета над крышей пусто");
+
+            building.HasParapet = true;
+            building.ParapetHeight = 1f;
+            SplineBuildingRebuilder.Rebuild(building);
+
+            Assert.IsFalse(LiveBuilderTestScene.IsOpen(aboveRoof, Vector3.right, 6f), "с парапетом — бортик по краю крыши");
+            Assert.IsTrue(LiveBuilderTestScene.IsOpen(aboveRoof + Vector3.up, Vector3.right, 6f), "выше парапета — пусто");
+        }
+
+
+        // ── Точная глубина ───────────────────────────────────────────────
+
+        [Test]
+        public void TypedDepth_MakesBoxExactlyThatHigh()
+        {
+            var gesture = new BoxModelDrawGesture();
+            var floor = LiveBuilderStoreys.GroundLevel + LiveBuilderStoreys.CurrentStorey * LiveBuilderStoreys.StoreyHeight;
+
+            Assert.IsTrue(gesture.TryBegin(new Ray(new Vector3(Origin.x, floor + 10f, Origin.z), Vector3.down), true), "прямоугольник начался на полу");
+            gesture.UpdateRectangle(new Ray(new Vector3(Origin.x + 4f, floor + 10f, Origin.z + 8f), Vector3.down));
+            Assert.IsTrue(gesture.TryFinishRectangle(Vector2.zero), "дальше — глубина");
+
+            foreach (var key in new[] { KeyCode.Alpha1, KeyCode.Period, KeyCode.Alpha5 })
+                Assert.IsTrue(gesture.HandleKey(key, out _), "цифра набрана");
+
+            Assert.IsTrue(gesture.HandleKey(KeyCode.Return, out var isCommitted) && isCommitted, "Enter — коробка встала");
+
+            var box = Selection.activeGameObject.GetComponent<BoxModelPart>();
+            Assert.AreEqual(1.5f, box.Size.y, 0.001f, "ровно набранная высота");
+        }
+
+
+        [Test]
+        public void TypedSidesAndDepth_MakeBoxExactlyThatSize()
+        {
+            var gesture = new BoxModelDrawGesture();
+            var floor = LiveBuilderStoreys.GroundLevel + LiveBuilderStoreys.CurrentStorey * LiveBuilderStoreys.StoreyHeight;
+
+            Assert.IsTrue(gesture.TryBegin(new Ray(new Vector3(Origin.x, floor + 10f, Origin.z), Vector3.down), true), "прямоугольник начался на полу");
+            gesture.UpdateRectangle(new Ray(new Vector3(Origin.x + 4f, floor + 10f, Origin.z + 8f), Vector3.down));
+            Assert.IsTrue(gesture.TryFinishRectangle(Vector2.zero), "дальше — глубина");
+
+            // «2,5 X 3», Enter — только стороны: коробка ещё ждёт глубину.
+            foreach (var key in new[] { KeyCode.Alpha2, KeyCode.Comma, KeyCode.Alpha5, KeyCode.X, KeyCode.Alpha3 })
+                Assert.IsTrue(gesture.HandleKey(key, out _), "набрано");
+
+            Assert.IsTrue(gesture.HandleKey(KeyCode.Return, out var isCommittedAfterSides) && !isCommittedAfterSides, "две стороны — ещё не готово");
+            Assert.IsTrue(gesture.IsChoosingDepth, "дальше — глубина");
+
+            Assert.IsTrue(gesture.HandleKey(KeyCode.Alpha2, out _), "глубина набрана");
+            Assert.IsTrue(gesture.HandleKey(KeyCode.Return, out var isCommitted) && isCommitted, "Enter — коробка встала");
+
+            var size = Selection.activeGameObject.GetComponent<BoxModelPart>().Size;
+            Assert.AreEqual(2f, size.y, 0.001f, "высота — набранная глубина");
+            Assert.AreEqual(2.5f, size.x, 0.001f, "первое число — по X, как в рамке выделения");
+            Assert.AreEqual(3f, size.z, 0.001f, "второе — по Z");
         }
 
 

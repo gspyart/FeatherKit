@@ -51,6 +51,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public override string Hint => cutterGesture.IsActive ? cutterGesture.Hint : openingPlacer.Hint;
 
+        public override string[] KeyHints { get; } = new[]
+        {
+            "клик по стене — проём готового размера",
+            "протянуть по любой поверхности — свой размер",
+            "клик по дыре — выделить; Shift + стрелки проёма — копия рядом"
+        };
+
 
         // ── Окно: редкие настройки ───────────────────────────────────────
 

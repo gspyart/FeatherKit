@@ -1,26 +1,45 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Точная длина отрезка с клавиатуры, как в SketchUp: цифры, точка или запятая набирают число, Backspace стирает последнюю цифру.
-    /// Только набор и разбор числа — куда встанет точка, решает тот, кто рисует (<see cref="LiveBuilderPathGesture"/>).
+    /// Точные числа с клавиатуры, как в SketchUp: цифры, точка или запятая набирают число, Backspace стирает последнюю цифру.
+    /// Если тому, кто рисует, нужно несколько чисел (стороны прямоугольника и глубина), X, «;» или «*» на цифровой клавиатуре начинают следующее: «4×3×2».
+    /// Только набор и разбор чисел — куда встанет точка и что значит каждое число, решает тот, кто рисует (<see cref="LiveBuilderPathGesture"/>, <see cref="BoxModelDrawGesture"/>).
     /// </summary>
     public sealed class LiveBuilderTypedLength
     {
         // Короче этого длина не считается, м.
         private const float MinLength = 0.001f;
 
+        private const char Separator = '×';
+
+        private readonly int maxValues;
         private string text = "";
 
 
-        // Набранное как есть: «2,5».
+        // maxValues — сколько чисел можно набрать через «×»; одно — разделитель не набирается.
+        public LiveBuilderTypedLength(int maxValues = 1)
+        {
+            this.maxValues = Mathf.Max(1, maxValues);
+        }
+
+
+        // Набранное как есть: «2,5» или «4×3».
         public string Text => text;
 
         public bool IsTyping => text.Length > 0;
 
+        private int ValueCount => text.Split(Separator).Length;
 
-        // Цифра, точка или запятая — в длину; Backspace — стереть последнюю. Возвращает, забрал ли клавишу.
+        // Число, которое набирается сейчас, — после последнего разделителя.
+        private string CurrentValue => text.Substring(text.LastIndexOf(Separator) + 1);
+
+
+        // ── Набор ────────────────────────────────────────────────────────
+
+        // Цифра, точка или запятая — в число; X, «;» или «*» — следующее число; Backspace — стереть последнее. Возвращает, забрал ли клавишу.
         public bool TryType(KeyCode key)
         {
             var character = key switch
@@ -28,10 +47,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 >= KeyCode.Alpha0 and <= KeyCode.Alpha9 => (char)('0' + (key - KeyCode.Alpha0)),
                 >= KeyCode.Keypad0 and <= KeyCode.Keypad9 => (char)('0' + (key - KeyCode.Keypad0)),
                 KeyCode.Period or KeyCode.Comma or KeyCode.KeypadPeriod => ',',
+                KeyCode.X or KeyCode.Semicolon or KeyCode.KeypadMultiply => Separator,
                 _ => '\0'
             };
 
-            if (character == ',' && text.Contains(","))
+            if (character == Separator)
+                return TryTypeSeparator();
+
+            if (character == ',' && CurrentValue.Contains(","))
                 return true;
 
             if (character != '\0')
@@ -47,14 +70,53 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return true;
         }
 
+        // Разделитель — только после набранного числа и пока чисел меньше, чем можно. Ничего не набрано — клавиша не наша: X без набора не трогаем.
+        private bool TryTypeSeparator()
+        {
+            if (maxValues == 1 || text.Length == 0)
+                return false;
 
-        // Забрать набранную длину, м: набор стирается в любом случае. Не число или почти ноль — false.
+            if (CurrentValue.Length > 0 && ValueCount < maxValues)
+                text += Separator;
+
+            return true;
+        }
+
+
+        // ── Разбор ───────────────────────────────────────────────────────
+
+        // Забрать набранную длину, м: набор стирается в любом случае. Не одно число или почти ноль — false.
         public bool TryTake(out float meters)
         {
-            var isNumber = float.TryParse(text.Replace(',', '.'), System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out meters);
+            var values = new List<float>();
+            var isTaken = TryTakeAll(values) && values.Count == 1;
+            meters = isTaken ? values[0] : 0f;
+            return isTaken;
+        }
+
+
+        // Забрать все набранные числа по порядку, м: набор стирается в любом случае. Хоть одно не число или почти ноль — false.
+        public bool TryTakeAll(List<float> values)
+        {
+            values.Clear();
+            var parts = text.Split(Separator);
             text = "";
-            return isNumber && meters > MinLength;
+
+            foreach (var part in parts)
+            {
+                var isNumber = float.TryParse(part.Replace(',', '.'), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var meters);
+
+                if (!isNumber || meters <= MinLength)
+                {
+                    values.Clear();
+                    return false;
+                }
+
+                values.Add(meters);
+            }
+
+            return values.Count > 0;
         }
 
 

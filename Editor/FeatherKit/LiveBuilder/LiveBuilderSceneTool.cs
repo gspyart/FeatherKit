@@ -13,7 +13,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// - нажатие: клик это или протягивание; клик, который инструмент не забрал, выделяет своё под мышью (<see cref="LiveBuilderClickSelection"/>)
     /// - ручки выделенного (<see cref="LiveBuilderSelectionHandles"/>) и точки контура (<see cref="LiveBuilderContourHandles"/>) — у того, что правит инструмент
     /// - подсветка грани под мышью и прицел на сетке — если инструмент их просит
-    /// - подсказка внизу окна сцены и окна Live Builder: этаж и что делать сейчас
+    /// - подсказка внизу окна сцены и окна Live Builder: этаж и что делать сейчас; шпаргалка клавиш в углу (<see cref="LiveBuilderSceneKeys"/>, «/»)
     /// Клавиши: [ и ] — шаг сетки, PageUp и PageDown — этаж выше и ниже, цифры — инструмент, Tab — повернуть выделенную лестницу,
     /// Esc — отменить начатое, а если ничего не начато — на «Выделение», в нём — снять выделение.
     /// </summary>
@@ -164,6 +164,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     tool.DrawPreview();
                     PublishHint(CurrentHint());
                     LiveBuilderSceneText.DrawHint(sceneView, CurrentHintText);
+                    LiveBuilderSceneKeys.Draw(sceneView, tool, CanShowContour && LiveBuilderContourHandles.IsShown);
                     break;
             }
         }
@@ -183,7 +184,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var tool = CurrentTool;
             var buildingStorey = hoveredBuildingContext is { IsBuildingAlive: true } ? tool.BuildingStoreyHint(hoveredBuildingContext) : null;
-            var storey = buildingStorey ?? "Этаж " + LiveBuilderStoreys.CurrentStorey + (LiveBuilderStoreys.IsSectionEnabled ? ", разрез" : "");
+            var storey = buildingStorey ?? "Этаж " + LiveBuilderStoreys.CurrentStoreyNumber + (LiveBuilderStoreys.IsSectionEnabled ? ", разрез" : "");
             var depthClickHint = tool.ShowsDepthClickHint ? LiveBuilderDepthClick.HintAt(Event.current.mousePosition, tool) : "";
             return storey + " · " + tool.Hint + depthClickHint;
         }
@@ -311,6 +312,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 case KeyCode.PageDown:
                     LiveBuilderStoreys.CurrentStorey--;
+                    break;
+
+                // S — прилипание к углам, серединам и рёбрам построек: выключить и включить. Ctrl+S — сохранение, его не трогаем.
+                case KeyCode.S when !current.control && !current.alt && !current.shift && !current.command:
+                    LiveBuilderPointSnap.IsEnabled = !LiveBuilderPointSnap.IsEnabled;
+                    SceneView.RepaintAll();
+                    break;
+
+                // «/» — шпаргалка клавиш в углу окна сцены: спрятать или показать.
+                case KeyCode.Slash:
+                    LiveBuilderSceneKeys.IsShown = !LiveBuilderSceneKeys.IsShown;
+                    SceneView.RepaintAll();
                     break;
 
                 // Выделенная лестница — Tab поворачивает её на месте, если её правит инструмент.

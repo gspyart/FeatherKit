@@ -380,7 +380,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var isBuilding = owner is SplineBuilding;
             var thickness = isBuilding ? ((SplineBuilding)owner).WallThickness : ((SplineWall)owner).Thickness;
-            var top = isBuilding ? ((SplineBuilding)owner).TotalHeight : ((SplineWall)owner).Height + (((SplineWall)owner).CopiesUp - 1) * ((SplineWall)owner).CopyStep;
+            var top = isBuilding
+                ? ((SplineBuilding)owner).TotalHeight + ((SplineBuilding)owner).ParapetRise
+                : ((SplineWall)owner).Height + (((SplineWall)owner).CopiesUp - 1) * ((SplineWall)owner).CopyStep;
             var margin = thickness + OwnerBoundsMargin;
             var min = bounds.min - new Vector3(margin, OwnerBoundsMargin, margin);
             var max = bounds.max + new Vector3(margin, top + OwnerBoundsMargin, margin);

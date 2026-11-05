@@ -63,7 +63,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     var submeshes = new SplineWallFaceSubmeshes(insideSign > 0f ? InnerWallSubmesh : OuterWallSubmesh,
                         insideSign > 0f ? OuterWallSubmesh : InnerWallSubmesh, isTopStorey ? RoofSubmesh : OuterWallSubmesh, OuterWallSubmesh);
                     var bottom = storey == 0 ? 0f : FloorTopOf(building, storey) - building.SlabThickness;
-                    var top = isTopStorey ? building.TotalHeight : FloorTopOf(building, storey + 1) - building.SlabThickness;
+                    // Верхний этаж — до крыши, а с парапетом стены продолжаются над ней бортиком.
+                    var top = isTopStorey ? building.TotalHeight + building.ParapetRise : FloorTopOf(building, storey + 1) - building.SlabThickness;
                     SplineWallMeshBuilder.AddWalls(Find(parts, SplineBuildingPartKind.Walls, storey).Geometry, path, wallHolesByPath[index],
                         leftOffset, rightOffset, bottom, top, submeshes);
                 }
@@ -90,6 +91,33 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (BuildingsWarnedAboutContour.Add(building.GetEntityId()))
                 Debug.LogWarning("Live Builder: контур здания «" + building.name + "» пересекает сам себя — часть пола и крыши не построена.", building);
         }
+
+        // Контур здания пересекает сам себя — по его точкам, сразу, или пол не разрезался целиком при сборке. Для предупреждения в инспекторе.
+        public static bool IsContourBroken(SplineBuilding building)
+        {
+            if (building == null)
+                return false;
+
+            if (BuildingsWarnedAboutContour.Contains(building.GetEntityId()))
+                return true;
+
+            if (!building.TryGetComponent<UnityEngine.Splines.SplineContainer>(out var container))
+                return false;
+
+            foreach (var spline in container.Splines)
+            {
+                var knots = new List<Vector2>();
+
+                foreach (var knot in spline.Knots)
+                    knots.Add(new Vector2(knot.Position.x, knot.Position.z));
+
+                if (knots.Count >= 4 && PlanPolygons.IsSelfCrossing(knots))
+                    return true;
+            }
+
+            return false;
+        }
+
 
         // Верх пола этажа над контуром, м.
         private static float FloorTopOf(SplineBuilding building, int storey)

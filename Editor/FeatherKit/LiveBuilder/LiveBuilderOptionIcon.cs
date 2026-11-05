@@ -13,6 +13,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Общее
         Storey,
         Grid,
+        SnapPoints,
         Wireframe,
         ViewAll,
         ViewRooms,

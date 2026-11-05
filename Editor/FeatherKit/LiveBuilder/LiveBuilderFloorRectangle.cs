@@ -93,6 +93,27 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Что встанет, если начать здесь, — для подсказки до нажатия: те же развилки, что у TryBegin, словами.
+        public static string DescribeTargetAt(Ray worldRay)
+        {
+            var group = BoxModelFactory.SelectedBuildingGroup(out _);
+
+            if (group != null)
+                return "в группу «" + group.name + "», из коробок, со своими стенами, полом и потолком";
+
+            if (LiveBuilderBuildingContext.TryFind(worldRay, out var context))
+                return "перегородками здания «" + context.Building.name + "»: стены до потолка, пол и потолок — здания";
+
+            if (BoxModelPicker.TryPickSurface(worldRay, out var surfaceHit) && surfaceHit.Surface.Face == TopFace)
+                return TryFindCeilingAbove(surfaceHit.Model, surfaceHit.LocalPoint, out _)
+                    ? "вырезом в доме «" + surfaceHit.Model.name + "»: без своих стен"
+                    : "на «" + surfaceHit.Model.name + "», со своими стенами, полом и потолком";
+
+            var selected = BoxModelActions.SelectedModel();
+            return selected != null ? "в «" + selected.name + "», со своими стенами, полом и потолком" : "новым объектом, со своими стенами, полом и потолком";
+        }
+
+
         // Пол выделенной группы здания: этаж, к которому она привязана (без привязки — выбранный в окне), в осях группы.
         private bool TryBeginOnGroupFloor(Ray worldRay, BoxModel group, SplineBuilding building)
         {

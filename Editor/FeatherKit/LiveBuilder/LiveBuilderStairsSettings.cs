@@ -44,10 +44,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
             set => LiveBuilderPreferences.SetFloat("Stairs.DefaultWidth", Mathf.Max(0.5f, value));
         }
 
+        // Пробивать перекрытие над маршем — сразу: лестница на этаж выше без дыры в полу бесполезна.
         public static bool CutsAbove
         {
-            get => LiveBuilderPreferences.GetBool("Stairs.CutsAboveByDefault", false);
-            set => LiveBuilderPreferences.SetBool("Stairs.CutsAboveByDefault", value);
+            get => LiveBuilderPreferences.GetBool("Stairs.CutsAboveSlab", true);
+            set => LiveBuilderPreferences.SetBool("Stairs.CutsAboveSlab", value);
         }
 
         public static float Height => IsStoreyHigh ? LiveBuilderStoreys.StoreyHeight : CustomHeight;

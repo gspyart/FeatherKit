@@ -21,6 +21,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                             LiveBuilderSceneText.FormatMeters(building.ClearHeight) + " м", EditorStyles.miniLabel);
             DrawRotationWarning(building);
 
+            if (SplineBuildingMeshBuilder.IsContourBroken(building))
+                EditorGUILayout.HelpBox("Контур пересекает сам себя — часть пола и крыши не построена. Разведи точки, чтобы стороны не перекрещивались.",
+                    MessageType.Warning);
+
             LiveBuilderInspectorLayout.Section("Этажи");
             LiveBuilderInspectorLayout.Properties(serializedObject, "storeyCount", "storeyHeight");
 
@@ -35,7 +39,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             LiveBuilderInspectorLayout.Properties(serializedObject, "contourSide");
 
             LiveBuilderInspectorLayout.Section("Перекрытия");
-            LiveBuilderInspectorLayout.Properties(serializedObject, "slabThickness", "hasFloor", "hasRoof");
+            LiveBuilderInspectorLayout.Properties(serializedObject, "slabThickness", "hasFloor", "hasRoof", "hasParapet");
+
+            if (building.HasParapet)
+                LiveBuilderInspectorLayout.Properties(serializedObject, "parapetHeight");
 
             if (LiveBuilderInspectorLayout.Foldout("SplineBuilding.Materials", "Материалы"))
             {

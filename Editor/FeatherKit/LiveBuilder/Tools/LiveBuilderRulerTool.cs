@@ -55,6 +55,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public override string Hint => ruler.Hint;
 
+        public override string[] KeyHints { get; } = new[] { "клик, клик — расстояние и допрыгнет ли игрок", "точки прилипают к углам, серединам и рёбрам построек" };
+
 
         // ── Что правит: проверка ─────────────────────────────────────────
 

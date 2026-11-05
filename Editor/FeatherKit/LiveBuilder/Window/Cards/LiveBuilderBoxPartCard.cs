@@ -5,7 +5,8 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка «Выделено» про коробки: одна — режим и размер, скосы рёбер (<see cref="BoxModelChamferPanel"/>), а под свёрнутым «Ещё» — угол в осях объекта,
+    /// Карточка «Выделено» про коробки: одна — режим и размер, у вырезающей — что она не режет из-за порядка в иерархии и кнопка поправить,
+    /// скосы рёбер (<see cref="BoxModelChamferPanel"/>), а под свёрнутым «Ещё» — угол в осях объекта,
     /// у вырезающей — что она режет из стен и зданий, материалы сторон; несколько — сколько их. Всё с Undo.
     /// </summary>
     public sealed class LiveBuilderBoxPartCard : LiveBuilderSelectionCard
@@ -48,6 +49,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 if (GUILayout.Button(new GUIContent("Добавить ⇄ Вырезать", "У выделенных коробок: добавляющие вырезают, вырезающие добавляют")))
                     BoxModelActions.ToggleModeOfSelectedParts();
+
+                DrawSkippedTargets(part);
             }
 
             BoxModelChamferPanel.Draw(part);
@@ -58,6 +61,33 @@ namespace FeatherKit.EditorTools.LiveBuilder
             DrawPlacement(part, model);
             DrawMaterials(part);
         }
+
+        // Вырезающая коробка стоит выше стены или здания и потому их не режет — видно здесь, а не только в консоли, с починкой одной кнопкой.
+        private static void DrawSkippedTargets(BoxModelPart part)
+        {
+            if (part.Mode != BoxModelPartMode.Cut)
+                return;
+
+            LiveBuilderCutOrderNotices.CheckNow(part);
+
+            foreach (var target in LiveBuilderCutOrderNotices.TargetsSkippedBy(part))
+            {
+                EditorGUILayout.HelpBox("Не режет «" + target.name + "»: стоит выше в иерархии. Режет только то, что выше неё.", MessageType.Warning);
+
+                if (target.transform.parent != part.transform.parent)
+                {
+                    LiveBuilderWindowControls.Note("Они в разных группах: перетащи коробку в Hierarchy ниже «" + target.name + "», не вынимая из её объекта.");
+                    continue;
+                }
+
+                if (GUILayout.Button(new GUIContent("Поставить ниже «" + target.name + "»", "Коробка встанет сразу за ним в списке объектов — и прорежет его")))
+                {
+                    LiveBuilderCutOrderNotices.TryPlaceBelow(part, target);
+                    GUIUtility.ExitGUI();
+                }
+            }
+        }
+
 
         // «Ещё» раскрыто само, если вырезающая режет не всё или задан хоть один материал.
         private static bool IsMoreChanged(BoxModelPart part)

@@ -40,9 +40,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Точка на плоскости, обе оси плоскости — на сетке.
+        // Точка на плоскости: рядом угол или середина постройки — к ней (<see cref="LiveBuilderPointSnap"/>), иначе обе оси плоскости — на сетке.
         public Vector3 SnapOnPlane(Vector3 localPoint)
         {
+            if (LiveBuilderPointSnap.TrySnap(FrameToWorld, Axis, Coordinate, localPoint, out var pointSnapped))
+                return pointSnapped;
+
             var snapped = LiveBuilderGrid.Snap(localPoint);
             snapped[Axis] = Coordinate;
             return snapped;

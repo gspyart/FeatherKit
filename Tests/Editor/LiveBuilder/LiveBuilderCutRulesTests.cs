@@ -53,6 +53,24 @@ namespace FeatherKit.Tests.LiveBuilder
         }
 
 
+        // Коробку выше стены проверяют сразу, без пересборки стены; «Поставить ниже» — и она снова режет.
+        [Test]
+        public void CutBoxAboveWall_IsReportedRightAway_AndPlaceBelowFixesIt()
+        {
+            var model = BoxModelFactory.CreateModel(Origin);
+            var wall = testScene.CreateWall(model, Vector3.zero, new Vector3(10f, 0f, 0f));
+            var box = BoxModelFactory.CreatePart(model, new Vector3(4f, 0.5f, -1f), new Vector3(6f, 2.5f, 1f), BoxModelPartMode.Cut);
+            box.transform.SetSiblingIndex(0);
+            BoxModelRebuilder.ForgetCachedResults();
+
+            LiveBuilderCutOrderNotices.CheckNow(box);
+            Assert.Contains(wall, LiveBuilderCutOrderNotices.TargetsSkippedBy(box), "коробка выше стены — сразу в списке");
+
+            Assert.IsTrue(LiveBuilderCutOrderNotices.TryPlaceBelow(box, wall), "у них общий родитель — поставить можно");
+            Assert.IsEmpty(LiveBuilderCutOrderNotices.TargetsSkippedBy(box), "ниже стены — уже режет");
+        }
+
+
         // Коробка в интерьере здания: здание — её предок, перекрытие прорезано; перегородка после коробки — цела.
         [Test]
         public void CutBoxInInterior_CutsBuildingSlab_ButNotPartitionBelowIt()

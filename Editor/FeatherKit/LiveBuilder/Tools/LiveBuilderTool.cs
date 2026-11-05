@@ -16,6 +16,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public abstract class LiveBuilderTool
     {
+        // Клавиши инструмента линии — для шпаргалки в окне сцены.
+        protected static readonly string[] PathKeyHints =
+        {
+            "клик — точка, по первой — замкнуть",
+            "Shift + клик — точка наоборот: угол или плавно",
+            "цифры + Enter — точная длина отрезка",
+            "Enter — готово; Esc — бросить отрезок за мышью, точки остаются; Ctrl+Z — убрать точку"
+        };
+
         // Подсказка про грани — общая у «Выделения» и «Коробки»: обе правят грани.
         protected const string FaceSelectionHint = "Клик — выделить кусок грани, двойной клик — грань целиком, Shift — добавить или убрать. " +
                                                    "Стрелки — двигать выделенное: кусок тянешь — новая коробка, толкаешь — вырез; грань с Ctrl — выдавить";
@@ -81,6 +90,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // Дописать к подсказке «клик ещё раз — глубже» (<see cref="LiveBuilderDepthClick"/>): мышь знает окно сцены, оно и дописывает.
         public virtual bool ShowsDepthClickHint => false;
+
+        // Клавиши и жесты инструмента — строки шпаргалки в окне сцены (<see cref="LiveBuilderSceneKeys"/>): «что нажать — что будет».
+        // У инструмента линии — клавиши линии.
+        public virtual string[] KeyHints => PathGesture != null ? PathKeyHints : System.Array.Empty<string>();
 
 
         // ── Окно: редкие настройки ───────────────────────────────────────

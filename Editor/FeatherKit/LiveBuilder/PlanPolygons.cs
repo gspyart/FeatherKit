@@ -5,7 +5,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Многоугольники в плане (X, Z → x, y): внутри ли точка, расстояние до контура, треугольники многоугольника,
-    /// вычитание выпуклой дыры, куски отрезка внутри многоугольника и вне соседних. Чистая геометрия без Unity-объектов — ею собирают
+    /// вычитание выпуклой дыры, куски отрезка внутри многоугольника и вне соседних, пересекает ли контур сам себя. Чистая геометрия без Unity-объектов — ею собирают
     /// перекрытия здания (<see cref="SplineBuildingMeshBuilder"/>) и ищут стены здания под мышью (<see cref="LiveBuilderBuildingContext"/>).
     /// </summary>
     public static class PlanPolygons
@@ -291,6 +291,40 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public static float Cross(Vector2 first, Vector2 second)
         {
             return first.x * second.y - first.y * second.x;
+        }
+
+
+        // Отрезки пересекаются крест-накрест; касание концом и наложение вдоль не считаются.
+        public static bool AreSegmentsCrossing(Vector2 firstStart, Vector2 firstEnd, Vector2 secondStart, Vector2 secondEnd)
+        {
+            const float Tolerance = 1e-6f;
+            var first = firstEnd - firstStart;
+            var second = secondEnd - secondStart;
+            var secondStartSide = Cross(first, secondStart - firstStart);
+            var secondEndSide = Cross(first, secondEnd - firstStart);
+            var firstStartSide = Cross(second, firstStart - secondStart);
+            var firstEndSide = Cross(second, firstEnd - secondStart);
+            return secondStartSide * secondEndSide < -Tolerance && firstStartSide * firstEndSide < -Tolerance;
+        }
+
+
+        // Замкнутый контур пересекает сам себя: какие-то две несоседние стороны — крест-накрест.
+        public static bool IsSelfCrossing(IReadOnlyList<Vector2> polygon)
+        {
+            var count = polygon.Count;
+
+            for (var first = 0; first < count; first++)
+                for (var second = first + 2; second < count; second++)
+                {
+                    // Последняя сторона и первая — соседи через первую точку.
+                    if (first == 0 && second == count - 1)
+                        continue;
+
+                    if (AreSegmentsCrossing(polygon[first], polygon[(first + 1) % count], polygon[second], polygon[(second + 1) % count]))
+                        return true;
+                }
+
+            return false;
         }
     }
 }

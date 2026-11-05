@@ -1,3 +1,5 @@
+using UnityEngine;
+
 namespace FeatherKit.LiveBuilder
 {
     /// <summary>
@@ -6,8 +8,8 @@ namespace FeatherKit.LiveBuilder
     /// </summary>
     public enum SplineWallHeightInBuilding
     {
-        ToCeiling,
-        FullStorey,
-        Custom
+        [InspectorName("До потолка этажа")] ToCeiling,
+        [InspectorName("Весь этаж, сквозь перекрытие")] FullStorey,
+        [InspectorName("Своя высота")] Custom
     }
 }

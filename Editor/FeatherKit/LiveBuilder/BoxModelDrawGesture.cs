@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEngine;
@@ -6,7 +7,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Рисование коробки в два шага, как фигуры в ProBuilder: зажал и протянул прямоугольник на поверхности, отпустил —
-    /// двигаешь мышь, задаёшь глубину, кликнул — готово. Всё прилипает к сетке, размеры подписаны.
+    /// двигаешь мышь, задаёшь глубину, кликнул — готово. Всё прилипает к сетке, размеры подписаны. На шаге глубины числа с клавиатуры:
+    /// «1,5» — глубина, «4×3» — стороны прямоугольника (глубина дальше мышью), «4×3×1,5» — всё сразу.
     /// Добавит коробка объём или вырежет дыру — по режиму <see cref="BoxModelDrawModeSetting"/>: в «Авто» наружу добавляет, внутрь вырезает.
     /// Рисуешь на объекте из коробок — коробка в нём; на прочей геометрии или в пустоте — в выделенном объекте или в новом.
     /// Новый объект на полу здания встаёт в его интерьер и привязывается к этажу целиком — вложенный объект (шахта, лестничная клетка).
@@ -39,6 +41,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Готовый вид объекта с новой коробкой, пока задаёшь глубину.
         private readonly BoxModelPreview preview = new();
 
+        // Точные размеры с клавиатуры, как в SketchUp: «1,5» — глубина, «4×3» — стороны, «4×3×1,5» — всё.
+        private readonly LiveBuilderTypedLength typedSize = new(3);
+        private readonly List<float> typedValues = new();
+
 
         public bool IsActive => stage != DrawStage.Idle;
         public bool IsChoosingDepth => stage == DrawStage.Depth;
@@ -47,9 +53,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public string Hint => stage switch
         {
             DrawStage.Rectangle => "Тяни — размер прямоугольника. Отпусти — дальше глубина. Esc — отмена",
+            DrawStage.Depth when typedSize.IsTyping => "Набрано " + typedSize.Text + " м: одно число — глубина, два — стороны, три — всё; X — следующее число. " +
+                                                       "Enter — применить, Backspace — стереть цифру, Esc — стереть набор",
             DrawStage.Depth => BoxModelDrawModeSetting.Current == BoxModelDrawMode.Auto && !isCreatingNewModel
-                ? "Веди мышь — глубина: наружу добавить, внутрь вырезать. Клик — готово, Esc — отмена"
-                : "Веди мышь — глубина. Клик — готово, Esc — отмена",
+                ? "Веди мышь — глубина: наружу добавить, внутрь вырезать; цифры + Enter — точно, «4 X 3» — стороны. Клик или Enter — готово, Esc — отмена"
+                : "Веди мышь — глубина; цифры + Enter — точно, «4 X 3» — стороны. Клик или Enter — готово, Esc — отмена",
             _ => string.Empty
         };
 
@@ -104,9 +112,67 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Пока выбираешь глубину: цифры — точные размеры, Enter — применить набранное (два числа — стороны, глубина дальше мышью; одно или три — готово)
+        // или готово как есть, Esc при наборе — стереть набор. Возвращает, забрал ли клавишу; committed — коробка встала.
+        public bool HandleKey(KeyCode key, out bool committed)
+        {
+            committed = false;
+
+            if (stage != DrawStage.Depth)
+                return false;
+
+            if (typedSize.TryType(key))
+                return true;
+
+            if (key == KeyCode.Escape && typedSize.IsTyping)
+            {
+                typedSize.Clear();
+                return true;
+            }
+
+            if (key is not (KeyCode.Return or KeyCode.KeypadEnter))
+                return false;
+
+            if (typedSize.IsTyping)
+            {
+                // Набрано не то — набор стёрт, коробка ждёт дальше.
+                if (!typedSize.TryTakeAll(typedValues))
+                    return true;
+
+                if (typedValues.Count >= 2)
+                    ResizeRectangle(typedValues[0], typedValues[1]);
+
+                if (typedValues.Count != 2)
+                    SetTypedDepth(typedValues[typedValues.Count - 1]);
+
+                RebuildPreview();
+
+                if (typedValues.Count == 2)
+                    return true;
+            }
+
+            committed = Commit();
+            return true;
+        }
+
+        // Стороны прямоугольника — набранные, от угла, где начали тянуть, в ту же сторону. Порядок — как в подписи «2 × 3».
+        private void ResizeRectangle(float firstSize, float secondSize)
+        {
+            GetSideAxes(out var firstAxis, out var secondAxis);
+            rectangleEnd[firstAxis] = rectangleStart[firstAxis] + Mathf.Sign(rectangleEnd[firstAxis] - rectangleStart[firstAxis]) * firstSize;
+            rectangleEnd[secondAxis] = rectangleStart[secondAxis] + Mathf.Sign(rectangleEnd[secondAxis] - rectangleStart[secondAxis]) * secondSize;
+        }
+
+        // Внутрь уже тянули — набранная глубина тоже внутрь.
+        private void SetTypedDepth(float meters)
+        {
+            depth = depth < 0f ? -meters : meters;
+        }
+
+
         public void UpdateDepth(Vector2 mousePosition)
         {
-            if (stage != DrawStage.Depth)
+            if (stage != DrawStage.Depth || typedSize.IsTyping)
                 return;
 
             if (IsTargetLost)
@@ -202,7 +268,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Коробка в здании — его часть, как перегородка: в его интерьер и к его этажу. Вырез в перекрытии с «И все выше» —
+        // Коробка в здании — его часть, как перегородка: в его интерьер и к его этажу. Вырез в перекрытии с «И этажи выше» —
         // сразу на всех этажах выше; потом повтор по этажам — в «Этажи в здании».
         private static void AttachToBuilding(BoxModel model, BoxModelPart part)
         {
@@ -220,7 +286,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Новый объект на полу здания — вложенный объект в нём (шахта, лестничная клетка): в его интерьер и к его этажу целиком;
-        // с «И все выше» — сразу на всех этажах выше, одним мешем.
+        // с «И этажи выше» — сразу на всех этажах выше, одним мешем.
         private static void AttachModelToBuilding(BoxModel model, BoxModelPart firstPart)
         {
             var center = model.transform.TransformPoint(BoxModelShapeCollector.LocalMinOf(model, firstPart.transform) + firstPart.Size / 2f);
@@ -238,6 +304,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public void Cancel()
         {
             preview.Clear();
+            typedSize.Clear();
             stage = DrawStage.Idle;
             plane = default;
             isCreatingNewModel = false;
@@ -275,10 +342,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // «2 × 3» — стороны прямоугольника по осям плоскости.
         private string RectangleSizeText()
         {
-            var axisU = (plane.Axis + 1) % 3;
-            var axisV = (plane.Axis + 2) % 3;
+            GetSideAxes(out var firstAxis, out var secondAxis);
             var size = rectangleEnd - rectangleStart;
-            return LiveBuilderSceneText.FormatMeters(size[axisU]) + " × " + LiveBuilderSceneText.FormatMeters(size[axisV]);
+            return LiveBuilderSceneText.FormatMeters(size[firstAxis]) + " × " + LiveBuilderSceneText.FormatMeters(size[secondAxis]);
         }
 
         // «2 × 3 м, высота 1,5 м — добавить»: у пола и потолка — высота, у стен — глубина.
@@ -286,6 +352,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var depthName = plane.Axis == 1 ? "высота" : "глубина";
             var action = mode == BoxModelPartMode.Add ? "добавить" : plane.Model == null && pathOwner == null ? "вырезать нечего" : "вырезать";
+            if (typedSize.IsTyping)
+                return "набрано " + typedSize.Text + "… м — " + action;
+
             return RectangleSizeText() + " м, " + depthName + " " + LiveBuilderSceneText.FormatMeters(depth) + " м — " + action;
         }
 
@@ -322,6 +391,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
             depthEnd[plane.Axis] = plane.Coordinate + depth * plane.OutwardSign;
             min = Vector3.Min(Vector3.Min(rectangleStart, rectangleEnd), depthEnd);
             max = Vector3.Max(Vector3.Max(rectangleStart, rectangleEnd), depthEnd);
+        }
+
+        // Оси сторон прямоугольника по порядку, как в рамке выделения: сначала по горизонтали (X, у стены вдоль Z — Z), высота — последней.
+        private void GetSideAxes(out int firstAxis, out int secondAxis)
+        {
+            (firstAxis, secondAxis) = plane.Axis switch
+            {
+                0 => (2, 1),
+                1 => (0, 2),
+                _ => (0, 1)
+            };
         }
 
         private bool HasArea()

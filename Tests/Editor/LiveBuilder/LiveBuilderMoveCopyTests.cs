@@ -79,6 +79,28 @@ namespace FeatherKit.Tests.LiveBuilder
         }
 
 
+        [Test]
+        public void ExactCopies_StandInRowByTypedOffset_AndExactMoveShiftsByIt()
+        {
+            var model = BoxModelFactory.CreateModel(Origin);
+            var original = BoxModelFactory.CreatePart(model, Vector3.zero, Vector3.one, BoxModelPartMode.Add);
+            var start = original.transform.position;
+
+            LiveBuilderExactMove.Copy(new[] { original.transform }, new Vector3(2.5f, 0f, 0f), 3);
+
+            var parts = model.GetComponentsInChildren<BoxModelPart>();
+            Assert.AreEqual(4, parts.Length, "три копии и оригинал");
+            Assert.AreEqual(3, Selection.gameObjects.Length, "выделены копии");
+
+            foreach (var copyIndex in new[] { 1, 2, 3 })
+                Assert.IsTrue(System.Array.Exists(parts, part => Vector3.Distance(part.transform.position, start + new Vector3(2.5f * copyIndex, 0f, 0f)) < 0.0001f),
+                    "копия " + copyIndex + " — через " + 2.5f * copyIndex + " м");
+
+            LiveBuilderExactMove.Move(new[] { original.transform }, new Vector3(0f, 0f, -1.25f));
+            Assert.That(Vector3.Distance(original.transform.position, start + new Vector3(0f, 0f, -1.25f)), Is.LessThan(0.0001f), "сдвиг — ровно набранный, не по сетке");
+        }
+
+
         // ── Точки контура ────────────────────────────────────────────────
 
         [Test]

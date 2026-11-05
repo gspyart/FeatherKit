@@ -16,8 +16,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public static class LiveBuilderMoveHandle
     {
-        private static readonly string[] AxisNames = { "X", "Y", "Z" };
-
         // Что едет и где оно было в начале: сдвиг считается от начала, без накопления округлений.
         private static readonly List<Transform> Targets = new();
         private static readonly List<Vector3> StartPositions = new();
@@ -79,16 +77,21 @@ namespace FeatherKit.EditorTools.LiveBuilder
             DrawDragLabel();
         }
 
-        // Выделенные постройки, что правит инструмент; часть здания — само здание. Лежащее внутри другой выделенной — едет с ней, отдельно не двигается.
-        private static List<Transform> MovableSelection(LiveBuilderTool tool)
+        // Выделенные постройки, что правит инструмент (без инструмента — все); часть здания — само здание. Лежащее внутри другой выделенной — едет с ней,
+        // отдельно не двигается. Активная — первой: по её осям стрелки и точный сдвиг (<see cref="LiveBuilderExactMove"/>).
+        public static List<Transform> MovableSelection(LiveBuilderTool tool)
         {
             var targets = new List<Transform>();
+            var active = Selection.activeGameObject != null ? MovableOf(Selection.activeGameObject) : null;
+
+            if (active != null && (tool == null || tool.CanEdit(active.gameObject)))
+                targets.Add(active);
 
             foreach (var selected in Selection.gameObjects)
             {
                 var target = MovableOf(selected);
 
-                if (target != null && tool.CanEdit(target.gameObject) && !targets.Contains(target))
+                if (target != null && (tool == null || tool.CanEdit(target.gameObject)) && !targets.Contains(target))
                     targets.Add(target);
             }
 
@@ -97,7 +100,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
         // Постройка, которую стрелки двигают целиком. Вырез — своими стрелками, повтор — своей ручкой; прочее — штатным переносом.
-        private static Transform MovableOf(GameObject selected)
+        public static Transform MovableOf(GameObject selected)
         {
             if (selected.TryGetComponent<SplineBuildingPart>(out _))
             {
@@ -134,7 +137,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
         // Коробка, комната, лестница — оси их объекта; прочее — как Global / Local в Unity.
-        private static Quaternion AxesOf(Transform target)
+        public static Quaternion AxesOf(Transform target)
         {
             if (target.TryGetComponent<BoxModelPart>(out _) || target.TryGetComponent<BoxModelRoom>(out _) || target.TryGetComponent<BoxModelStairs>(out _))
             {
@@ -253,13 +256,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (!isDragging || Event.current.type != EventType.Repaint)
                 return;
 
-            var parts = new List<string>();
-
-            for (var axis = 0; axis < 3; axis++)
-                if (!Mathf.Approximately(snappedOffset[axis], 0f))
-                    parts.Add(AxisNames[axis] + " " + (snappedOffset[axis] > 0f ? "+" : "−") + LiveBuilderSceneText.FormatMeters(snappedOffset[axis]));
-
-            var offsetText = parts.Count > 0 ? string.Join(" · ", parts) + " м" : isCopying ? "тяни дальше — копия встанет на клетку сетки" : "0 м";
+            var offsetText = LiveBuilderSceneText.FormatOffset(snappedOffset) ?? (isCopying ? "тяни дальше — копия встанет на клетку сетки" : "0 м");
             LiveBuilderSceneText.DrawLabel(HandlePosition, isCopying ? "копия · " + offsetText : offsetText);
         }
     }
