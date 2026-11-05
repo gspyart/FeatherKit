@@ -174,7 +174,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Развёртка под запекание света — долгая, поэтому только при сохранении сцены, а не на каждую правку.
+        // Развёртка под запекание света — долгая, поэтому только при сохранении сцены и перед запеканием, а не на каждую правку.
         public static void AddLightmapUVs(Mesh mesh)
         {
             if (mesh == null || mesh.vertexCount == 0 || mesh.uv2.Length > 0)

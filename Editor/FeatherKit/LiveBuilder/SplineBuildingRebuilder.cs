@@ -29,7 +29,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 try
                 {
-                    if (BoxModelPrefabInstances.TryUsePrefabGeometry(building, () => IsPrefabUpToDate(building), () => PrefabStateOf(building)))
+                    if (TryUsePrefabGeometry(building))
                         continue;
 
                     var signature = SignatureOf(building);
@@ -44,6 +44,23 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
         }
 
+        // У каждой части меш прорезан теми вырезами, что режут её сейчас.
+        private static bool ArePartsCutUpToDate(SplineBuilding building, string signature)
+        {
+            foreach (var part in building.GetComponentsInChildren<SplineBuildingPart>(false))
+                if (part.BuiltSignature != PartSignatureOf(part, signature, CuttersOf(part, part.UncutBounds)))
+                    return false;
+
+            return true;
+        }
+
+
+        // Экземпляр префаба без своих правок берёт меши префаба (отставший префаб пересобирается) — сам тогда не собирается.
+        public static bool TryUsePrefabGeometry(SplineBuilding building)
+        {
+            return BoxModelPrefabInstances.TryUsePrefabGeometry(building, () => IsPrefabUpToDate(building), () => PrefabStateOf(building));
+        }
+
         // Префаб собран по тому же, что у экземпляра без правок, и все его части на месте.
         private static bool IsPrefabUpToDate(SplineBuilding instance)
         {
@@ -56,16 +73,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var source = PrefabUtility.GetCorrespondingObjectFromSource(instance);
             return (source != null ? source.BuiltSignature : "") + "|" + (source != null && SplineBuildingParts.AreBuilt(source));
-        }
-
-        // У каждой части меш прорезан теми вырезами, что режут её сейчас.
-        private static bool ArePartsCutUpToDate(SplineBuilding building, string signature)
-        {
-            foreach (var part in building.GetComponentsInChildren<SplineBuildingPart>(false))
-                if (part.BuiltSignature != PartSignatureOf(part, signature, CuttersOf(part, part.UncutBounds)))
-                    return false;
-
-            return true;
         }
 
 

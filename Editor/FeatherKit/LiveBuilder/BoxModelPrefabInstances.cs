@@ -11,6 +11,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// - экземпляр без своих правок коробок, лестниц, повторов, проёмов и точек сам ничего не пересобирает и берёт меш префаба —
     ///   иначе у каждого экземпляра появлялся бы свой файл меша и лишнее переопределение
     /// - устарел сам префаб (поменялся расчёт, файл меша не записался или откатили) — пересобирается префаб; не помогло — по кругу не гоняем
+    /// - пересобирается ближайший префаб — тот, с которым сверяли (у варианта — сам вариант). Объект в нём из базового или вложенного префаба
+    ///   разбирается так же: со своими правками собирается в нём, без правок берёт меш того префаба, а отставший тот пересобирается
+    ///   следом, когда этот уже записан
     /// Экземпляр со своими правками геометрии или прорезанный вырезом не из этого префаба — как обычный объект: свой файл меша.
     /// Вырез убрали — снова меш префаба.
     /// Сверка правок экземпляра дорогая (около миллисекунды), а проверка идёт на каждую правку в сцене: ответ помнится,
@@ -23,6 +26,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // Префаб и в каком состоянии его уже пересобирали в эту сессию: если и после этого не сходится — по кругу не гоняем.
         private static readonly Dictionary<string, string> RefreshedPrefabStates = new();
+
+        // Отставшие базовые и вложенные префабы, найденные при пересборке другого префаба, — на после его записи.
+        private static readonly List<string> PrefabsToRefreshAfterCurrent = new();
+
+        // Идёт пересборка префаба: найденные внутри отставшие префабы ждут в очереди.
+        private static bool isRefreshingPrefab;
 
         // Уже сверенные объекты в экземплярах: объект → его экземпляр, берёт ли он меш префаба и резал ли его чужой вырез при сверке.
         private static readonly Dictionary<EntityId, (EntityId InstanceRoot, bool UsesPrefabGeometry, bool IsCutFromOutside)> CheckedOwners = new();
@@ -219,13 +228,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Префаб собран не по своим коробкам или его файл меша отстал — пересобрать префаб.
-        // Сверяют на экземпляре без правок: его коробки — те же, что у префаба.
+        // Сверяют на экземпляре без правок с ближайшим префабом (у варианта — с самим вариантом): его и пересобираем.
         private static void RefreshPrefabIfStale(Component owner, bool isPrefabUpToDate, string prefabState)
         {
             if (isPrefabUpToDate)
                 return;
 
-            var source = PrefabUtility.GetCorrespondingObjectFromOriginalSource(owner);
+            var source = PrefabUtility.GetCorrespondingObjectFromSource(owner);
             var prefabPath = AssetDatabase.GetAssetPath(source);
 
             if (string.IsNullOrEmpty(prefabPath) || RefreshedPrefabStates.TryGetValue(prefabPath, out var refreshedState) && refreshedState == prefabState)
@@ -233,6 +242,35 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             RefreshedPrefabStates[prefabPath] = prefabState;
 
+            // Отставший базовый префаб нашёлся при пересборке варианта — после записи варианта: иначе загруженный вариант
+            // записал бы прежние значения базового как свои правки.
+            if (isRefreshingPrefab)
+            {
+                PrefabsToRefreshAfterCurrent.Add(prefabPath);
+                return;
+            }
+
+            isRefreshingPrefab = true;
+
+            try
+            {
+                RebuildPrefab(prefabPath);
+
+                // Пересборка базового может найти отставший ещё глубже — очередь растёт, пока не кончится цепочка.
+                for (var index = 0; index < PrefabsToRefreshAfterCurrent.Count; index++)
+                    RebuildPrefab(PrefabsToRefreshAfterCurrent[index]);
+            }
+            finally
+            {
+                PrefabsToRefreshAfterCurrent.Clear();
+                isRefreshingPrefab = false;
+            }
+        }
+
+        // Пересобирает постройки в файле префаба. Свои — всегда; из базового или вложенного префаба — как в сцене:
+        // без своих правок берут меш того префаба (отставший — в очередь), со своими — собираются в этом.
+        private static void RebuildPrefab(string prefabPath)
+        {
             var contents = PrefabUtility.LoadPrefabContents(prefabPath);
 
             // Меши построек префаба — в его папке, вырезы — его собственные, а не сцены.
@@ -241,15 +279,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
             try
             {
                 foreach (var model in contents.GetComponentsInChildren<BoxModel>(true))
-                    if (!PrefabUtility.IsPartOfPrefabInstance(model))
+                    if (!BoxModelRebuilder.TryUsePrefabGeometry(model))
                         BoxModelRebuilder.Rebuild(model);
 
                 foreach (var wall in contents.GetComponentsInChildren<SplineWall>(true))
-                    if (!PrefabUtility.IsPartOfPrefabInstance(wall))
+                    if (!SplineWallRebuilder.TryUsePrefabGeometry(wall))
                         SplineWallRebuilder.Rebuild(wall);
 
                 foreach (var building in contents.GetComponentsInChildren<SplineBuilding>(true))
-                    if (!PrefabUtility.IsPartOfPrefabInstance(building))
+                    if (!SplineBuildingRebuilder.TryUsePrefabGeometry(building))
                         SplineBuildingRebuilder.Rebuild(building);
 
                 BoxModelMeshSaving.SaveMeshFiles(contents);

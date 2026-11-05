@@ -5,7 +5,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Многоугольники в плане (X, Z → x, y): внутри ли точка, расстояние до контура, треугольники многоугольника,
-    /// вычитание выпуклой дыры, куски отрезка внутри многоугольника. Чистая геометрия без Unity-объектов — ею собирают
+    /// вычитание выпуклой дыры, куски отрезка внутри многоугольника и вне соседних. Чистая геометрия без Unity-объектов — ею собирают
     /// перекрытия здания (<see cref="SplineBuildingMeshBuilder"/>) и ищут стены здания под мышью (<see cref="LiveBuilderBuildingContext"/>).
     /// </summary>
     public static class PlanPolygons
@@ -61,23 +61,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var cuts = new List<float> { 0f, 1f };
             var segment = end - start;
-
-            for (var index = 0; index < polygon.Count; index++)
-            {
-                var edgeStart = polygon[index];
-                var edge = polygon[(index + 1) % polygon.Count] - edgeStart;
-                var denominator = Cross(segment, edge);
-
-                if (Mathf.Abs(denominator) < 1e-6f)
-                    continue;
-
-                var offset = edgeStart - start;
-                var alongSegment = Cross(offset, edge) / denominator;
-                var alongEdge = Cross(offset, segment) / denominator;
-
-                if (alongSegment > 0f && alongSegment < 1f && alongEdge >= 0f && alongEdge <= 1f)
-                    cuts.Add(alongSegment);
-            }
+            AddCrossings(start, end, polygon, cuts);
 
             cuts.Sort();
             var parts = new List<(Vector2 From, Vector2 To)>();
@@ -97,10 +81,75 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Куски отрезка, сбоку от которых нет ни одного из многоугольников: режем отрезок по их сторонам и смотрим точку
+        // у середины куска, сдвинутую на aside. Соседние оставленные куски — одним куском.
+        public static List<(Vector2 From, Vector2 To)> PartsClearAside(Vector2 start, Vector2 end, IReadOnlyList<List<Vector2>> polygons, Vector2 aside)
+        {
+            var cuts = new List<float> { 0f, 1f };
+            var segment = end - start;
+
+            foreach (var polygon in polygons)
+                AddCrossings(start, end, polygon, cuts);
+
+            cuts.Sort();
+            var parts = new List<(Vector2 From, Vector2 To)>();
+            var lastKeptEnd = -1f;
+
+            for (var index = 0; index < cuts.Count - 1; index++)
+            {
+                if (cuts[index + 1] - cuts[index] < 1e-4f || IsInsideAny(start + segment * ((cuts[index] + cuts[index + 1]) / 2f) + aside, polygons))
+                    continue;
+
+                if (parts.Count > 0 && cuts[index] - lastKeptEnd < 1e-4f)
+                    parts[^1] = (parts[^1].From, start + segment * cuts[index + 1]);
+                else
+                    parts.Add((start + segment * cuts[index], start + segment * cuts[index + 1]));
+
+                lastKeptEnd = cuts[index + 1];
+            }
+
+            return parts;
+        }
+
+        private static bool IsInsideAny(Vector2 point, IReadOnlyList<List<Vector2>> polygons)
+        {
+            foreach (var polygon in polygons)
+                if (IsInside(point, polygon))
+                    return true;
+
+            return false;
+        }
+
+
+        // Где отрезок пересекает стороны многоугольника — доли от его начала (между 0 и 1), в список cuts.
+        private static void AddCrossings(Vector2 start, Vector2 end, List<Vector2> polygon, List<float> cuts)
+        {
+            var segment = end - start;
+
+            for (var index = 0; index < polygon.Count; index++)
+            {
+                var edgeStart = polygon[index];
+                var edge = polygon[(index + 1) % polygon.Count] - edgeStart;
+                var denominator = Cross(segment, edge);
+
+                if (Mathf.Abs(denominator) < 1e-6f)
+                    continue;
+
+                var offset = edgeStart - start;
+                var alongSegment = Cross(offset, edge) / denominator;
+                var alongEdge = Cross(offset, segment) / denominator;
+
+                if (alongSegment > 0f && alongSegment < 1f && alongEdge >= 0f && alongEdge <= 1f)
+                    cuts.Add(alongSegment);
+            }
+        }
+
+
         // ── Треугольники ─────────────────────────────────────────────────
 
         // Треугольники многоугольника отрезанием «ушей»: выпуклый угол, внутри которого нет других точек, — треугольник.
-        public static List<Vector2[]> Triangulate(List<Vector2> outline)
+        // isComplete — разрезан весь: у контура, который пересекает сам себя, «уши» кончаются раньше, и остаток теряется.
+        public static List<Vector2[]> Triangulate(List<Vector2> outline, out bool isComplete)
         {
             var points = new List<Vector2>(outline);
             var triangles = new List<Vector2[]>();
@@ -132,6 +181,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (!earFound)
                     break;
             }
+
+            // Остаток без площади (точки на одной прямой) — не потеря.
+            isComplete = points.Count <= 3 || Mathf.Abs(SignedArea(points)) <= MinPieceArea;
 
             if (points.Count == 3)
                 triangles.Add(points.ToArray());

@@ -38,7 +38,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 try
                 {
-                    if (BoxModelPrefabInstances.TryUsePrefabGeometry(model, () => IsPrefabMeshUpToDate(model), () => PrefabStateOf(model)))
+                    if (TryUsePrefabGeometry(model))
                         continue;
 
                     BoxModelPieceTidying.Tidy(model);
@@ -51,26 +51,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     Debug.LogException(exception, model);
                 }
             }
-        }
-
-        // Меш префаба собран по тем же коробкам, что у экземпляра без правок, и его файл не пустой.
-        private static bool IsPrefabMeshUpToDate(BoxModel instance)
-        {
-            var source = PrefabUtility.GetCorrespondingObjectFromSource(instance);
-            var sourceMesh = source != null ? source.GetComponent<MeshFilter>().sharedMesh : null;
-            var result = GetBuildResult(instance);
-
-            // Подпись префаба — без части вырезов: свои вырезы префаба режут его меш, а экземпляр их не считает.
-            return source != null && GeometryCutterLookup.WithoutCutterKey(source.BuiltSignature) == result.Signature && sourceMesh != null
-                   && (IsCutAfterSurfaces(instance, result) ? sourceMesh.vertexCount > 0 : BoxModelMeshBuilder.IsBuiltFrom(sourceMesh, result.Surfaces));
-        }
-
-        // Чем сейчас собран префаб — если после пересборки он всё равно не сходится, второй раз его не трогаем.
-        private static string PrefabStateOf(BoxModel instance)
-        {
-            var source = PrefabUtility.GetCorrespondingObjectFromSource(instance);
-            var sourceMesh = source != null ? source.GetComponent<MeshFilter>().sharedMesh : null;
-            return (source != null ? source.BuiltSignature : "") + "|" + (sourceMesh != null ? sourceMesh.vertexCount : -1);
         }
 
         // Меш собран по этим коробкам. Одной подписи мало: файл меша может отстать от сцены (не сохранился, откатили в git) —
@@ -99,6 +79,33 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             VerifiedMeshes[mesh.GetEntityId()] = verifiedKey;
             return true;
+        }
+
+
+        // Экземпляр префаба без своих правок берёт меш префаба (отставший префаб пересобирается) — сам тогда не собирается.
+        public static bool TryUsePrefabGeometry(BoxModel model)
+        {
+            return BoxModelPrefabInstances.TryUsePrefabGeometry(model, () => IsPrefabMeshUpToDate(model), () => PrefabStateOf(model));
+        }
+
+        // Меш префаба собран по тем же коробкам, что у экземпляра без правок, и его файл не пустой.
+        private static bool IsPrefabMeshUpToDate(BoxModel instance)
+        {
+            var source = PrefabUtility.GetCorrespondingObjectFromSource(instance);
+            var sourceMesh = source != null ? source.GetComponent<MeshFilter>().sharedMesh : null;
+            var result = GetBuildResult(instance);
+
+            // Подпись префаба — без части вырезов: свои вырезы префаба режут его меш, а экземпляр их не считает.
+            return source != null && GeometryCutterLookup.WithoutCutterKey(source.BuiltSignature) == result.Signature && sourceMesh != null
+                   && (IsCutAfterSurfaces(instance, result) ? sourceMesh.vertexCount > 0 : BoxModelMeshBuilder.IsBuiltFrom(sourceMesh, result.Surfaces));
+        }
+
+        // Чем сейчас собран префаб — если после пересборки он всё равно не сходится, второй раз его не трогаем.
+        private static string PrefabStateOf(BoxModel instance)
+        {
+            var source = PrefabUtility.GetCorrespondingObjectFromSource(instance);
+            var sourceMesh = source != null ? source.GetComponent<MeshFilter>().sharedMesh : null;
+            return (source != null ? source.BuiltSignature : "") + "|" + (sourceMesh != null ? sourceMesh.vertexCount : -1);
         }
 
 

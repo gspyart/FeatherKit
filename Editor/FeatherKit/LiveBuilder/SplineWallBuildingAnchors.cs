@@ -202,10 +202,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return path.PointAt(along, innerOffset, 0f);
         }
 
-        // Где на пути стоит точка контура, м от его начала: первая — в самом начале.
+        // Где на пути стоит точка контура, м от его начала: ближайшее к ней место пути, у скруглённого угла — середина дуги.
+        // Так и у первой точки замкнутого контура; первая точка открытой линии — в самом начале.
         private static float KnotAlong(SplineWallPath path, Spline spline, int knot)
         {
-            return knot == 0 ? 0f : path.ClosestDistanceTo(spline[knot].Position);
+            return knot == 0 && !spline.Closed ? 0f : path.ClosestDistanceTo(spline[knot].Position);
         }
 
 

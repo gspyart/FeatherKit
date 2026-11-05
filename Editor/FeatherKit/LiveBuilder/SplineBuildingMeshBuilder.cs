@@ -8,8 +8,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Строит геометрию здания по контуру по частям — стены и пол каждого этажа, крыша: стены по замкнутому пути (тем же кодом,
     /// что стену по линии) и перекрытия — плиты точно по форме контура, до внутренней стороны стен.
     /// Высоты — от линии контура: на ней низ плиты пола (здание стоит на точке опоры), над ней — этажи и крыша.
-    /// Дыра в перекрытии — прямоугольник вырезающей коробки в плане: треугольники плиты обрезаются по нему.
+    /// Дыра в перекрытии — прямоугольник вырезающей коробки в плане: треугольники плиты обрезаются по нему; торцы плиты — по краям
+    /// общей пустоты дыр, внутри соседней дыры торца нет.
     /// Части меша — по материалам: стены снаружи (и откосы), стены изнутри, пол, потолок, крыша.
+    /// Контур, который не разрезался на треугольники целиком (пересекает сам себя), — одно предупреждение в консоли на здание.
     /// </summary>
     public static class SplineBuildingMeshBuilder
     {
@@ -21,7 +23,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public const int RoofSubmesh = 4;
         public const int SubmeshCount = 5;
 
-        // Меньше этой площади кусок плиты после обрезки — мусор, м².
+        // На столько от края дыры смотрим наружу, есть ли там плита или уже соседняя дыра, м.
+        private const float HoleEdgeProbeOffset = 0.001f;
+
+        // Здания, о чьём сломанном контуре уже предупредили: не на каждую пересборку. Починили контур — забываем.
+        private static readonly HashSet<EntityId> BuildingsWarnedAboutContour = new();
 
 
         // Геометрия каждой части здания: стены и пол каждого этажа, крыша. Стены этажа — от низа его плиты до низа плиты следующего,
@@ -43,6 +49,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (building.HasRoof)
                 parts.Add(new SplineBuildingPartGeometry(SplineBuildingPartKind.Roof, 0));
 
+            var isContourComplete = true;
+
             for (var index = 0; index < paths.Count; index++)
             {
                 var path = paths[index];
@@ -61,10 +69,26 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 }
 
                 var innerOffset = insideSign > 0f ? rightOffset : leftOffset;
-                AddSlabs(parts, building, path, innerOffset, slabHoles);
+                isContourComplete &= AddSlabs(parts, building, path, innerOffset, slabHoles);
             }
 
+            ReportBrokenContour(building, isContourComplete);
             return parts;
+        }
+
+        // Контур не разрезался на треугольники целиком — часть плит пропала: сказать один раз, со ссылкой на здание.
+        private static void ReportBrokenContour(SplineBuilding building, bool isContourComplete)
+        {
+            var hasSlabs = building.HasFloor || building.HasRoof || building.StoreyCount > 1;
+
+            if (isContourComplete || !hasSlabs)
+            {
+                BuildingsWarnedAboutContour.Remove(building.GetEntityId());
+                return;
+            }
+
+            if (BuildingsWarnedAboutContour.Add(building.GetEntityId()))
+                Debug.LogWarning("Live Builder: контур здания «" + building.name + "» пересекает сам себя — часть пола и крыши не построена.", building);
         }
 
         // Верх пола этажа над контуром, м.
@@ -168,12 +192,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Перекрытия ───────────────────────────────────────────────────
 
         // Пол снизу, перекрытия между этажами, крыша сверху — плиты по внутренней стороне стен, каждая в свою часть.
-        private static void AddSlabs(List<SplineBuildingPartGeometry> parts, SplineBuilding building, SplineWallPath path, float innerOffset,
+        // Возвращает, разрезался ли контур на треугольники целиком.
+        private static bool AddSlabs(List<SplineBuildingPartGeometry> parts, SplineBuilding building, SplineWallPath path, float innerOffset,
             IReadOnlyList<SplineBuildingSlabHole> slabHoles)
         {
             var outline = ContourOf(path, innerOffset);
             var baseHeight = path.BaseHeightAt(0f);
-            var triangles = PlanPolygons.Triangulate(outline);
+            var triangles = PlanPolygons.Triangulate(outline, out var isContourComplete);
             var slab = building.SlabThickness;
 
             if (building.HasFloor)
@@ -191,6 +216,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var roofTop = baseHeight + building.TotalHeight;
                 AddSlab(Find(parts, SplineBuildingPartKind.Roof, 0).Geometry, outline, triangles, slabHoles, roofTop - slab, roofTop, RoofSubmesh, CeilingSubmesh);
             }
+
+            return isContourComplete;
         }
 
         // Плита: верх и низ — треугольники контура за вычетом дыр, которые проходят через эту плиту, и торцы по краям дыр.
@@ -199,6 +226,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             IReadOnlyList<SplineBuildingSlabHole> slabHoles, float bottom, float top, int topSubmesh, int bottomSubmesh)
         {
             var pieces = new List<List<Vector2>>();
+            var holesThrough = new List<List<Vector2>>();
 
             foreach (var triangle in triangles)
                 pieces.Add(new List<Vector2>(triangle));
@@ -208,8 +236,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (hole.Bottom < top - 0.001f && hole.Top > bottom + 0.001f)
                 {
                     pieces = PlanPolygons.SubtractConvex(pieces, hole.Corners);
-                    AddHoleEdges(geometry, outline, hole.Corners, bottom, top);
+                    holesThrough.Add(new List<Vector2>(hole.Corners));
                 }
+
+            for (var index = 0; index < holesThrough.Count; index++)
+                AddHoleEdges(geometry, outline, holesThrough, index, bottom, top);
 
             foreach (var piece in pieces)
                 for (var index = 1; index < piece.Count - 1; index++)
@@ -221,10 +252,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 }
         }
 
-        // Торцы плиты по краям дыры — там, где край идёт по плите, а не по пустоте за стенами. Лицом внутрь дыры.
-        private static void AddHoleEdges(SplineWallGeometry geometry, List<Vector2> outline, Vector2[] hole, float bottom, float top)
+        // Торцы плиты по краям дыры holeIndex — там, где край идёт по плите: не по пустоте за стенами и не по соседней дыре,
+        // которая заходит на эту. Лицом внутрь дыры.
+        private static void AddHoleEdges(SplineWallGeometry geometry, List<Vector2> outline, List<List<Vector2>> holes, int holeIndex, float bottom, float top)
         {
-            var corners = new List<Vector2>(hole);
+            var corners = new List<Vector2>(holes[holeIndex]);
+            var otherHoles = new List<List<Vector2>>(holes);
+            otherHoles.RemoveAt(holeIndex);
 
             if (PlanPolygons.SignedArea(corners) < 0f)
                 corners.Reverse();
@@ -235,8 +269,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var end = corners[(index + 1) % corners.Count];
                 var direction = (end - start).normalized;
                 var intoHole = new Vector3(-direction.y, 0f, direction.x);
+                var awayFromHole = new Vector2(direction.y, -direction.x) * HoleEdgeProbeOffset;
 
-                foreach (var (from, to) in PlanPolygons.PartsInside(start, end, outline))
+                foreach (var (insideFrom, insideTo) in PlanPolygons.PartsInside(start, end, outline))
+                foreach (var (from, to) in PlanPolygons.PartsClearAside(insideFrom, insideTo, otherHoles, awayFromHole))
                     geometry.AddQuad(
                         new SplineWallVertex(new Vector3(from.x, bottom, from.y), intoHole, new Vector2(Vector2.Distance(start, from), bottom)),
                         new SplineWallVertex(new Vector3(to.x, bottom, to.y), intoHole, new Vector2(Vector2.Distance(start, to), bottom)),

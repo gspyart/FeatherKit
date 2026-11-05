@@ -11,7 +11,7 @@ namespace FeatherKit.Tests.LiveBuilder
     /// <summary>
     /// Пересборка и файлы мешей: окно на одном этаже пересобирает только этот этаж; экземпляр префаба под чужим вырезом получает свой меш
     /// и возвращается к мешу префаба, когда выреза нет; копия не перезаписывает общий с оригиналом файл; хеш линии не зависит от языка системы;
-    /// уборка находит брошенные файлы мешей и не трогает нужные.
+    /// уборка находит брошенные файлы мешей и не трогает нужные — и те, на которые ссылается только ScriptableObject.
     /// </summary>
     public class LiveBuilderRebuildTests
     {
@@ -160,6 +160,33 @@ namespace FeatherKit.Tests.LiveBuilder
             finally
             {
                 AssetDatabase.DeleteAsset(removedPath);
+            }
+        }
+
+
+        // Меш, на который ссылается только ScriptableObject проекта (не сцена и не префаб), — нужный.
+        [Test]
+        public void MeshCleanup_KeepsFileReferencedByScriptableObject()
+        {
+            AssetDatabase.CreateFolder("Assets", "LiveBuilderTestTemp");
+            var wall = testScene.CreateWall(Vector3.zero, new Vector3(10f, 0f, 0f));
+            var mesh = wall.GetComponent<MeshFilter>().sharedMesh;
+            var meshPath = AssetDatabase.GetAssetPath(mesh);
+            Object.DestroyImmediate(wall.gameObject);
+
+            try
+            {
+                CollectionAssert.Contains(BoxModelMeshCleanup.FindUnusedMeshFiles(), meshPath, "без ссылок — лишний");
+
+                var holder = ScriptableObject.CreateInstance<LiveBuilderTestMeshHolder>();
+                holder.Mesh = mesh;
+                AssetDatabase.CreateAsset(holder, TempFolder + "/Mesh Holder.asset");
+
+                CollectionAssert.DoesNotContain(BoxModelMeshCleanup.FindUnusedMeshFiles(), meshPath, "на него смотрит ScriptableObject — нужен");
+            }
+            finally
+            {
+                AssetDatabase.DeleteAsset(meshPath);
             }
         }
 

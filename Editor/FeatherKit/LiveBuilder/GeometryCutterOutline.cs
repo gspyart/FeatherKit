@@ -7,7 +7,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Форма выреза (<see cref="GeometryCutter"/>) точками: контур на плоскости XY выреза — прямоугольник со скруглёнными углами или овал,
     /// и тело — этот контур, протянутый по Z на глубину; где стоит форма (точка объекта плюс сдвиг формы) и каждая копия вверх.
-    /// Нужна вычитанию из меша, рамке и ручкам в окне сцены и поиску пересечений.
+    /// Нужна вычитанию из меша, рамке и ручкам в окне сцены, поиску пересечений и проверке, лежит ли точка в дыре.
     /// </summary>
     public static class GeometryCutterOutline
     {
@@ -118,6 +118,28 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 bounds.Encapsulate(cutterToTarget.MultiplyPoint3x4(corners[index]));
 
             return bounds;
+        }
+
+
+        // Точка в мире — внутри тела выреза или одной из его копий вверх, с запасом margin, м: там у того, что он режет, дыра.
+        public static bool Contains(GeometryCutter cutter, Vector3 worldPoint, float margin = 0f)
+        {
+            var outline = OutlineOf(cutter);
+            var halfDepth = cutter.Depth / 2f;
+
+            for (var copy = 0; copy < cutter.CopiesUp; copy++)
+            {
+                var local = CopyToWorld(cutter, copy).inverse.MultiplyPoint3x4(worldPoint);
+                var flat = new Vector2(local.x, local.y);
+
+                if (Mathf.Abs(local.z) > halfDepth + margin)
+                    continue;
+
+                if (PlanPolygons.IsInside(flat, outline) || margin > 0f && PlanPolygons.DistanceToContours(flat, new List<List<Vector2>> { outline }) <= margin)
+                    return true;
+            }
+
+            return false;
         }
     }
 }

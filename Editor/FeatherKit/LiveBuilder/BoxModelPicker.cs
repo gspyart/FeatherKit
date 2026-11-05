@@ -27,9 +27,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Ищет поверхность объекта из коробок под лучом мыши: по прямоугольникам наружных поверхностей, без физики —
     /// работает и у объекта без коллайдера. Прочая геометрия сцены перед объектом закрывает его — и здания, и стены по линии, даже лежащие в объекте из коробок.
     /// Спрятанное разрезом над этажом (<see cref="LiveBuilderStoreys"/>) не ловится: клик проходит сквозь него.
+    /// Поверхность в дыре выреза (<see cref="GeometryCutter"/>), который режет объект, тоже не ловится: в готовом меше её там нет,
+    /// клик идёт сквозь дверь к следующей поверхности. Дно ниши и откос дыры — уже меш — закрывают то, что за ними.
     /// </summary>
     public static class BoxModelPicker
     {
+        // Запас у границы тела выреза, м: дно ниши и откос лежат ровно на ней.
+        private const float CutterHoleMargin = 0.01f;
+
         // Поверхности одного объекта под лучом — один список на все вызовы: поиск идёт на каждое движение мыши.
         private static readonly List<BoxModelSurfaceHit> ModelHitsScratch = new();
 
@@ -53,10 +58,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return false;
 
             // Закрывает всё, кроме меша самого объекта из коробок — и здание или стена по линии внутри объекта тоже:
-            // иначе коробка, нарисованная на полу здания, легла бы на объект под ним.
+            // иначе коробка, нарисованная на полу здания, легла бы на объект под ним. Меш объекта закрывает только в дыре выреза:
+            // дно ниши и откос — грани меша, которых нет среди поверхностей.
             var isHiddenBehindOtherGeometry = TryRaycastVisible(worldRay, bestDistance, out var physicsHit)
-                && !physicsHit.collider.TryGetComponent<BoxModel>(out _)
-                && physicsHit.distance < bestDistance - 0.01f;
+                && physicsHit.distance < bestDistance - 0.01f
+                && (!physicsHit.collider.TryGetComponent<BoxModel>(out var hitModel) || IsInCutterHole(CuttersOf(hitModel), physicsHit.point, CutterHoleMargin));
 
             return !isHiddenBehindOtherGeometry;
         }
@@ -124,7 +130,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return hit.Model != null;
         }
 
-        // Лицевые поверхности объекта, через которые проходит луч; спрятанное разрезом над этажом — нет.
+        // Лицевые поверхности объекта, через которые проходит луч; спрятанное разрезом над этажом и вырезанное вырезом — нет.
         private static void CollectHitsOnModel(BoxModel model, Ray worldRay, List<BoxModelSurfaceHit> hits)
         {
             var modelTransform = model.transform;
@@ -132,6 +138,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             // С масштабом, как и точка: при неравном масштабе без него луч в осях объекта уходит вбок. Расстояние меряется в мире — ниже.
             var direction = modelTransform.InverseTransformVector(worldRay.direction);
             IReadOnlyList<BoxModelSurface> surfaces = BoxModelRebuilder.GetSurfaces(model);
+            // Вырезы ищутся, только когда луч попал хоть в одну поверхность: поиск идёт на каждое движение мыши.
+            List<GeometryCutter> cutters = null;
 
             foreach (var surface in surfaces)
             {
@@ -152,7 +160,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 var worldPoint = modelTransform.TransformPoint(point);
 
-                if (!LiveBuilderStoreys.IsHiddenBySection(worldPoint))
+                if (LiveBuilderStoreys.IsHiddenBySection(worldPoint))
+                    continue;
+
+                cutters ??= CuttersOf(model);
+
+                if (!IsInCutterHole(cutters, worldPoint, 0f))
                     hits.Add(new BoxModelSurfaceHit(model, surface, point, Vector3.Distance(worldRay.origin, worldPoint)));
             }
         }
@@ -163,6 +176,26 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var v = localPoint[BoxFaces.SurfaceAxisV(surface.Face)] * MillimeterBox.MillimetersPerMeter;
             var area = surface.Area;
             return u >= area.xMin && u <= area.xMax && v >= area.yMin && v <= area.yMax;
+        }
+
+
+        // ── Дыры вырезов ─────────────────────────────────────────────────
+
+        // Вырезы, которые режут объект (<see cref="GeometryCutterLookup"/>).
+        private static List<GeometryCutter> CuttersOf(BoxModel model)
+        {
+            return GeometryCutterLookup.CuttersFor(model, GeometryCutterLookup.WorldBoundsOf(model.GetComponent<MeshRenderer>()));
+        }
+
+
+        // Точка в мире — в дыре одного из вырезов, с запасом margin, м.
+        private static bool IsInCutterHole(List<GeometryCutter> cutters, Vector3 worldPoint, float margin)
+        {
+            foreach (var cutter in cutters)
+                if (GeometryCutterOutline.Contains(cutter, worldPoint, margin))
+                    return true;
+
+            return false;
         }
     }
 }

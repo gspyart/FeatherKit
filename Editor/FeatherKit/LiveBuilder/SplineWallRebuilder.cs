@@ -37,7 +37,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 try
                 {
-                    if (BoxModelPrefabInstances.TryUsePrefabGeometry(wall, () => IsPrefabMeshUpToDate(wall), () => PrefabStateOf(wall)))
+                    if (TryUsePrefabGeometry(wall))
                         continue;
 
                     // Пустой меш — тоже готовый: стена из одной точки или целиком в вырезе.
@@ -49,6 +49,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     Debug.LogException(exception, wall);
                 }
             }
+        }
+
+
+        // Экземпляр префаба без своих правок берёт меш префаба (отставший префаб пересобирается) — сам тогда не собирается.
+        public static bool TryUsePrefabGeometry(SplineWall wall)
+        {
+            return BoxModelPrefabInstances.TryUsePrefabGeometry(wall, () => IsPrefabMeshUpToDate(wall), () => PrefabStateOf(wall));
         }
 
         // Меш префаба собран по тому же, что у экземпляра без правок, и не пустой.

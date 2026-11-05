@@ -11,6 +11,7 @@ namespace FeatherKit.Tests.LiveBuilder
     /// Поиск поверхности под мышью: здание, стоящее на объекте из коробок, закрывает его — коробка, нарисованная на полу здания,
     /// встаёт в объект здания на его пол, а не на объект под ним. Вырез, стоящий на самом объекте, не перехватывает клик по его граням;
     /// клик через пустую часть коробки выреза мимо дыры — по грани за ней, сквозь дыру — по вырезу.
+    /// Поверхность в дыре выреза не ловится: сквозь дверь — стена за ней, а дно ниши закрывает то, что за стеной.
     /// Выключенный объект из коробок не ловится.
     /// </summary>
     public class BoxModelPickerTests
@@ -128,6 +129,60 @@ namespace FeatherKit.Tests.LiveBuilder
             Assert.IsNotNull(past.GeometryCutter, "луч проходит через коробку выреза");
             Assert.IsFalse(past.IsGeometryCutterInFront, "мимо дыры, через пустую часть коробки — грань за ней");
             Assert.IsTrue(through.IsGeometryCutterInFront, "сквозь дыру — вырез");
+        }
+
+
+        // ── Сквозь дыру выреза ───────────────────────────────────────────
+
+        // Клик сквозь дверь в стене-объекте — по стене за ней, а не по грани расчёта в дыре; рядом с дверью — по самой стене.
+        [Test]
+        public void RayThroughCutterHole_PicksSurfaceBehind()
+        {
+            var wall = CreateWallModel(0f);
+            var backWall = CreateWallModel(3f);
+            CreateCutterAt(new Vector3(2f, 0.5f, 0.1f), 0.6f);
+            BoxModelRebuilder.Rebuild(wall);
+            Physics.SyncTransforms();
+
+            Assert.IsTrue(BoxModelPicker.TryPickSurface(new Ray(Origin + new Vector3(2f, 1.5f, -2f), Vector3.forward), out var throughHole), "сквозь дыру — что-то за ней");
+            Assert.AreSame(backWall, throughHole.Model, "сквозь дыру — стена за ней");
+
+            Assert.IsTrue(BoxModelPicker.TryPickSurface(new Ray(Origin + new Vector3(0.5f, 1.5f, -2f), Vector3.forward), out var besideHole));
+            Assert.AreSame(wall, besideHole.Model, "рядом с дырой — сама стена");
+        }
+
+
+        // Ниша не насквозь: её дно — меш стены, оно закрывает то, что за стеной.
+        [Test]
+        public void RayIntoNiche_DoesNotPickSurfaceBehindWall()
+        {
+            var wall = CreateWallModel(0f);
+            CreateWallModel(3f);
+            CreateCutterAt(new Vector3(2f, 0.5f, 0f), 0.1f);
+            BoxModelRebuilder.Rebuild(wall);
+            Physics.SyncTransforms();
+
+            Assert.IsFalse(BoxModelPicker.TryPickSurface(new Ray(Origin + new Vector3(2f, 1.5f, -2f), Vector3.forward), out _), "дно ниши закрывает стену за ней");
+        }
+
+        // Стена-объект из коробок 4 × 3 × 0,2 на расстоянии z от Origin.
+        private static BoxModel CreateWallModel(float z)
+        {
+            var model = BoxModelFactory.CreateModel(Origin);
+            BoxModelFactory.CreatePart(model, new Vector3(0f, 0f, z), new Vector3(4f, 3f, z + 0.2f), BoxModelPartMode.Add);
+            BoxModelRebuilder.Rebuild(model);
+            return model;
+        }
+
+        // Вырез-дверь 1 × 2 м отдельным объектом, низ посередине — в точке от Origin.
+        private static void CreateCutterAt(Vector3 bottom, float depth)
+        {
+            var cutterObject = new GameObject("Door Cutter");
+            cutterObject.transform.position = Origin + bottom;
+            var cutter = cutterObject.AddComponent<GeometryCutter>();
+            cutter.Width = 1f;
+            cutter.Height = 2f;
+            cutter.Depth = depth;
         }
 
 
