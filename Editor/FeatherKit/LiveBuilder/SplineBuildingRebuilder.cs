@@ -156,26 +156,28 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Дыры в перекрытиях ───────────────────────────────────────────
 
-        // Вырезающие коробки объекта, в котором лежит здание, — те, что режут перекрытия и стоят ниже здания в иерархии
-        // (в его интерьере — всегда): прямоугольник в плане здания и высоты над контуром.
-        private static List<SplineBuildingSlabHole> CollectSlabHoles(SplineBuilding building)
+        // Вырезающие коробки объекта, в котором лежит здание или замкнутая стена с полом и потолком, — те, что режут перекрытия и стоят ниже неё
+        // в иерархии (в интерьере здания — всегда): прямоугольник в плане владельца и высоты над его линией.
+        public static List<SplineBuildingSlabHole> CollectSlabHoles(Component owner)
         {
             var holes = new List<SplineBuildingSlabHole>();
-            var model = SplineWallRebuilder.OuterModelOf(building);
+            var model = SplineWallRebuilder.OuterModelOf(owner);
 
             if (model == null)
                 return holes;
 
-            var modelToBuilding = building.transform.worldToLocalMatrix * model.transform.localToWorldMatrix;
+            var modelToBuilding = owner.transform.worldToLocalMatrix * model.transform.localToWorldMatrix;
 
             foreach (var box in BoxModelRebuilder.GetSolverBoxes(model))
             {
                 if (!box.CutsSlabs)
                     continue;
 
-                if (!box.IsBelow(building))
+                if (!box.IsBelow(owner))
                 {
-                    ReportIfWouldCutSlabs(building, model, box);
+                    if (owner is SplineBuilding building)
+                        ReportIfWouldCutSlabs(building, model, box);
+
                     continue;
                 }
 

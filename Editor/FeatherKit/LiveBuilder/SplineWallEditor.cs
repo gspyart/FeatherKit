@@ -4,7 +4,7 @@ using UnityEditor;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Инспектор стены по линии: размер → этажи → вид → тонко. Стена в здании — копии от здания, высота — до потолка, на весь этаж или своя
+    /// Инспектор стены по линии: размер → этажи → пол и потолок (у замкнутой) → вид → тонко. Стена в здании — копии от здания, высота — до потолка, на весь этаж или своя
     /// («Height In Building»); поля от здания только показаны, а этажи меняются в привязке («Spline Building Storey Link» ниже);
     /// у неё же — «не строить стороны вдоль стен здания».
     /// </summary>
@@ -48,6 +48,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (isLinked || wall.CopiesUp > 1)
                 LiveBuilderInspectorLayout.StoreyCopies(serializedObject, wall, isLinked);
 
+            // Пол и потолок — у замкнутой стены: у открытой линии нечего закрывать.
+            if (IsClosed(wall))
+            {
+                LiveBuilderInspectorLayout.Section("Пол и потолок");
+                LiveBuilderInspectorLayout.Properties(serializedObject, "hasFloor", "hasCeiling");
+
+                if (wall.HasSlabs)
+                    LiveBuilderInspectorLayout.Properties(serializedObject, "slabThickness", "floorMaterial", "ceilingMaterial");
+            }
+
             LiveBuilderInspectorLayout.Section("Вид");
 
             if (wall.WallType == null)
@@ -59,6 +69,19 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderInspectorLayout.Properties(serializedObject, "curveStep", "cornerSegments", "hasCollider");
 
             serializedObject.ApplyModifiedProperties();
+        }
+
+        // Хоть одна линия стены замкнута.
+        private static bool IsClosed(SplineWall wall)
+        {
+            if (!wall.TryGetComponent<UnityEngine.Splines.SplineContainer>(out var container))
+                return false;
+
+            foreach (var spline in container.Splines)
+                if (spline.Closed)
+                    return true;
+
+            return false;
         }
     }
 }

@@ -36,16 +36,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Так проёмы, которые накладываются, просто сливаются, а на кривой проём изгибается вместе со стеной.
     /// Из клеток — обе стороны, верх, торцы открытого пути и откосы проёмов: бока, подоконник, верх проёма.
     /// Низа нет — стена всегда на чём-то стоит. Развёртка текстуры — по метрам.
+    /// У замкнутой стены — по желанию пол и потолок, плитами по её внутренней стороне (общий код с перекрытиями здания).
     /// </summary>
     public static class SplineWallMeshBuilder
     {
+        // Части меша: стена; у замкнутой стены с полом или потолком — ещё пол и потолок снизу.
+        public const int WallSubmesh = 0;
+        public const int FloorSubmesh = 1;
+        public const int CeilingSubmesh = 2;
+        public const int SlabSubmeshCount = 3;
+
         private const float BreakTolerance = 0.001f;
 
 
-        // Заполняет меш стены заново по путям и проёмам каждого пути, с копиями вверх. Один материал на всё.
-        public static void Fill(Mesh mesh, SplineWall wall, IReadOnlyList<SplineWallPath> paths, IReadOnlyList<List<SplineWallHole>> holesByPath)
+        // Заполняет меш стены заново по путям и проёмам каждого пути, с копиями вверх. Один материал на всё;
+        // есть замкнутые пути с полом или потолком (slabPaths) — три части: стена, пол, потолок.
+        public static void Fill(Mesh mesh, SplineWall wall, IReadOnlyList<SplineWallPath> paths, IReadOnlyList<List<SplineWallHole>> holesByPath,
+            IReadOnlyList<SplineWallPath> slabPaths, IReadOnlyList<SplineBuildingSlabHole> slabHoles)
         {
-            var geometry = new SplineWallGeometry(1);
+            var geometry = new SplineWallGeometry(slabPaths.Count > 0 ? SlabSubmeshCount : 1);
             GetSideOffsets(wall, out var leftOffset, out var rightOffset);
 
             for (var index = 0; index < paths.Count; index++)
@@ -55,7 +64,32 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     AddWalls(geometry, paths[index], holesByPath[index], leftOffset, rightOffset, bottom, bottom + wall.Height, SplineWallFaceSubmeshes.Single);
                 }
 
+            foreach (var path in slabPaths)
+                for (var copy = 0; copy < wall.CopiesUp; copy++)
+                    AddSlabs(geometry, wall, path, leftOffset, rightOffset, copy * wall.CopyStep, slabHoles);
+
             geometry.WriteTo(mesh);
+        }
+
+        // Пол и потолок внутри замкнутого пути — по внутренней стороне стены, как перекрытия здания: пол — на её низу, потолок — под её верхом.
+        // Снизу пола и сверху потолка — материал стены: так висящая в воздухе комната закрыта со всех сторон.
+        private static void AddSlabs(SplineWallGeometry geometry, SplineWall wall, SplineWallPath path, float leftOffset, float rightOffset, float copyBottom,
+            IReadOnlyList<SplineBuildingSlabHole> slabHoles)
+        {
+            var innerOffset = SplineBuildingMeshBuilder.InsideSignOf(path) > 0f ? rightOffset : leftOffset;
+            var outline = SplineBuildingMeshBuilder.ContourOf(path, innerOffset);
+            var triangles = PlanPolygons.Triangulate(outline, out _);
+            var bottom = path.BaseHeightAt(0f) + copyBottom;
+            var thickness = Mathf.Min(wall.SlabThickness, wall.Height / 2f);
+
+            if (wall.HasFloor)
+                SplineBuildingMeshBuilder.AddSlab(geometry, outline, triangles, slabHoles, bottom, bottom + thickness, FloorSubmesh, WallSubmesh);
+
+            if (!wall.HasCeiling)
+                return;
+
+            var top = bottom + wall.Height;
+            SplineBuildingMeshBuilder.AddSlab(geometry, outline, triangles, slabHoles, top - thickness, top, WallSubmesh, CeilingSubmesh);
         }
 
         // Смещения сторон от линии: по центру — поровну, слева или справа — стена целиком с одной стороны.

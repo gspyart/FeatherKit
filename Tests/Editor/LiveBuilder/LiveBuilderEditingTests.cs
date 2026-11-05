@@ -9,7 +9,7 @@ namespace FeatherKit.Tests.LiveBuilder
     /// <summary>
     /// Правка уже построенного не ломает поставленное в него: сменил толщину стен здания — окна остались сквозными;
     /// сменил высоту этажа — шахта во весь этаж выросла с ним; повернул стену здания и вернул — конец перегородки на прежнем месте;
-    /// выключил у комнаты потолок или пол — там открыто, стены на месте.
+    /// выключил у комнаты потолок или пол — там открыто, стены на месте; у замкнутой стены — свои пол и потолок, у открытой их нет.
     /// </summary>
     public class LiveBuilderEditingTests
     {
@@ -125,6 +125,31 @@ namespace FeatherKit.Tests.LiveBuilder
             room.HasFloor = false;
             BoxModelRebuilder.Rebuild(model);
             Assert.IsTrue(LiveBuilderTestScene.IsOpen(center + Vector3.up * 5f, Vector3.down, 7f), "без пола — насквозь");
+        }
+
+
+        [Test]
+        public void ClosedWallWithFloorAndCeiling_IsClosedThere_OpenWallHasNoSlabs()
+        {
+            var wall = testScene.CreateWall(Vector3.zero, new Vector3(6f, 0f, 0f), new Vector3(6f, 0f, 6f), new Vector3(0f, 0f, 6f));
+            wall.GetComponent<SplineContainer>().Spline.Closed = true;
+            wall.HasFloor = true;
+            wall.HasCeiling = true;
+            wall.SlabThickness = 0.1f;
+            SplineWallRebuilder.Rebuild(wall);
+
+            var center = Origin + new Vector3(3f, 1.5f, 3f);
+            Assert.AreEqual(3, wall.GetComponent<MeshFilter>().sharedMesh.subMeshCount, "стена, пол, потолок — три части");
+            Assert.IsFalse(LiveBuilderTestScene.IsOpen(center + Vector3.up * 5f, Vector3.down, 4f), "сверху — потолок");
+            Assert.IsFalse(LiveBuilderTestScene.IsOpen(center, Vector3.down, 2f), "снизу — пол");
+
+            wall.HasCeiling = false;
+            SplineWallRebuilder.Rebuild(wall);
+            Assert.IsTrue(LiveBuilderTestScene.IsOpen(center + Vector3.up * 5f, Vector3.down, 4.5f), "без потолка — сверху открыто");
+
+            wall.GetComponent<SplineContainer>().Spline.Closed = false;
+            SplineWallRebuilder.Rebuild(wall);
+            Assert.AreEqual(1, wall.GetComponent<MeshFilter>().sharedMesh.subMeshCount, "открытая линия — без плит");
         }
 
 

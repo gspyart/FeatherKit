@@ -137,6 +137,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Коробку, комнату или лестницу уже повторяет по этажам объект или группа, в которой она стоит.
+        public static bool IsPieceInsideStoreyCopies(Transform piece)
+        {
+            var parent = piece.parent;
+            var ownerModel = parent != null ? parent.GetComponentInParent<BoxModel>() : null;
+            return ownerModel != null && IsInsideStoreyCopies(ownerModel, parent);
+        }
+
+
         // Под узлом есть привязанные к этажам коробки, комнаты, лестницы или группы — свои, не вложенных объектов и стен.
         // Спрятанные из-за пропавшего этажа — тоже: привязка на них осталась.
         public static bool HasStoreyLinksInside(Transform node)

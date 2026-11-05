@@ -212,8 +212,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (building == null)
                 return;
 
-            Undo.SetTransformParent(part.transform, BoxModelFactory.InteriorOf(building), true, "Create Box");
-            SplineBuildingLinkSync.Attach(part.gameObject, building, LiveBuilderBuildingContext.IsOnAllStoreys);
+            Undo.SetTransformParent(part.transform, BoxModelFactory.InteriorTargetOf(building), true, "Create Box");
+
+            if (!BoxModelShapeCollector.IsPieceInsideStoreyCopies(part.transform))
+                SplineBuildingLinkSync.Attach(part.gameObject, building, LiveBuilderBuildingContext.IsOnAllStoreys);
         }
 
 
@@ -227,7 +229,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (building == null)
                 return;
 
-            Undo.SetTransformParent(model.transform, BoxModelFactory.InteriorOf(building), true, "Create Box Model");
+            // Вложенный объект группа не повторяет (он сам по себе) — привязка своя, и в группе тоже.
+            Undo.SetTransformParent(model.transform, BoxModelFactory.InteriorTargetOf(building), true, "Create Box Model");
             SplineBuildingLinkSync.Attach(model.gameObject, building, LiveBuilderBuildingContext.IsOnAllStoreys);
         }
 

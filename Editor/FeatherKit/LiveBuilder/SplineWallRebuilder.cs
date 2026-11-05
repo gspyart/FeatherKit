@@ -84,11 +84,19 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var paths = SplineWallBuildingSides.PathsToBuild(wall);
             var holesByPath = paths.ConvertAll(path => CollectHoles(wall, path));
             var material = wall.Material != null ? wall.Material : BoxModelFactory.LoadDefaultMaterial();
+
+            // Пол и потолок — по всей замкнутой линии, и вдоль стен здания тоже: стороны там не строятся, а комната под ними есть.
+            var slabPaths = wall.HasSlabs ? SplineWallPath.FromWall(wall).FindAll(path => path.IsClosed && path.IsUsable) : new List<SplineWallPath>();
+            var slabHoles = slabPaths.Count > 0 ? SplineBuildingRebuilder.CollectSlabHoles(wall) : new List<SplineBuildingSlabHole>();
+
             var written = LiveBuilderMeshWriter.Write(wall, null, mesh =>
             {
-                SplineWallMeshBuilder.Fill(mesh, wall, paths, holesByPath);
+                SplineWallMeshBuilder.Fill(mesh, wall, paths, holesByPath, slabPaths, slabHoles);
                 UncutBoundsByWall[wall.GetEntityId()] = mesh.bounds;
-                return new[] { material };
+
+                return slabPaths.Count > 0
+                    ? new[] { material, wall.FloorMaterial != null ? wall.FloorMaterial : material, wall.CeilingMaterial != null ? wall.CeilingMaterial : material }
+                    : new[] { material };
             });
 
             var signature = SignatureOf(wall, written.Cutters);
@@ -264,12 +272,22 @@ namespace FeatherKit.EditorTools.LiveBuilder
             SplineWallBuildingSides.AppendBuildingKey(ref hash, wall);
             LiveBuilderStableHash.AppendSplines(ref hash, wall.GetComponent<SplineContainer>());
 
+            // Пол и потолок — только если есть: у прежних стен подпись та же, пересборки нет.
+            if (wall.HasSlabs)
+            {
+                hash.Append(wall.HasFloor ? 1 : 0);
+                hash.Append(wall.HasCeiling ? 1 : 0);
+                hash.Append(wall.SlabThickness);
+                hash.Append(BoxModelSideMaterials.KeyOf(wall.FloorMaterial));
+                hash.Append(BoxModelSideMaterials.KeyOf(wall.CeilingMaterial));
+            }
+
             var model = OuterModelOf(wall);
 
-            // Коробки — уже в осях стены: где стоит сама стена в объекте, подписи не важно.
+            // Коробки — уже в осях стены: где стоит сама стена в объекте, подписи не важно. С полом и потолком — и те, что режут перекрытия.
             if (model != null)
             {
-                var cutBoxes = CutBoxesHashOf(model, wall, false);
+                var cutBoxes = CutBoxesHashOf(model, wall, wall.HasSlabs);
                 hash.Append(ref cutBoxes);
             }
 

@@ -18,6 +18,7 @@ namespace FeatherKit.LiveBuilder
     /// Стена по линии: сплайн на этом же объекте — путь стены, у точки свой режим — угол или плавный изгиб.
     /// Толщина и высота — здесь, а с типом (<see cref="SplineWallType"/>) толщина и материал — из типа; «копии вверх» — та же стена на этажах выше (перегородка на все этажи здания).
     /// Замкнутая стена в здании может быть комнатой: стороны вдоль стен здания не строятся, но остаются в линии.
+    /// У замкнутой стены могут быть свои пол и потолок — плиты по внутренней стороне, своими материалами.
     /// Точки перегородки, лежащие на стене здания, держатся за неё: двигаешь стену здания — точки едут следом.
     /// Проёмы — вырезы (<see cref="GeometryCutter"/>), обычно её дети, и вырезающие коробки объекта из коробок, в котором лежит стена, — насквозь.
     /// Меш собирает редактор и хранит файлом рядом со сценой; в игре компонент — только данные.
@@ -52,6 +53,24 @@ namespace FeatherKit.LiveBuilder
         [Tooltip("Докуда стена в здании. До потолка — этаж минус перекрытие. Весь этаж — сквозь перекрытие до пола следующего: " +
                  "шахта лифта без щелей между этажами. Своя — высота выше. Работает в привязке к зданию.")]
         [SerializeField] private SplineWallHeightInBuilding heightInBuilding = SplineWallHeightInBuilding.ToCeiling;
+
+        [Space]
+        [Header("Пол и потолок")]
+        [Tooltip("Плита пола внутри замкнутой стены, на её низу. В здании — свой пол комнаты поверх пола здания, своим материалом. У открытой линии пола нет.")]
+        [SerializeField] private bool hasFloor;
+
+        [Tooltip("Плита потолка внутри замкнутой стены, под её верхом. В здании — свой потолок комнаты под перекрытием здания. У открытой линии нет.")]
+        [SerializeField] private bool hasCeiling;
+
+        [Tooltip("Толщина пола и потолка, м. 0,05 — отделка поверх пола здания, 0,2 — настоящее перекрытие.")]
+        [Min(0.01f)]
+        [SerializeField] private float slabThickness = 0.05f;
+
+        [Tooltip("Материал пола. Пусто — материал стены.")]
+        [SerializeField] private Material floorMaterial;
+
+        [Tooltip("Материал потолка снизу. Пусто — материал стены.")]
+        [SerializeField] private Material ceilingMaterial;
 
         [Space]
         [Header("Копии вверх")]
@@ -128,6 +147,39 @@ namespace FeatherKit.LiveBuilder
         {
             get => skipsSidesAlongBuildingWalls;
             set => skipsSidesAlongBuildingWalls = value;
+        }
+
+        public bool HasFloor
+        {
+            get => hasFloor;
+            set => hasFloor = value;
+        }
+
+        public bool HasCeiling
+        {
+            get => hasCeiling;
+            set => hasCeiling = value;
+        }
+
+        // Есть ли у стены пол или потолок — только у замкнутой линии они строятся.
+        public bool HasSlabs => hasFloor || hasCeiling;
+
+        public float SlabThickness
+        {
+            get => slabThickness;
+            set => slabThickness = Mathf.Max(0.01f, value);
+        }
+
+        public Material FloorMaterial
+        {
+            get => floorMaterial;
+            set => floorMaterial = value;
+        }
+
+        public Material CeilingMaterial
+        {
+            get => ceilingMaterial;
+            set => ceilingMaterial = value;
         }
 
         public int CopiesUp

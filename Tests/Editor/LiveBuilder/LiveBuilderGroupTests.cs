@@ -36,6 +36,34 @@ namespace FeatherKit.Tests.LiveBuilder
         }
 
 
+        // ── Выделенная группа здания ─────────────────────────────────────
+
+        // Выделена группа здания (или что-то в ней) — новое встаёт в неё, а не в «Interior»; комната — на пол её этажа, хоть за стенами здания.
+        [Test]
+        public void SelectedBuildingGroup_TakesNewThings_RoomOnItsFloorOutsideWalls()
+        {
+            var model = BoxModelFactory.CreateModel(Origin);
+            var building = testScene.CreateBuilding(model, 3, Vector3.zero, new Vector3(8f, 0f, 0f), new Vector3(8f, 0f, 8f), new Vector3(0f, 0f, 8f));
+            var group = LiveBuilderGroups.CreateGroupInside(building.gameObject);
+
+            Assert.AreEqual(group.transform, BoxModelFactory.InteriorTargetOf(building), "выделена группа — новое в неё");
+
+            var link = group.GetComponent<SplineBuildingStoreyLink>();
+            var groupFloor = building.FirstFloorWorldHeight + link.Storey * building.StoreyHeight;
+            var outsideWalls = new Vector3(Origin.x - 3f, groupFloor + 20f, Origin.z + 4f);
+            var rectangle = new LiveBuilderFloorRectangle();
+
+            Assert.IsTrue(rectangle.TryBegin(new Ray(outsideWalls, Vector3.down)), "прямоугольник начался и за стенами здания");
+            Assert.IsNull(rectangle.BuildingContext, "не перегородки здания");
+            Assert.AreEqual(group, rectangle.TargetModel, "комната встанет в группу");
+            Assert.AreEqual(groupFloor, rectangle.ToWorld(rectangle.Start).y, 0.001f, "на пол этажа группы");
+            rectangle.Cancel();
+
+            Selection.activeGameObject = building.gameObject;
+            Assert.AreEqual(BoxModelFactory.InteriorOf(building), BoxModelFactory.InteriorTargetOf(building), "выделено само здание — в «Interior»");
+        }
+
+
         // ── Вырезающая коробка ───────────────────────────────────────────
 
         [Test]

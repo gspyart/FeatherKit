@@ -200,8 +200,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Перегородка в здании без точек: в его объекте, в группе интерьера, толщиной и типом перегородки, привязана к его этажам
-        // («только этот» или «и все выше» — как выбрано в окне). Высоту и копии потом берёт от здания сверка привязки.
+        // Перегородка в здании без точек: в его объекте, в группе интерьера (или в выделенной группе здания), толщиной и типом перегородки,
+        // привязана к его этажам («только этот» или «и все выше» — как выбрано в окне). Высоту и копии потом берёт от здания сверка привязки.
         public static SplineWall CreatePartition(LiveBuilderBuildingContext context, Vector3 worldPosition, string name)
         {
             var building = context.Building;
@@ -210,7 +210,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             wall.Thickness = LiveBuilderWallSettings.PartitionThickness;
             wall.Material = LiveBuilderWallSettings.Material;
             wall.WallType = LiveBuilderWallSettings.PartitionWallType;
-            Undo.SetTransformParent(wall.transform, InteriorOf(building), true, "Create Partition");
+            Undo.SetTransformParent(wall.transform, InteriorTargetOf(building), true, "Create Partition");
             SplineBuildingLinkSync.Attach(wall.gameObject, building, LiveBuilderBuildingContext.IsOnAllStoreys);
             return wall;
         }
@@ -297,6 +297,38 @@ namespace FeatherKit.EditorTools.LiveBuilder
             interiorObject.transform.SetParent(building.transform, false);
             GameObjectUtility.SetStaticEditorFlags(interiorObject, GameObjectUtility.GetStaticEditorFlags(building.gameObject));
             return interiorObject.transform;
+        }
+
+
+        // Куда класть поставленное в здание: в его группу, в которой выделенное, — как Default Parent в Unity и активная коллекция в Blender;
+        // иначе — в «Interior».
+        public static Transform InteriorTargetOf(SplineBuilding building)
+        {
+            var group = SelectedGroupIn(building);
+            return group != null ? group.transform : InteriorOf(building);
+        }
+
+
+        // Группа внутри этого здания, в которой выделенное: выделена сама группа или что-то в ней. Нет такой — null.
+        public static BoxModel SelectedGroupIn(SplineBuilding building)
+        {
+            var group = SelectedBuildingGroup(out var groupBuilding);
+            return building != null && groupBuilding == building ? group : null;
+        }
+
+
+        // Группа внутри какого-нибудь здания, в которой выделенное, и само здание. Нет такой — null.
+        public static BoxModel SelectedBuildingGroup(out SplineBuilding building)
+        {
+            building = null;
+            var selected = Selection.activeGameObject;
+            var group = selected != null ? LiveBuilderGroups.GroupOf(selected.transform) : null;
+
+            if (group == null || group.transform.parent == null)
+                return null;
+
+            building = group.transform.parent.GetComponentInParent<SplineBuilding>();
+            return building != null ? group : null;
         }
 
 

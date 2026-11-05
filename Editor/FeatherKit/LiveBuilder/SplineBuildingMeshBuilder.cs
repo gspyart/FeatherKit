@@ -220,9 +220,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return isContourComplete;
         }
 
-        // Плита: верх и низ — треугольники контура за вычетом дыр, которые проходят через эту плиту, и торцы по краям дыр.
-        // Низ −1 — без нижней стороны.
-        private static void AddSlab(SplineWallGeometry geometry, List<Vector2> outline, List<Vector2[]> triangles,
+        // Плита: верх и низ — треугольники контура за вычетом дыр, которые проходят через эту плиту, и торцы по краям дыр (частью меша 0).
+        // Низ −1 — без нижней стороны. Общая у перекрытий здания и пола с потолком замкнутой стены (<see cref="SplineWallMeshBuilder"/>).
+        public static void AddSlab(SplineWallGeometry geometry, List<Vector2> outline, List<Vector2[]> triangles,
             IReadOnlyList<SplineBuildingSlabHole> slabHoles, float bottom, float top, int topSubmesh, int bottomSubmesh)
         {
             var pieces = new List<List<Vector2>>();
@@ -296,7 +296,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Многоугольник ────────────────────────────────────────────────
 
         // Контур в плане (X, Z) со смещением вбок от линии; последняя точка замкнутого пути совпадает с первой — без неё.
-        private static List<Vector2> ContourOf(SplineWallPath path, float sideOffset)
+        public static List<Vector2> ContourOf(SplineWallPath path, float sideOffset)
         {
             var outline = new List<Vector2>();
             var count = path.IsClosed ? path.Points.Count - 1 : path.Points.Count;

@@ -168,11 +168,19 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var building = context.Building;
             var localMin = model.transform.InverseTransformPoint(building.transform.TransformPoint(buildingLocalMin));
             var stairs = BoxModelFactory.CreateStairs(model, localMin, direction, width, height, stepDepth, LiveBuilderStairsSettings.CutsAbove);
-            Undo.SetTransformParent(stairs.transform, BoxModelFactory.InteriorOf(building), true, "Create Stairs");
-            SplineBuildingLinkSync.Attach(stairs.gameObject, building, LiveBuilderBuildingContext.IsOnAllStoreys, true);
+            Undo.SetTransformParent(stairs.transform, BoxModelFactory.InteriorTargetOf(building), true, "Create Stairs");
+
+            // В группе, привязанной к этажам, лестницу повторяет группа — своя привязка перемножила бы копии.
+            if (!BoxModelShapeCollector.IsPieceInsideStoreyCopies(stairs.transform))
+                SplineBuildingLinkSync.Attach(stairs.gameObject, building, LiveBuilderBuildingContext.IsOnAllStoreys, true);
+
             Selection.activeGameObject = stairs.gameObject;
 
             BoxModelRebuilder.Rebuild(model);
+            var ownerModel = stairs.GetComponentInParent<BoxModel>();
+
+            if (ownerModel != model)
+                BoxModelRebuilder.Rebuild(ownerModel);
         }
 
 

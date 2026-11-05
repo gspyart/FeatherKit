@@ -7,8 +7,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Прямоугольник на полу для «Комнаты» и «Лестницы»: зажал — первый угол, тянешь — второй, всё по сетке.
-    /// Пол — этаж здания по контуру под мышью (углы прилипают к его стенам), верх объекта из коробок, а если там стена, потолок,
-    /// другая геометрия или пусто — пол текущего этажа.
+    /// Пол — этаж здания по контуру под мышью (углы прилипают к его стенам); выделена группа этого здания — пол её этажа, и новое встаёт в неё;
+    /// верх объекта из коробок, а если там стена, потолок, другая геометрия или пусто — пол текущего этажа.
     /// Помнит, начат ли он внутри объекта из коробок — на полу под потолком того же объекта или в его сплошном объёме: тогда новое вырезается в нём.
     /// Тот же поиск пола под потолком дома нужен и комнате по контуру — <see cref="TryFindHouseFloor"/>.
     /// </summary>
@@ -48,9 +48,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Жест ─────────────────────────────────────────────────────────
 
         // Здание под мышью — на полу его этажа; пол объекта из коробок — на нём; иначе — пол текущего этажа.
+        // Выделена группа этого здания — не его этаж, а сама группа, как выделенный объект: комната в ней — из коробок, со своими стенами,
+        // полом и потолком, где угодно, хоть за стенами здания (эркер со второго этажа), и повторяется по этажам вместе с группой.
         public bool TryBegin(Ray worldRay)
         {
             BuildingContext = null;
+            var selectedGroup = BoxModelFactory.SelectedBuildingGroup(out var groupBuilding);
+
+            if (selectedGroup != null)
+                return TryBeginOnGroupFloor(worldRay, selectedGroup, groupBuilding);
 
             if (LiveBuilderBuildingContext.TryFind(worldRay, out var context) && context.FloorPlane.TryIntersect(worldRay, out var buildingPoint))
             {
@@ -82,6 +88,28 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Plane = plane;
             Start = point;
             End = point;
+            isStarted = true;
+            return true;
+        }
+
+
+        // Пол выделенной группы здания: этаж, к которому она привязана (без привязки — выбранный в окне), в осях группы.
+        private bool TryBeginOnGroupFloor(Ray worldRay, BoxModel group, SplineBuilding building)
+        {
+            var windowStorey = Mathf.Clamp(LiveBuilderStoreys.CurrentStorey - SplineBuildingLevelAlignment.BaseStoreyOf(building), 0, building.StoreyCount - 1);
+            var storey = group.TryGetComponent<SplineBuildingStoreyLink>(out var link) && link.IsValid ? link.Storey : windowStorey;
+            var floorHeight = building.FirstFloorWorldHeight + storey * building.StoreyHeight;
+            var groupTransform = group.transform;
+            var localFloor = groupTransform.InverseTransformPoint(groupTransform.position + Vector3.up * (floorHeight - groupTransform.position.y)).y;
+            var plane = new BoxModelDrawPlane(group, groupTransform.localToWorldMatrix, 1, localFloor, 1f);
+
+            if (!plane.TryIntersect(worldRay, out var point))
+                return false;
+
+            Plane = plane;
+            Start = plane.SnapOnPlane(point);
+            End = Start;
+            IsInsideModel = IsInsideSolid(group, Start);
             isStarted = true;
             return true;
         }

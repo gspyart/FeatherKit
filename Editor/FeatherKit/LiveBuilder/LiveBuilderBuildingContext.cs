@@ -222,6 +222,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Подсказка внизу окна сцены. У лестницы копии — без верхнего этажа: с него идти некуда.
         public string DescriptionOf(bool skipsTopStorey)
         {
+            var group = BoxModelFactory.SelectedGroupIn(Building);
+
+            // Выделена группа здания — новое встаёт в неё и повторяется по этажам вместе с ней.
+            if (group != null)
+                return "Здание «" + Building.name + "» · в группу «" + group.name + "»";
+
             var copiesAbove = StoreysAbove - 1 - (skipsTopStorey ? 1 : 0);
             return "Здание «" + Building.name + "», его этаж " + (Storey + 1) + " из " + Building.StoreyCount + " · " +
                    (IsOnAllStoreys && copiesAbove > 0 ? "этот и ещё " + copiesAbove + " выше" : "только этот этаж");
