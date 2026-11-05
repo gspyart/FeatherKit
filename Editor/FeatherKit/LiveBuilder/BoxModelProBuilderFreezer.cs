@@ -30,8 +30,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
             frozenTransform.localScale = model.transform.localScale;
             GameObjectUtility.SetStaticEditorFlags(frozenObject, GameObjectUtility.GetStaticEditorFlags(model.gameObject));
 
+            var materials = model.GetComponent<MeshRenderer>().sharedMaterials;
             var proBuilderMesh = frozenObject.AddComponent<ProBuilderMesh>();
-            var importer = new MeshImporter(source, model.GetComponent<MeshRenderer>().sharedMaterials, proBuilderMesh);
+
+            // Материалы — до сборки меша: ProBuilder сам их не переносит, а грани по материалам раскладывает по тому, сколько их на объекте.
+            frozenObject.GetComponent<MeshRenderer>().sharedMaterials = materials;
+
+            var importer = new MeshImporter(source, materials, proBuilderMesh);
             importer.Import(new MeshImportSettings { quads = true, smoothing = false });
             proBuilderMesh.ToMesh();
             proBuilderMesh.Refresh();
