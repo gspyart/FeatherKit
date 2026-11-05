@@ -11,8 +11,8 @@ namespace FeatherKit.Tests.LiveBuilder
 {
     /// <summary>
     /// Инструменты целиком, как их нажимает окно сцены (<see cref="LiveBuilderToolDriver"/>): протянул, набрал цифры, Enter или Esc.
-    /// Одни правила у всех: цифры + Enter — точно; Esc при наборе стирает только число; Esc без набора бросает то, что ещё не поставлено, —
-    /// у коробки и лестницы всё, у линии — отрезок за мышью, поставленные точки остаются; набрано не то — жест ждёт дальше.
+    /// Одни правила у всех: цифры + Enter — точно; Esc при наборе стирает только число; Esc без набора бросает начатое целиком —
+    /// и коробку, и лестницу, и стену, и здание; оставить — Enter; набрано не то — жест ждёт дальше.
     /// </summary>
     public class LiveBuilderToolGestureTests
     {
@@ -124,7 +124,7 @@ namespace FeatherKit.Tests.LiveBuilder
 
 
         [Test]
-        public void WallTool_Esc_DropsSegmentUnderMouse_KeepsPlacedPoints()
+        public void WallTool_Esc_DropsWholeLine()
         {
             var driver = new LiveBuilderToolDriver(LiveBuilderToolPalette.Get<LiveBuilderWallTool>());
 
@@ -133,9 +133,27 @@ namespace FeatherKit.Tests.LiveBuilder
             driver.Move(FloorRay(6f, 4f));
             driver.Press(KeyCode.Escape);
 
-            var wall = InTestScene<SplineWall>().Single();
-            Assert.AreEqual(2, wall.GetComponent<SplineContainer>().Spline.Count, "поставленные две точки остались, отрезок за мышью — нет");
-            Assert.IsFalse(driver.IsBusy, "линия закончена");
+            Assert.IsEmpty(InTestScene<SplineWall>(), "Esc — передумал: начатой стены нет, как недорисованной коробки");
+            Assert.IsFalse(driver.IsBusy, "рисование брошено");
+        }
+
+
+        [Test]
+        public void BuildingTool_Esc_DropsContour_EnterKeepsIt()
+        {
+            var driver = new LiveBuilderToolDriver(LiveBuilderToolPalette.Get<LiveBuilderBuildingTool>());
+
+            driver.Click(FloorRay(0f, 0f));
+            driver.Click(FloorRay(8f, 0f));
+            driver.Click(FloorRay(8f, 6f));
+            driver.Press(KeyCode.Escape);
+            Assert.IsEmpty(InTestScene<SplineBuilding>(), "Esc — здание не замкнулось и не построилось, его нет");
+
+            driver.Click(FloorRay(20f, 0f));
+            driver.Click(FloorRay(28f, 0f));
+            driver.Click(FloorRay(28f, 6f));
+            driver.Press(KeyCode.Return);
+            Assert.AreEqual(1, InTestScene<SplineBuilding>().Length, "Enter — здание осталось");
         }
 
 

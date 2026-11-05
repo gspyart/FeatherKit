@@ -20,7 +20,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// (коробки, крыши, перекрытия), а под мышью пусто или стена сбоку — на пол текущего этажа; дальше линия идёт на высоте первой точки,
     /// и по ним сразу встаёт стена (<see cref="SplineWall"/>), здание (<see cref="SplineBuilding"/>) или комната.
     /// Точка — угол или плавный изгиб: по переключателю в окне, Shift на клике — наоборот.
-    /// Клик по первой точке — замкнуть; Enter — готово, Esc — бросить отрезок за мышью (здание и комната замыкаются сами); Ctrl+Z, пока рисуешь, — убрать последнюю точку.
+    /// Клик по первой точке — замкнуть; Enter — готово (здание и комната замыкаются сами), Esc — бросить начатую линию целиком; Ctrl+Z, пока рисуешь, — убрать последнюю точку.
     /// Отрезок, с которым контур здания или комнаты перекрестит сам себя, — красный, с подписью.
     /// Точная длина, как в SketchUp (<see cref="LiveBuilderTypedLength"/>): набрал цифры — Enter ставит следующую точку на этом расстоянии в сторону мыши.
     /// У мыши подпись, к чему прилипло: «к стене» здания, «замкнуть» у первой точки.
@@ -91,8 +91,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             : typedLength.IsTyping
                 ? "Длина " + typedLength.Text + " м: Enter — точка на этом расстоянии в сторону мыши, Backspace — стереть цифру, Esc — отмена длины"
                 : IsClosedShape
-                    ? "Клик — следующая точка контура, цифры + Enter — точная длина. По первой точке или Enter — замкнуть и готово. Esc — тоже готово, Ctrl+Z — убрать последнюю"
-                    : "Клик — следующая точка, цифры + Enter — точная длина, по первой — замкнуть. Enter — готово; Esc — бросить отрезок за мышью, точки остаются; Ctrl+Z — убрать последнюю";
+                    ? "Клик — следующая точка контура, цифры + Enter — точная длина. По первой точке или Enter — замкнуть и готово. Esc — бросить контур, Ctrl+Z — убрать последнюю точку"
+                    : "Клик — следующая точка, цифры + Enter — точная длина, по первой — замкнуть. Enter — готово, Esc — бросить линию, Ctrl+Z — убрать последнюю точку";
 
         private string ShapeName => kind switch
         {
@@ -171,7 +171,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Пока рисуешь: цифры — длина следующего отрезка, Enter — точка на этой длине или готово, Esc — сбросить длину или готово.
+        // Пока рисуешь: цифры — длина следующего отрезка, Enter — точка на этой длине или готово, Esc — сбросить длину или бросить линию.
         // Возвращает, забрал ли клавишу.
         public bool HandleKey(KeyCode key)
         {
@@ -193,7 +193,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return true;
             }
 
-            if (key is not (KeyCode.Return or KeyCode.KeypadEnter or KeyCode.Escape))
+            // Esc — передумал: начатая линия уходит целиком, как недорисованная коробка. Оставить — Enter.
+            if (key == KeyCode.Escape)
+            {
+                Abandon();
+                return true;
+            }
+
+            if (key is not (KeyCode.Return or KeyCode.KeypadEnter))
                 return false;
 
             Finish(IsClosedShape);
@@ -222,6 +229,21 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             Finish(IsClosedShape);
         }
+
+        // Бросить начатую линию целиком: всё, что сделано с её начала (сама постройка, её точки, группа «Interior»), отменяется одним махом.
+        public void Abandon()
+        {
+            if (pathOwner == null)
+                return;
+
+            Undo.RevertAllDownToGroup(undoGroupAtBegin);
+            pathOwner = null;
+            createdModel = null;
+            interiorCreatedByGesture = null;
+            buildingContext = null;
+            typedLength.Clear();
+        }
+
 
         private void Finish(bool isClosing)
         {
