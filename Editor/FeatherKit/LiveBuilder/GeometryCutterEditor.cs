@@ -5,7 +5,8 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Инспектор выреза: форма → размер → сдвиг от точки объекта → скругление (у прямоугольника; «Арка» — полукруг сверху) → этажи → вид → место в стене.
+    /// Инспектор выреза: форма → размер → сдвиг от точки объекта → скругление (у прямоугольника; «Арка» — полукруг сверху) → этажи →
+    /// что и где режет (с подписью, внутри какой постройки) → вид → место в стене.
     /// Вырез в здании — копии по этажам задаёт привязка к зданию, здесь число только показано. Тонкая настройка гладкости — свёрнута в «Тонко».
     /// </summary>
     [CustomEditor(typeof(GeometryCutter))]
@@ -48,6 +49,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             LiveBuilderInspectorLayout.StoreyCopies(serializedObject, cutter, isLinked);
 
+            LiveBuilderInspectorLayout.Section("Что режет");
+            LiveBuilderInspectorLayout.Properties(serializedObject, "cutTargets", "scope");
+            DrawScopeResult(cutter);
+
             LiveBuilderInspectorLayout.Section("Вид");
             LiveBuilderInspectorLayout.Properties(serializedObject, "revealMaterial");
 
@@ -65,6 +70,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             serializedObject.ApplyModifiedProperties();
         }
+
+        // Где режет на деле: внутри какой постройки или всё вокруг. Своя группа без постройки над вырезом — ничего не режет.
+        private void DrawScopeResult(GeometryCutter cutter)
+        {
+            if (targets.Length > 1)
+                return;
+
+            var group = GeometryCutterLookup.OwnGroupOf(cutter);
+            var scope = cutter.Scope;
+
+            if (scope == GeometryCutterScope.OwnGroup && group == null)
+                EditorGUILayout.HelpBox("Над вырезом нет постройки — своей группы нет, он ничего не режет. Положи его в стену, здание или объект из коробок.",
+                    MessageType.Warning);
+            else if (scope == GeometryCutterScope.Everything || group == null)
+                EditorGUILayout.LabelField("Режет всё, что пересекает", EditorStyles.wordWrappedMiniLabel);
+            else
+                EditorGUILayout.LabelField("Режет только внутри «" + group.name + "»", EditorStyles.wordWrappedMiniLabel);
+        }
+
 
         private void SetTopRadius(float radius)
         {

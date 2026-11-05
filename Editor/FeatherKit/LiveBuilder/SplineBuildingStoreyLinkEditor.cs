@@ -6,7 +6,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Инспектор привязки к этажам здания — вместо сырых полей одна понятная строка, как этажи у Revit:
-    /// на каком этаже стоит и на каких повторяется — только этот, «с … по …» или до верха здания.
+    /// на каком этаже стоит и на каких повторяется — только этот, «с … по …» или до верха здания; у лестницы — ещё «и на последнем этаже».
     /// Тот же блок показывает окно Live Builder у выделенного.
     /// </summary>
     [CustomEditor(typeof(SplineBuildingStoreyLink))]
@@ -40,6 +40,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             DrawStorey(link, count);
             DrawSpan(link, count);
+            DrawTopStoreyToggle(link);
             GUILayout.Label("Высоты и шаг — от здания: поменяешь здание — подстроится само.", EditorStyles.wordWrappedMiniLabel);
         }
 
@@ -112,6 +113,24 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             if (link.TryGetComponent<IStoreyCopies>(out var storeyCopies))
                 Undo.RecordObject((Object)storeyCopies, "Change Building Storeys");
+        }
+
+
+        // Только у лестницы: копия и на верхнем этаже — выход на крышу. Обычно выключено.
+        private static void DrawTopStoreyToggle(SplineBuildingStoreyLink link)
+        {
+            if (link.GetComponent<BoxModelStairs>() == null)
+                return;
+
+            var isOnTopStorey = EditorGUILayout.Toggle(new GUIContent("И на последнем этаже",
+                "Лестница и на верхнем этаже — например, выход на крышу. Обычно выключено: с верхнего этажа идти некуда"), !link.SkipsTopStorey);
+
+            if (isOnTopStorey == !link.SkipsTopStorey)
+                return;
+
+            Undo.RecordObject(link, "Change Stairs Top Storey");
+            link.SkipsTopStorey = !isOnTopStorey;
+            SplineBuildingLinkSync.Sync(link);
         }
     }
 }

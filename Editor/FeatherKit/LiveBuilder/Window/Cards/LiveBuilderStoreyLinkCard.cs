@@ -6,7 +6,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Карточка «Этажи в здании» зоны «Выделено» — у всего, что стоит в здании: привязано — этаж и повтор (инспектор привязки);
-    /// не привязано — кнопка привязать. Привязать можно перегородку, вырез, лестницу, коробку и комнату — не само здание и не его собранные части.
+    /// не привязано — кнопка привязать. Привязать можно перегородку, вырез, лестницу, коробку, комнату и целый объект из коробок внутри здания —
+    /// не само здание и не его собранные части.
     /// </summary>
     public sealed class LiveBuilderStoreyLinkCard : LiveBuilderSelectionCard
     {
@@ -48,10 +49,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return true;
         }
 
+        // Вложенный объект из коробок (шахта, лестничная клетка) — тоже, целиком; само здание и его собранные части — нет.
         private static bool CanLinkToStoreys(GameObject selected)
         {
+            if (selected.GetComponent<SplineBuilding>() != null || selected.GetComponent<SplineBuildingPart>() != null)
+                return false;
+
             return selected.GetComponent<SplineWall>() != null || selected.GetComponent<GeometryCutter>() != null
-                || selected.GetComponent<BoxModelStairs>() != null || selected.GetComponent<BoxModelPart>() != null || selected.GetComponent<BoxModelRoom>() != null;
+                || selected.GetComponent<BoxModelStairs>() != null || selected.GetComponent<BoxModelPart>() != null || selected.GetComponent<BoxModelRoom>() != null
+                || selected.GetComponent<BoxModel>() != null;
         }
 
 

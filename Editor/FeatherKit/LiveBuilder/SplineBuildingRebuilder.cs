@@ -11,6 +11,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Пересобирает части зданий по контуру (<see cref="SplineBuildingPart"/>: стены и пол каждого этажа, крыша),
     /// когда изменились контур, числа или вырезающие коробки объекта вокруг — все части, а когда только вырезы — лишь те части, что они режут. Как у стен по линии: по «подписи»,
     /// меши — файлами рядом со сценой, экземпляр префаба без своих правок берёт меши префаба, общий меш копий не перезаписывается. Вырезающие коробки переводит в дыры перекрытий — прямоугольники в плане здания.
+    /// Режут только коробки ниже здания в иерархии (<see cref="LiveBuilderHierarchyOrder"/>): стены — те, что режут стены, перекрытия — те, что режут перекрытия.
     /// Когда проверять — решает общая очередь <see cref="LiveBuilderRebuildQueue"/>: здания — после объектов из коробок.
     /// Объекты частей в иерархии — найти, создать, убрать — <see cref="SplineBuildingParts"/>.
     /// </summary>
@@ -149,7 +150,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Дыры в перекрытиях ───────────────────────────────────────────
 
-        // Вырезающие коробки объекта, в котором лежит здание: прямоугольник в плане здания и высоты над контуром.
+        // Вырезающие коробки объекта, в котором лежит здание, — те, что режут перекрытия и стоят ниже здания в иерархии
+        // (в его интерьере — всегда): прямоугольник в плане здания и высоты над контуром.
         private static List<SplineBuildingSlabHole> CollectSlabHoles(SplineBuilding building)
         {
             var holes = new List<SplineBuildingSlabHole>();
@@ -162,8 +164,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             foreach (var box in BoxModelRebuilder.GetSolverBoxes(model))
             {
-                if (box.Mode != BoxModelPartMode.Cut)
+                if (!box.CutsSlabs)
                     continue;
+
+                if (!box.IsBelow(building))
+                {
+                    ReportIfWouldCutSlabs(building, model, box);
+                    continue;
+                }
 
                 var min = box.Box.MinInMeters;
                 var max = box.Box.MaxInMeters;
@@ -186,6 +194,22 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static Vector2 Flat(Vector3 point)
         {
             return new Vector2(point.x, point.z);
+        }
+
+
+        // Коробка выше здания в иерархии, а задевает его пол, перекрытие или крышу — старая сцена: сказать в консоль, что теперь не режет.
+        private static void ReportIfWouldCutSlabs(SplineBuilding building, BoxModel model, BoxModelSolverBox box)
+        {
+            var localBounds = new Bounds();
+            localBounds.SetMinMax(box.Box.MinInMeters, box.Box.MaxInMeters);
+            var boxBounds = GeometryCutterLookup.WorldBoundsOf(localBounds, model.transform);
+
+            foreach (var part in building.GetComponentsInChildren<SplineBuildingPart>(false))
+                if (part.Kind != SplineBuildingPartKind.Walls && GeometryCutterLookup.WorldBoundsOf(part.UncutBounds, part.transform).Intersects(boxBounds))
+                {
+                    LiveBuilderCutOrderNotices.ReportBoxAboveTarget(box.Owner, building);
+                    return;
+                }
         }
 
 
@@ -217,7 +241,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (model != null)
             {
-                var cutBoxes = SplineWallRebuilder.CutBoxesHashOf(model, true);
+                var cutBoxes = SplineWallRebuilder.CutBoxesHashOf(model, building, true);
                 hash.Append(ref cutBoxes);
                 LiveBuilderStableHash.AppendMatrix(ref hash, model.transform.worldToLocalMatrix * building.transform.localToWorldMatrix);
             }

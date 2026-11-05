@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка «Выделено» про коробки: одна — режим, угол и размер в осях объекта, скосы рёбер (<see cref="BoxModelChamferPanel"/>),
+    /// Карточка «Выделено» про коробки: одна — режим (у вырезающей — что она режет из стен и зданий), угол и размер в осях объекта, скосы рёбер (<see cref="BoxModelChamferPanel"/>),
     /// материалы сторон; несколько — сколько их. Всё с Undo.
     /// </summary>
     public sealed class LiveBuilderBoxPartCard : LiveBuilderSelectionCard
@@ -48,6 +48,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     part.Size = newSize;
                 }
 
+                if (part.Mode == BoxModelPartMode.Cut)
+                    DrawCutTargets(part);
+
                 if (GUILayout.Button(new GUIContent("Добавить ⇄ Вырезать", "У выделенных коробок: добавляющие вырезают, вырезающие добавляют")))
                     BoxModelActions.ToggleModeOfSelectedParts();
             }
@@ -55,6 +58,23 @@ namespace FeatherKit.EditorTools.LiveBuilder
             BoxModelChamferPanel.Draw(part);
             DrawMaterials(part);
         }
+
+        // Что вырезающая коробка режет из стен по линии и зданий объекта. Свои коробки объекта режет всегда.
+        private static void DrawCutTargets(BoxModelPart part)
+        {
+            var targets = (LiveBuilderCutTargets)LiveBuilderWindowControls.Switch(new GUIContent("Режет",
+                    "Что режет из стен по линии и зданий этого объекта; свои коробки режет всегда. " +
+                    "Всё — стены и перекрытия. Перекрытия — дыра под лестницу или шахту: стены и перегородки не трогает. " +
+                    "Стены — проём: пол и потолок целы. Режет только то, что выше неё в иерархии"),
+                (int)part.CutTargets, "Всё", "Перекрытия", "Стены");
+
+            if (targets == part.CutTargets)
+                return;
+
+            Undo.RecordObject(part, "Change Cut Targets");
+            part.CutTargets = targets;
+        }
+
 
         private static void DrawMaterials(BoxModelPart part)
         {

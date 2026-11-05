@@ -7,8 +7,9 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Какие вырезы (<see cref="GeometryCutter"/>) режут постройку: включённые, пересекают её габарит, не её дочерние объекты.
-    /// Вырез внутри самой постройки режет её всегда; чужой — если не из одного с ней префаба, а в открытом префабе — никогда:
+    /// Какие вырезы (<see cref="GeometryCutter"/>) режут постройку: включённые, пересекают её габарит, не её дочерние объекты, режут её вид
+    /// (всё, только перекрытия, только стены). Где режет: в своей группе — только ближайшую постройку над вырезом и вложенное в неё;
+    /// везде — вырез внутри самой постройки режет её всегда, чужую — если не из одного с ней префаба, а в открытом префабе — никогда:
     /// дверь-префаб режет стену, куда её поставили, а не свою раму.
     /// На время прохода очереди пересборки вырезы сцены собираются один раз. Отсюда же — подпись: двинул вырез — постройка пересоберётся.
     /// </summary>
@@ -85,14 +86,23 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return cutters;
         }
 
-        // Включён и постройка — не его дочерний объект. Лежит внутри самой постройки — режет её всегда: так проём в здании, и в префабе здания тоже.
-        // Иначе не режет то, что из его же префаба (дверь-префаб — свою раму), а в открытом префабе — ничего.
+        // Включён, постройка — не его дочерний объект и того вида, что он режет. Дальше — где режет:
+        // в своей группе — только постройки внутри неё; везде — внутри самой постройки режет её всегда (так проём в здании, и в префабе здания тоже),
+        // иначе не режет то, что из его же префаба (дверь-префаб — свою раму), а в открытом префабе — ничего.
         private static bool CanCut(GeometryCutter cutter, Component owner)
         {
-            if (!cutter.isActiveAndEnabled || owner.transform.IsChildOf(cutter.transform))
+            if (!cutter.isActiveAndEnabled || owner.transform.IsChildOf(cutter.transform) || !IsTargetKind(cutter.CutTargets, owner))
                 return false;
 
-            if (cutter.transform.IsChildOf(ConstructionOf(owner)))
+            var construction = ConstructionOf(owner);
+
+            if (CutsOnlyOwnGroup(cutter))
+            {
+                var group = OwnGroupOf(cutter);
+                return group != null && construction.IsChildOf(group);
+            }
+
+            if (cutter.transform.IsChildOf(construction))
                 return true;
 
             if (PrefabStageUtility.GetPrefabStage(cutter.gameObject) != null || BoxModelMeshStorage.IsLoadedPrefabContents(cutter.gameObject.scene))
@@ -100,6 +110,41 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var prefabRoot = PrefabUtility.GetNearestPrefabInstanceRoot(cutter.gameObject);
             return prefabRoot == null || !owner.transform.IsChildOf(prefabRoot.transform);
+        }
+
+        // Режет ли вырез этот вид постройки: всё — любую; только перекрытия — пол, перекрытия и крышу зданий; только стены — стены по линии и стены зданий.
+        private static bool IsTargetKind(LiveBuilderCutTargets targets, Component owner)
+        {
+            var buildingPart = owner as SplineBuildingPart;
+
+            return targets switch
+            {
+                LiveBuilderCutTargets.SlabsOnly => buildingPart != null && buildingPart.Kind != SplineBuildingPartKind.Walls,
+                LiveBuilderCutTargets.WallsOnly => owner is SplineWall || buildingPart != null && buildingPart.Kind == SplineBuildingPartKind.Walls,
+                _ => true
+            };
+        }
+
+        // Режет только в своей группе: так задано, или «авто» и над вырезом есть постройка.
+        private static bool CutsOnlyOwnGroup(GeometryCutter cutter)
+        {
+            return cutter.Scope switch
+            {
+                GeometryCutterScope.OwnGroup => true,
+                GeometryCutterScope.Everything => false,
+                _ => OwnGroupOf(cutter) != null
+            };
+        }
+
+
+        // Своя группа выреза — ближайшая постройка над ним: объект из коробок, стена по линии или здание. Нет такой — null.
+        public static Transform OwnGroupOf(GeometryCutter cutter)
+        {
+            for (var node = cutter.transform.parent; node != null; node = node.parent)
+                if (node.GetComponent<BoxModel>() != null || node.GetComponent<SplineWall>() != null || node.GetComponent<SplineBuilding>() != null)
+                    return node;
+
+            return null;
         }
 
         // Постройка, чей это меш: у части здания — само здание.
@@ -201,6 +246,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
             key.Append(cutter.CopiesUp);
             key.Append(cutter.CopyStep);
             key.Append(BoxModelSideMaterials.KeyOf(cutter.RevealMaterial));
+
+            // Что и где режет — только если не по умолчанию: подписи старых построек остаются прежними.
+            if (cutter.CutTargets != LiveBuilderCutTargets.Everything || cutter.Scope != GeometryCutterScope.Automatic)
+            {
+                key.Append((int)cutter.CutTargets);
+                key.Append((int)cutter.Scope);
+            }
+
             return key;
         }
     }

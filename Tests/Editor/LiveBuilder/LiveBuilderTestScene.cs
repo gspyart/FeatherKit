@@ -36,7 +36,14 @@ namespace FeatherKit.Tests.LiveBuilder
         // Стена по линии через точки (от Origin), толщина 0,3, высота 3, линия посередине. Уже собрана.
         public SplineWall CreateWall(params Vector3[] points)
         {
-            var wall = BoxModelFactory.CreateWall(null, Origin, Quaternion.identity);
+            return CreateWall(null, points);
+        }
+
+
+        // То же в объекте из коробок: его вырезающие коробки ниже стены в иерархии режут и её.
+        public SplineWall CreateWall(BoxModel parentModel, params Vector3[] points)
+        {
+            var wall = BoxModelFactory.CreateWall(parentModel, Origin, Quaternion.identity);
             wall.Thickness = 0.3f;
             wall.Height = 3f;
             wall.Alignment = SplineWallAlignment.Center;
@@ -49,7 +56,14 @@ namespace FeatherKit.Tests.LiveBuilder
         // Здание по замкнутому контуру (от Origin): этажи по 4 м, стены 0,3 внутрь от контура. Уже собрано.
         public SplineBuilding CreateBuilding(int storeyCount, params Vector3[] contour)
         {
-            var building = BoxModelFactory.CreateBuilding(null, Origin, Quaternion.identity);
+            return CreateBuilding(null, storeyCount, contour);
+        }
+
+
+        // То же в объекте из коробок: его вырезающие коробки режут стены и перекрытия здания.
+        public SplineBuilding CreateBuilding(BoxModel parentModel, int storeyCount, params Vector3[] contour)
+        {
+            var building = BoxModelFactory.CreateBuilding(parentModel, Origin, Quaternion.identity);
             building.StoreyCount = storeyCount;
             building.StoreyHeight = 4f;
             building.WallThickness = 0.3f;

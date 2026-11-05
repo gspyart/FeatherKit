@@ -9,6 +9,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// двигаешь мышь, задаёшь глубину, кликнул — готово. Всё прилипает к сетке, размеры подписаны.
     /// Добавит коробка объём или вырежет дыру — по режиму <see cref="BoxModelDrawModeSetting"/>: в «Авто» наружу добавляет, внутрь вырезает.
     /// Рисуешь на объекте из коробок — коробка в нём; на прочей геометрии или в пустоте — в выделенном объекте или в новом.
+    /// Новый объект на полу здания встаёт в его интерьер и привязывается к этажу целиком — вложенный объект (шахта, лестничная клетка).
     /// Вырезаешь в стене по линии или здании — встаёт вырез (<see cref="GeometryCutter"/>) в них, как у «Проёма»: едет за их точками и этажами.
     /// </summary>
     public sealed class BoxModelDrawGesture
@@ -140,7 +141,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return true;
             }
 
-            if (model == null)
+            var isNewModel = model == null;
+
+            if (isNewModel)
             {
                 model = BoxModelFactory.CreateModel(min);
                 max -= min;
@@ -148,7 +151,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             var part = BoxModelFactory.CreatePart(model, min, max, mode);
-            AttachToBuilding(model, part);
+
+            if (isNewModel)
+                AttachModelToBuilding(model, part);
+            else
+                AttachToBuilding(model, part);
+
             Selection.activeGameObject = part.gameObject;
 
             // Сразу, а не после паузы пересборки: иначе после предпросмотра на миг мелькнёт старый вид.
@@ -197,6 +205,21 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             Undo.SetTransformParent(part.transform, BoxModelFactory.InteriorOf(building), true, "Create Box");
             SplineBuildingLinkSync.Attach(part.gameObject, building, LiveBuilderBuildingContext.IsOnAllStoreys);
+        }
+
+
+        // Новый объект на полу здания — вложенный объект в нём (шахта, лестничная клетка): в его интерьер и к его этажу целиком;
+        // с «И все выше» — сразу на всех этажах выше, одним мешем.
+        private static void AttachModelToBuilding(BoxModel model, BoxModelPart firstPart)
+        {
+            var center = model.transform.TransformPoint(BoxModelShapeCollector.LocalMinOf(model, firstPart.transform) + firstPart.Size / 2f);
+            var building = LiveBuilderBuildingContext.BuildingContaining(center);
+
+            if (building == null)
+                return;
+
+            Undo.SetTransformParent(model.transform, BoxModelFactory.InteriorOf(building), true, "Create Box Model");
+            SplineBuildingLinkSync.Attach(model.gameObject, building, LiveBuilderBuildingContext.IsOnAllStoreys);
         }
 
 

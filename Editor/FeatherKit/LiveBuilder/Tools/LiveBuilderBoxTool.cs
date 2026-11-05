@@ -9,12 +9,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// «Коробка»: протянул прямоугольник, мышью глубина, клик — коробка (<see cref="BoxModelDrawGesture"/>);
     /// на косой поверхности — коробка по её нормали (<see cref="LiveBuilderSurfaceBoxGesture"/>). Правит только коробки и их грани.
-    /// Здесь же — «новый объект»: следующая коробка отдельным объектом, даже поверх другого.
+    /// Здесь же — «новый объект»: следующая коробка отдельным объектом, даже поверх другого; на полу здания — вложенным объектом в нём.
     /// </summary>
     public sealed class LiveBuilderBoxTool : LiveBuilderTool
     {
         private const string IdleHint = "Протяни по поверхности — новая коробка. Клик по грани — выделить коробку";
-        private const string NewModelHint = "Новый объект: протяни прямоугольник на поверхности или земле. Esc — отмена";
+        private const string NewModelHint = "Новый объект: протяни прямоугольник на поверхности или земле; на полу здания — встанет в здание. Esc — отмена";
 
         private readonly BoxModelDrawGesture drawGesture = new();
         private readonly LiveBuilderSurfaceBoxGesture surfaceBoxGesture = new();
@@ -129,7 +129,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderWindowControls.ValueChip(new GUIContent(targetName, targetName), GUILayout.MinWidth(40f));
 
                 var isPressed = LiveBuilderWindowControls.IconToggle(isNewRequested, LiveBuilderOptionIcon.NewObject, "Новый",
-                    "Следующая коробка — отдельный объект, даже поверх другого. Нажать ещё раз — отмена");
+                    "Следующая коробка — отдельный объект, даже поверх другого. На полу здания — вложенный объект в нём, привязанный к этажу " +
+                    "(шахта, лестничная клетка). Нажать ещё раз — отмена");
 
                 if (isPressed == isNewRequested)
                     return;

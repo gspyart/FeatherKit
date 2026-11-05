@@ -12,7 +12,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// правка точек, перенос, Ctrl+Z. Как у объектов из коробок — по «подписи», без лишних пересборок; меш — файлом рядом со сценой.
     /// Когда проверять — решает общая очередь <see cref="LiveBuilderRebuildQueue"/>: стены — последними, после коробок и зданий.
     /// Вырезающие коробки объекта, в котором стена лежит, переводит в проёмы в координатах стены: там, где коробка пересекает линию стены,
-    /// стена прорезана насквозь. Коробка во всю высоту стены — комната, в которой стена стоит, а не проём: такую стену она не режет.
+    /// стена прорезана насквозь. Режут только коробки ниже стены в иерархии (<see cref="LiveBuilderHierarchyOrder"/>), которые режут стены.
+    /// Коробка во всю высоту стены — комната, в которой стена стоит, а не проём: такую стену она не режет.
     /// Вырезы (<see cref="GeometryCutter"/>) вычитаются из готового меша (<see cref="GeometryCutterApplier"/>).
     /// У стены-комнаты в здании стороны на его стенах не строятся (<see cref="SplineWallBuildingSides"/>).
     /// </summary>
@@ -102,19 +103,38 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Проёмы ───────────────────────────────────────────────────────
 
-        // Проёмы одного пути в координатах стены или здания — от вырезающих коробок объекта вокруг.
+        // Проёмы одного пути в координатах стены или здания — от вырезающих коробок объекта вокруг, что режут стены и стоят ниже в иерархии.
+        // Вырез лестницы и коробка «только перекрытия» стену не пробивают.
         public static List<SplineWallHole> CollectHoles(Component owner, SplineWallPath path)
         {
             var holes = new List<SplineWallHole>();
             var model = OuterModelOf(owner);
 
-            // Вырез лестницы — только для перекрытий: стену рядом с маршем он не пробивает.
-            if (model != null)
-                foreach (var box in BoxModelRebuilder.GetSolverBoxes(model))
-                    if (box.Mode == BoxModelPartMode.Cut && box.Owner is not BoxModelStairs)
-                        AddCutBoxHoles(owner, model, path, box.Box, holes);
+            if (model == null)
+                return holes;
+
+            foreach (var box in BoxModelRebuilder.GetSolverBoxes(model))
+            {
+                if (!box.CutsWalls)
+                    continue;
+
+                if (box.IsBelow(owner))
+                    AddCutBoxHoles(owner, model, path, box.Box, holes);
+                else
+                    ReportIfWouldCut(owner, model, path, box);
+            }
 
             return holes;
+        }
+
+        // Коробка выше стены в иерархии, а прорезала бы её — старая сцена: сказать в консоль, что теперь не режет.
+        private static void ReportIfWouldCut(Component owner, BoxModel model, SplineWallPath path, BoxModelSolverBox box)
+        {
+            var skippedHoles = new List<SplineWallHole>();
+            AddCutBoxHoles(owner, model, path, box.Box, skippedHoles);
+
+            if (skippedHoles.Count > 0)
+                LiveBuilderCutOrderNotices.ReportBoxAboveTarget(box.Owner, owner);
         }
 
         // Где линия стены проходит внутри коробки (в плане) — там проём на высоту коробки. По отрезку на каждый кусок пути.
@@ -245,7 +265,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (model != null)
             {
-                var cutBoxes = CutBoxesHashOf(model, false);
+                var cutBoxes = CutBoxesHashOf(model, wall, false);
                 hash.Append(ref cutBoxes);
                 LiveBuilderStableHash.AppendMatrix(ref hash, model.transform.worldToLocalMatrix * wall.transform.localToWorldMatrix);
             }
@@ -253,21 +273,27 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return hash + GeometryCutterLookup.KeyOf(wall, cutters);
         }
 
-        // Вырезающие коробки объекта — для подписи стены или здания: правка добавляющих коробок, материалов и ступеней их не пересобирает.
-        // Вырез над лестницей режет только перекрытия здания, стенам он не нужен.
-        public static Hash128 CutBoxesHashOf(BoxModel model, bool includesStairsCuts)
+        // Вырезающие коробки объекта, которые режут эту стену или здание, — для их подписи: правка добавляющих коробок, материалов и ступеней
+        // их не пересобирает, а переставил коробку выше или ниже в иерархии — пересоберёт. Перекрытия есть только у здания.
+        // Что режет коробка — только если не «всё»: старые подписи остаются прежними.
+        public static Hash128 CutBoxesHashOf(BoxModel model, Component owner, bool includesSlabCuts)
         {
             var hash = new Hash128();
 
             foreach (var box in BoxModelRebuilder.GetSolverBoxes(model))
             {
-                if (box.Mode != BoxModelPartMode.Cut || !includesStairsCuts && box.Owner is BoxModelStairs)
+                var isApplied = box.CutsWalls || includesSlabCuts && box.CutsSlabs;
+
+                if (!isApplied || !box.IsBelow(owner))
                     continue;
 
                 var min = box.Box.Min;
                 var max = box.Box.Max;
                 hash.Append(ref min);
                 hash.Append(ref max);
+
+                if (box.OwnerPart != null && box.CutTargets != LiveBuilderCutTargets.Everything)
+                    hash.Append((int)box.CutTargets);
             }
 
             return hash;

@@ -13,7 +13,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
     ///   копий — сколько этажей задано в привязке; один и тот же повтор по этажам, что у стен и проёмов
     /// - лестница (<see cref="BoxModelStairs"/>) — вырез над маршем и ступени (сплошные до пола или отдельными плитами), плюс невидимый скат для столкновений
     /// Вложенный объект из коробок и стена по линии — сами по себе, их содержимое не наше. В здание по контуру заходим:
-    /// лестницы и вырезы его интерьера — коробки этого объекта.
+    /// лестницы и вырезы его интерьера — коробки этого объекта. Привязка к этажам на самом объекте (вложенный объект в здании —
+    /// шахта, лестничная клетка) — все его коробки ещё раз на каждом этаже повтора, как у группы повтора.
     /// </summary>
     public static class BoxModelShapeCollector
     {
@@ -28,11 +29,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static readonly HashSet<EntityId> ModelsWarnedAboutLimit = new();
 
 
-        // Коробки расчёта и скаты лестниц объекта.
+        // Коробки расчёта и скаты лестниц объекта. Сам объект привязан к этажам здания (шахта в здании) — всё его содержимое на каждом этаже повтора, одним мешем.
         public static List<BoxModelSolverBox> Collect(BoxModel model, List<BoxModelRampShape> ramps)
         {
             var boxes = new List<BoxModelSolverBox>();
-            CollectChildren(model, model.transform, Vector3.zero, boxes, ramps);
+            var count = 1;
+            var step = Vector3.zero;
+            TryGetStoreyCopies(model, model.transform, ref count, ref step);
+
+            for (var copy = 0; copy < count && boxes.Count < MaxSolverBoxes; copy++)
+                CollectChildren(model, model.transform, step * copy, boxes, ramps);
+
             WarnIfOverLimit(model, boxes.Count);
             return boxes;
         }

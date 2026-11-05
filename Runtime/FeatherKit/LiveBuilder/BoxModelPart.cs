@@ -17,6 +17,7 @@ namespace FeatherKit.LiveBuilder
     /// Опора — угол с наименьшими координатами по всем осям объекта, размер — в метрах. Коробки не поворачиваются: всегда по осям объекта.
     /// Материал можно задать всей коробке или отдельно низу, верху и бокам — у вырезающей это пол, потолок и стены дыры.
     /// У добавляющей рёбра можно скосить (<see cref="BoxModelEdgeChamfer"/>): пандус, склон, скат крыши.
+    /// Вырезающая режет стены по линии и здания объекта, что стоят выше неё в иерархии; что именно — стены, перекрытия или всё — <see cref="LiveBuilderCutTargets"/>.
     /// В игре не нужна: объект коробки помечен EditorOnly и в сборку не попадает.
     /// </summary>
     [FDescription("Коробка объекта из коробок: добавляет объём или вырезает дыру. Опора — угол с наименьшими координатами, размер — в метрах. " +
@@ -28,6 +29,10 @@ namespace FeatherKit.LiveBuilder
     {
         [Tooltip("Добавить объём или вырезать дыру.")]
         [SerializeField] private BoxModelPartMode mode = BoxModelPartMode.Add;
+
+        [Tooltip("Только у вырезающей: что она режет из стен по линии и зданий в этом объекте. Свои коробки объекта режет всегда. " +
+                 "Только перекрытия — дыра под лестницу или шахту: стены и перегородки не трогает. Только стены — проём, пол и потолок целы.")]
+        [SerializeField] private LiveBuilderCutTargets cutTargets = LiveBuilderCutTargets.Everything;
 
         [Tooltip("Размер коробки по осям объекта, м.")]
         [SerializeField] private Vector3 size = new(3f, 3f, 3f);
@@ -67,6 +72,13 @@ namespace FeatherKit.LiveBuilder
         {
             get => mode;
             set => mode = value;
+        }
+
+        // Что вырезающая коробка режет из стен и зданий объекта; у добавляющей не важно.
+        public LiveBuilderCutTargets CutTargets
+        {
+            get => cutTargets;
+            set => cutTargets = value;
         }
 
         public Vector3 Size

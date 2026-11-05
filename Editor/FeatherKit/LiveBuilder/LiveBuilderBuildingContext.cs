@@ -119,22 +119,37 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public static SplineBuilding BuildingContaining(BoxModel model, Vector3 worldPoint)
         {
             foreach (var building in model.GetComponentsInChildren<SplineBuilding>(false))
-            {
-                if (SplineWallRebuilder.OuterModelOf(building) != model)
-                    continue;
-
-                var localPoint = building.transform.InverseTransformPoint(worldPoint);
-                var baseHeight = SplineBuildingLevelAlignment.BaseHeightOf(building);
-
-                if (localPoint.y < baseHeight - 0.01f || localPoint.y > baseHeight + building.TotalHeight + 0.01f)
-                    continue;
-
-                foreach (var path in SplineWallPath.FromContainer(building.GetComponent<SplineContainer>(), building.CurveStep))
-                    if (PlanPolygons.IsInside(new Vector2(localPoint.x, localPoint.z), SplineBuildingMeshBuilder.InnerContourOf(building, path)))
-                        return building;
-            }
+                if (SplineWallRebuilder.OuterModelOf(building) == model && Contains(building, worldPoint))
+                    return building;
 
             return null;
+        }
+
+
+        // Любое включённое здание сцены или открытого префаба, внутри которого точка мира. Нет такого — null.
+        public static SplineBuilding BuildingContaining(Vector3 worldPoint)
+        {
+            foreach (var building in UnityEditor.SceneManagement.StageUtility.GetCurrentStageHandle().FindComponentsOfType<SplineBuilding>())
+                if (building.gameObject.activeInHierarchy && Contains(building, worldPoint))
+                    return building;
+
+            return null;
+        }
+
+        // Точка мира внутри здания: в плане — внутри его стен, по высоте — от пола до крыши.
+        private static bool Contains(SplineBuilding building, Vector3 worldPoint)
+        {
+            var localPoint = building.transform.InverseTransformPoint(worldPoint);
+            var baseHeight = SplineBuildingLevelAlignment.BaseHeightOf(building);
+
+            if (localPoint.y < baseHeight - 0.01f || localPoint.y > baseHeight + building.TotalHeight + 0.01f)
+                return false;
+
+            foreach (var path in SplineWallPath.FromContainer(building.GetComponent<SplineContainer>(), building.CurveStep))
+                if (PlanPolygons.IsInside(new Vector2(localPoint.x, localPoint.z), SplineBuildingMeshBuilder.InnerContourOf(building, path)))
+                    return true;
+
+            return false;
         }
 
 
