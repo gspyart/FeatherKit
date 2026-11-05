@@ -1,4 +1,5 @@
 using System;
+using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -10,8 +11,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Рисование в пустоте идёт от пола текущего этажа. Разрез прячет в окне сцены всё выше плоскости над полом этажа —
     /// видно этаж сверху, как план, и можно работать внутри дома. Разрез — ключевое слово и высота для шейдера проекта
     /// (имена — в настройках проекта, <see cref="LiveBuilderProjectSettings"/>), только для камер окна сцены: игра не меняется.
-    /// Этажи и разрез свои у каждого человека, хранятся в настройках редактора.
-    /// Читаются оттуда один раз и дальше держатся в памяти: их спрашивают на каждый кадр камеры и каждую коробку при отрисовке.
+    /// Высота этажа и пол первого этажа — данные уровня: лежат в самой сцене (<see cref="LiveBuilderLevelStoreysInScene"/>), одни для всех;
+    /// в сцене их ещё нет — свои числа из настроек редактора, а первая правка кладёт их в сцену.
+    /// Текущий этаж и разрез — свои у каждого человека, в настройках редактора; читаются оттуда один раз и дальше держатся в памяти:
+    /// их спрашивают на каждый кадр камеры и каждую коробку при отрисовке.
     /// </summary>
     [InitializeOnLoad]
     public static class LiveBuilderStoreys
@@ -22,9 +25,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private const int LowestStorey = -5;
         private const int HighestStorey = 60;
 
-        // Настройки в памяти — копия настроек редактора, пишутся туда же при каждой смене.
-        private static float storeyHeight;
-        private static float groundLevel;
+        // Свои высота этажа и пол первого этажа — для сцен, где этажей уровня ещё нет (старые уровни, новые сцены). Сами больше не меняются.
+        private static float personalStoreyHeight;
+        private static float personalGroundLevel;
+
+        // Свои настройки в памяти — копия настроек редактора, пишутся туда же при каждой смене.
         private static int currentStorey;
         private static bool isSectionEnabled;
         private static float sectionHeightAboveFloor;
@@ -38,13 +43,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         static LiveBuilderStoreys()
         {
-            storeyHeight = EditorPrefs.GetFloat(PreferencePrefix + "StoreyHeight", 4f);
-            groundLevel = EditorPrefs.GetFloat(PreferencePrefix + "GroundLevel", 0f);
+            personalStoreyHeight = Mathf.Max(LiveBuilderLevelStoreys.MinStoreyHeight, EditorPrefs.GetFloat(PreferencePrefix + "StoreyHeight", 4f));
+            personalGroundLevel = EditorPrefs.GetFloat(PreferencePrefix + "GroundLevel", 0f);
             currentStorey = EditorPrefs.GetInt(PreferencePrefix + "CurrentStorey", 0);
             isSectionEnabled = EditorPrefs.GetBool(PreferencePrefix + "IsSectionEnabled", false);
             sectionHeightAboveFloor = EditorPrefs.GetFloat(PreferencePrefix + "SectionHeightAboveFloor", 3f);
 
             RenderPipelineManager.beginCameraRendering += ApplyToCamera;
+            LiveBuilderLevelStoreysInScene.Changed += NotifyChanged;
         }
 
 
@@ -54,26 +60,38 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Настройки ────────────────────────────────────────────────────
 
+        // Высота этажа уровня, м. Правка — в сцену, с Undo.
         public static float StoreyHeight
         {
-            get => storeyHeight;
+            get
+            {
+                var sceneStoreys = LiveBuilderLevelStoreysInScene.Find();
+                return sceneStoreys != null ? sceneStoreys.StoreyHeight : personalStoreyHeight;
+            }
             set
             {
-                storeyHeight = Mathf.Max(0.5f, value);
-                SetFloat("StoreyHeight", storeyHeight);
+                SceneStoreysForEdit("Change Storey Height").StoreyHeight = value;
+                NotifyChanged();
             }
         }
 
-        // Высота пола первого этажа в мире, м.
+        // Высота пола первого этажа в мире, м. Правка — в сцену, с Undo.
         public static float GroundLevel
         {
-            get => groundLevel;
+            get
+            {
+                var sceneStoreys = LiveBuilderLevelStoreysInScene.Find();
+                return sceneStoreys != null ? sceneStoreys.GroundLevel : personalGroundLevel;
+            }
             set
             {
-                groundLevel = value;
-                SetFloat("GroundLevel", groundLevel);
+                SceneStoreysForEdit("Change Ground Level").GroundLevel = value;
+                NotifyChanged();
             }
         }
+
+        // Этажи уровня лежат в активной сцене, а не берутся из своих настроек.
+        public static bool IsStoredInScene => LiveBuilderLevelStoreysInScene.Find() != null;
 
         public static int CurrentStorey
         {
@@ -159,6 +177,23 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 return sectionHeightId;
             }
+        }
+
+
+        // ── Этажи уровня в сцене ─────────────────────────────────────────
+
+        // Положить этажи уровня в активную сцену с нынешними числами — у всех, кто её откроет, этажи будут те же. Уже там — ничего не меняет.
+        public static void StoreInScene()
+        {
+            SceneStoreysForEdit("Store Level Storeys In Scene");
+            NotifyChanged();
+        }
+
+
+        // Этажи уровня активной сцены для правки; нет их там — кладутся со своими числами, с которыми уровень выглядел до сих пор.
+        private static LiveBuilderLevelStoreys SceneStoreysForEdit(string undoName)
+        {
+            return LiveBuilderLevelStoreysInScene.FindOrCreate(personalStoreyHeight, personalGroundLevel, undoName);
         }
 
 

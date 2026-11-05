@@ -95,24 +95,42 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             using (LiveBuilderWindowControls.Card("Этажи уровня"))
             {
-                var storeyHeight = EditorGUILayout.FloatField(new GUIContent("Высота этажа, м", "От пола до пола следующего этажа. По метрикам — 4. Новые здания берут её же"),
+                DrawStoreysPlace();
+
+                var storeyHeight = EditorGUILayout.FloatField(new GUIContent("Высота этажа, м", "От пола до пола следующего этажа. По метрикам — 4. Новые здания берут её же. " +
+                                                                                                "Хранится в сцене — у всех одна"),
                     LiveBuilderStoreys.StoreyHeight);
 
                 if (!Mathf.Approximately(storeyHeight, LiveBuilderStoreys.StoreyHeight))
                     LiveBuilderStoreys.StoreyHeight = storeyHeight;
 
-                var groundLevel = EditorGUILayout.FloatField(new GUIContent("Пол первого этажа, м", "Высота в мире, от которой считаются этажи. Дом на цоколе 1 м — 1"),
+                var groundLevel = EditorGUILayout.FloatField(new GUIContent("Пол первого этажа, м", "Высота в мире, от которой считаются этажи. Дом на цоколе 1 м — 1. " +
+                                                                                                    "Хранится в сцене — у всех один"),
                     LiveBuilderStoreys.GroundLevel);
 
                 if (!Mathf.Approximately(groundLevel, LiveBuilderStoreys.GroundLevel))
                     LiveBuilderStoreys.GroundLevel = groundLevel;
 
-                var sectionHeight = EditorGUILayout.FloatField(new GUIContent("Высота разреза, м", "На сколько выше пола этажа режет вид «Комнаты» и «Стены вниз»"),
+                var sectionHeight = EditorGUILayout.FloatField(new GUIContent("Высота разреза, м", "На сколько выше пола этажа режет вид «Комнаты» и «Стены вниз». " +
+                                                                                                   "Своя у каждого, в сцену не пишется"),
                     LiveBuilderStoreys.SectionHeightAboveFloor);
 
                 if (!Mathf.Approximately(sectionHeight, LiveBuilderStoreys.SectionHeightAboveFloor))
                     LiveBuilderStoreys.SectionHeightAboveFloor = sectionHeight;
             }
+        }
+
+        // Этажи ещё не в сцене — числа свои, на другом компьютере могут быть другими: предупредить и дать положить их в сцену как есть.
+        private static void DrawStoreysPlace()
+        {
+            if (LiveBuilderStoreys.IsStoredInScene)
+                return;
+
+            LiveBuilderWindowControls.Note("Этажи этой сцены ещё не сохранены в ней: числа твои, у другого человека этажи могут быть другими.");
+
+            if (GUILayout.Button(new GUIContent("Сохранить в сцене", "Положить в сцену объект «Live Builder Level» с этими числами — " +
+                                                                     "у всех, кто откроет сцену, этажи будут те же. Первая правка чисел ниже делает то же самое")))
+                LiveBuilderStoreys.StoreInScene();
         }
 
 
