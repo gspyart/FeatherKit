@@ -3,11 +3,11 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Цветная зона окна Live Builder: заголовок со значком и пояснением, сворачивается кликом и помнит это (<see cref="LiveBuilderWindowZones"/>).
+    /// Цветная зона окна Live Builder: заголовок со значком и пояснением, сворачивается кликом и помнит это (<see cref="LiveBuilderZoneFrame"/>).
     /// Зона знает, что в ней и когда её показывать; рамку, цвет и место рисует окно (<see cref="LiveBuilderWindow"/>).
     /// Новая зона — новый наследник: окно находит его само и ставит по <see cref="Order"/>.
     /// </summary>
-    public abstract class LiveBuilderWindowZone
+    public abstract class LiveBuilderWindowZone : System.IDisposable
     {
         // ── Заголовок ────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public abstract void Draw();
 
 
-        // Окно закрывается — отпустить своё (готовые инспекторы и прочее).
+        // IDisposable: окно закрывается — отпустить своё (готовые инспекторы и прочее).
         public virtual void Dispose()
         {
         }

@@ -889,7 +889,7 @@ DebugPanel.Watch(this, "Игрок", "Скорость", () => speed.ToString("0
 | `GeometryCutter` | Проём: прямоугольник, арка, круг; режет коробки, стены и здания |
 | `LiveBuilderWindow`, `LiveBuilderSceneTool` | Окно и инструмент окна сцены |
 | `LiveBuilderTool`, `LiveBuilderWindowZone`, `LiveBuilderSelectionCard` | Инструмент палитры, зона окна, карточка «Выделено» — новый наследник находится сам |
-| `LiveBuilderWindowZones`, `LiveBuilderWindowControls` | Цветные зоны окна и его общие элементы: переключатели со значками, пояснения, плитки |
+| `LiveBuilderZoneFrame`, `LiveBuilderWindowControls` | Цветные зоны окна и его общие элементы: переключатели со значками, пояснения, плитки |
 | `LiveBuilderToolIcons`, `LiveBuilderOptionIcons` | Значки инструментов и настроек — рисуются кодом из линий (`LiveBuilderIconRasterizer`), без картинок; запоминает — `LiveBuilderIconCache` |
 | `LiveBuilderRebuildQueue` | Одна очередь пересборки на все постройки |
 | `LiveBuilderProjectSettings` | Настройки проекта, страница — `LiveBuilderProjectSettingsPage` |

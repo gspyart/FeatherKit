@@ -9,7 +9,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Хранит меш объекта из коробок и стены по линии отдельным файлом, а не внутри сцены: сцена не раздувается, как с ProBuilder.
-    /// Папка — рядом со сценой, «<Сцена>_BoxModels»; сцена ещё не сохранена — общая папка из настроек проекта.
+    /// Папка — рядом со сценой, «<Сцена>_BoxModels»; сцена ещё не сохранена — общая папка из настроек проекта,
+    /// при сохранении сцены её файлы оттуда переезжают копией в папку сцены (<see cref="BoxModelMeshSaving"/>).
     /// Меш для столкновений со скатами лестниц — второй меш в том же файле.
     /// Пересобранный меш записывается на диск сам, через короткую паузу, — не ждёт сохранения сцены:
     /// префаб или копия, которые на него ссылаются, никогда не останутся с незаписанной геометрией.
@@ -75,6 +76,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // Файл Live Builder и лежит в папке сцены или префаба этого объекта. Из папки другой сцены или префаба — чужой:
         // объект скопировали туда или распаковали префаб, а файл всё ещё смотрит и туда.
+        // Общая папка — своя только у объекта несохранённой сцены (на тот же файл в открытых сценах никто больше не смотрит — это сверяет запись).
+        // У сохранённой сцены своя папка: файл из общей ей уже чужой, а при сохранении сцены такие файлы переезжают копией в её папку.
         public static bool IsOwnMeshFile(Component owner, Mesh mesh)
         {
             if (!IsBoxModelMeshFile(mesh))
@@ -82,6 +85,40 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var folder = Path.GetDirectoryName(AssetDatabase.GetAssetPath(mesh))?.Replace('\\', '/');
             return folder == FolderFor(owner.gameObject);
+        }
+
+
+        // ── Общая папка несохранённых сцен ───────────────────────────────
+
+        // Файл Live Builder из общей папки несохранённых сцен.
+        public static bool IsFallbackMeshFile(Mesh mesh)
+        {
+            return IsBoxModelMeshFile(mesh) && AssetDatabase.GetAssetPath(mesh).StartsWith(FallbackFolder + "/");
+        }
+
+
+        // Копия файла меша (вместе с мешем для столкновений) в папку folder. Возвращает пары «меш файла → его копия».
+        public static Dictionary<Mesh, Mesh> CopyMeshFileTo(Mesh mainMesh, string folder)
+        {
+            EnsureFolder(folder);
+
+            var sourcePath = AssetDatabase.GetAssetPath(mainMesh);
+            var copyPath = AssetDatabase.GenerateUniqueAssetPath(folder + "/" + Path.GetFileName(sourcePath));
+            var copies = new Dictionary<Mesh, Mesh>();
+
+            if (!AssetDatabase.CopyAsset(sourcePath, copyPath))
+                return copies;
+
+            var mainCopy = AssetDatabase.LoadAssetAtPath<Mesh>(copyPath);
+            copies[mainMesh] = mainCopy;
+
+            var sourceCollider = FindColliderMesh(mainMesh);
+            var colliderCopy = FindColliderMesh(mainCopy);
+
+            if (sourceCollider != null && colliderCopy != null)
+                copies[sourceCollider] = colliderCopy;
+
+            return copies;
         }
 
 

@@ -21,6 +21,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
                                                    "Стрелки — двигать выделенное: кусок тянешь — новая коробка, толкаешь — вырез; грань с Ctrl — выдавить";
 
 
+        // ── Выделенное ───────────────────────────────────────────────────
+
+        // Выделена коробка — подсказка про её выдавливание.
+        protected static bool IsBoxSelected => Selection.activeGameObject != null && Selection.activeGameObject.TryGetComponent<BoxModelPart>(out _);
+
+
         // ── Описание ─────────────────────────────────────────────────────
 
         // Постоянное имя для настроек редактора: под ним помнится выбранный инструмент. Не переводить и не менять.
@@ -70,18 +76,32 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Прицел на сетке — где начнётся рисование. Только вместе с подсветкой грани.
         public virtual bool DrawsSnapCursor => false;
 
-        // Что делать сейчас — внизу окна сцены, после этажа.
+        // Что делать сейчас — внизу окна сцены, после этажа. Читается и вне отрисовки сцены: про мышь здесь не спрашивают.
         public abstract string Hint { get; }
 
-        // Выделена коробка — подсказка про её выдавливание.
-        protected static bool IsBoxSelected => Selection.activeGameObject != null && Selection.activeGameObject.TryGetComponent<BoxModelPart>(out _);
+        // Дописать к подсказке «клик ещё раз — глубже» (<see cref="LiveBuilderDepthClick"/>): мышь знает окно сцены, оно и дописывает.
+        public virtual bool ShowsDepthClickHint => false;
 
 
-        // ── Что правит ───────────────────────────────────────────────────
+        // ── Подсказка ────────────────────────────────────────────────────
+
+        // Подсказка инструмента линии: что сейчас — и про точки своего выделенного: их правят тут же.
+        protected static string PathHint(LiveBuilderPathGesture pathGesture)
+        {
+            return pathGesture.Hint + (!pathGesture.IsActive && LiveBuilderContourHandles.IsShown
+                ? " · Точки выделенного — тяни, «+» — новая, двойной клик — вид"
+                : " · Клик по готовому — выделить");
+        }
+
+
+        // ── Что правит: проверка ─────────────────────────────────────────
 
         // Может ли инструмент выделить и править эту постройку или её часть. Часть здания — как само здание.
         public bool CanEdit(Component target)
         {
+            if (target == null)
+                return false;
+
             if (target is SplineBuildingPart part)
                 target = part.GetComponentInParent<SplineBuilding>();
 
@@ -198,15 +218,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public virtual string BuildingStoreyHint(LiveBuilderBuildingContext context)
         {
             return context.DescriptionOf(false);
-        }
-
-
-        // Подсказка инструмента линии: что сейчас — и про точки своего выделенного: их правят тут же.
-        protected static string PathHint(LiveBuilderPathGesture pathGesture)
-        {
-            return pathGesture.Hint + (!pathGesture.IsActive && LiveBuilderContourHandles.IsShown
-                ? " · Точки выделенного — тяни, «+» — новая, двойной клик — вид"
-                : " · Клик по готовому — выделить");
         }
     }
 }

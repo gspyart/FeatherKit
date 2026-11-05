@@ -23,7 +23,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Все привязки на сцене или в открытом префабе, и спрятанные тоже — иначе этаж вернулся, а объект остался выключенным.
-        // Сначала — те, что выше в иерархии: проём в перегородке едет за ней, а не дважды.
+        // Сначала — те, что выше в иерархии: проём в перегородке едет за ней, а не дважды. Ошибка в одной привязке не останавливает остальные.
         public static void SyncAll()
         {
             var stage = StageUtility.GetCurrentStageHandle();
@@ -36,8 +36,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
             ordered.Sort((first, second) => DepthOf(first.transform).CompareTo(DepthOf(second.transform)));
 
             foreach (var link in ordered)
-                if (link.IsValid)
-                    Sync(link);
+            {
+                try
+                {
+                    if (link.IsValid)
+                        Sync(link);
+                }
+                catch (System.Exception exception)
+                {
+                    Debug.LogException(exception, link);
+                }
+            }
         }
 
         private static int DepthOf(Transform node)

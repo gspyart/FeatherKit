@@ -81,34 +81,29 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
         // Режет ли объект вырез не из этого экземпляра префаба: со сцены, из другого префаба или добавленный в экземпляр поверх префаба.
+        // Меш — только свой: у здания — каждая его часть со своим видом (вырез «только перекрытия» ищется у пола и перекрытий),
+        // у остальных — меш на самом объекте. Вложенные объекты, стены и здания разбираются сами.
         private static bool IsCutFromOutside(Component owner, GameObject instanceRoot)
         {
-            var bounds = new Bounds();
-            var hasBounds = false;
-
-            foreach (var renderer in owner.GetComponentsInChildren<MeshRenderer>())
+            foreach (var meshOwner in OwnMeshOwnersOf(owner))
             {
-                var rendererBounds = GeometryCutterLookup.WorldBoundsOf(renderer);
+                var bounds = GeometryCutterLookup.WorldBoundsOf(meshOwner.GetComponent<MeshRenderer>());
 
-                if (rendererBounds.size == Vector3.zero)
-                    continue;
-
-                if (hasBounds)
-                    bounds.Encapsulate(rendererBounds);
-                else
-                    bounds = rendererBounds;
-
-                hasBounds = true;
+                foreach (var cutter in GeometryCutterLookup.CuttersFor(meshOwner, bounds))
+                    if (!PrefabUtility.IsPartOfPrefabInstance(cutter) || PrefabUtility.GetOutermostPrefabInstanceRoot(cutter) != instanceRoot)
+                        return true;
             }
 
-            if (!hasBounds)
-                return false;
-
-            foreach (var cutter in GeometryCutterLookup.CuttersFor(owner, bounds))
-                if (!PrefabUtility.IsPartOfPrefabInstance(cutter) || PrefabUtility.GetOutermostPrefabInstanceRoot(cutter) != instanceRoot)
-                    return true;
-
             return false;
+        }
+
+        // Чьи меши — у постройки: у здания — его части, у остальных — сам объект.
+        private static IEnumerable<Component> OwnMeshOwnersOf(Component owner)
+        {
+            if (owner is SplineBuilding building)
+                return building.GetComponentsInChildren<SplineBuildingPart>(false);
+
+            return new[] { owner };
         }
 
 

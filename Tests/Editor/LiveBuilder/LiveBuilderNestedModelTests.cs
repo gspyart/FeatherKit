@@ -6,7 +6,8 @@ using UnityEngine;
 namespace FeatherKit.Tests.LiveBuilder
 {
     /// <summary>
-    /// Объект в объекте: вложенный объект из коробок в здании, привязанный к этажам целиком, повторяет все свои коробки на каждом этаже одним мешем,
+    /// Объект в объекте: вложенный объект из коробок в здании, привязанный к этажам целиком, повторяет все свои коробки на каждом этаже одним мешем
+    /// (привязанная внутри него коробка копий не перемножает),
     /// а вырез в нём («всё вокруг», «только перекрытия») пробивает перекрытия здания — шахта. Лестница с «и на последнем этаже» не теряет его при сверке.
     /// </summary>
     public class LiveBuilderNestedModelTests
@@ -44,6 +45,22 @@ namespace FeatherKit.Tests.LiveBuilder
 
             var bounds = shaft.GetComponent<MeshRenderer>().bounds;
             Assert.AreEqual(2f * StoreyHeight + 3f, bounds.size.y, 0.01f, "один меш на все три этажа");
+        }
+
+
+        // Коробка в уже привязанном объекте, привязанная сама, копий не перемножает: этажей три — коробок три, а не девять.
+        [Test]
+        public void LinkedBoxInsideLinkedModel_DoesNotMultiplyCopies()
+        {
+            var building = CreateBuilding(null, 3);
+            var shaft = CreateShaft(building);
+            var box = BoxModelRebuilder.CollectParts(shaft)[0];
+            SplineBuildingLinkSync.Attach(box.gameObject, building, true);
+            BoxModelRebuilder.Rebuild(shaft);
+
+            Assert.AreEqual(3, BoxModelRebuilder.GetSolverBoxes(shaft).Count, "по коробке на этаж");
+            Assert.IsTrue(BoxModelShapeCollector.IsInsideStoreyCopies(shaft, box.transform.parent), "коробке этажи уже повторяет объект");
+            Assert.IsTrue(BoxModelShapeCollector.HasStoreyLinksInside(shaft.transform), "в объекте есть привязанная коробка");
         }
 
 

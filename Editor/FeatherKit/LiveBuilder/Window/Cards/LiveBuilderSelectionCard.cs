@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEngine;
 
@@ -6,23 +8,33 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Карточка зоны «Выделено» окна Live Builder: числа и действия одного вида выделенного — коробки, повтора, стены, здания…
     /// Сама решает, есть ли ей что показать. Зона (<see cref="LiveBuilderSelectionZone"/>) находит все карточки сама и рисует их по <see cref="Order"/>.
-    /// Новая карточка — новый наследник.
+    /// Новая карточка — новый наследник. Окно закрывается — зона отпускает карточку (<see cref="Dispose"/>).
     /// </summary>
-    public abstract class LiveBuilderSelectionCard
+    public abstract class LiveBuilderSelectionCard : System.IDisposable
     {
         // Меньше — выше в зоне.
         public abstract int Order { get; }
 
 
-        // ── Рисование ────────────────────────────────────────────────────
+        // ── Общее для карточек ───────────────────────────────────────────
 
-        // Нарисовать про выделенное (selected — активный объект выделения). true — было что показать.
-        public abstract bool Draw(GameObject selected);
-
-
-        // Окно закрывается — отпустить готовые инспекторы.
-        public virtual void Dispose()
+        // Постройка, чей инспектор показывать: проём, комната, лестница, стена, здание, объект из коробок — первое, что есть на объекте. Иначе — null.
+        protected static Component OwnComponentOf(GameObject selected)
         {
+            if (selected == null)
+                return null;
+
+            var candidates = new List<Component>
+            {
+                selected.GetComponent<GeometryCutter>(),
+                selected.GetComponent<BoxModelRoom>(),
+                selected.GetComponent<BoxModelStairs>(),
+                selected.GetComponent<SplineWall>(),
+                selected.GetComponent<SplineBuilding>(),
+                selected.GetComponent<BoxModel>()
+            };
+
+            return candidates.Find(candidate => candidate != null);
         }
 
 
@@ -48,6 +60,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 Object.DestroyImmediate(editor);
 
             editor = null;
+        }
+
+
+        // ── Рисование ────────────────────────────────────────────────────
+
+        // Нарисовать про выделенное (selected — активный объект выделения). true — было что показать.
+        public abstract bool Draw(GameObject selected);
+
+
+        // IDisposable: окно закрывается — отпустить готовые инспекторы.
+        public virtual void Dispose()
+        {
         }
     }
 }

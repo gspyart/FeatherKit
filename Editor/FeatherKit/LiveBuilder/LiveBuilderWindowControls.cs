@@ -6,7 +6,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Общие элементы окна Live Builder, чтобы всё выглядело одинаково: карточка с тихим заголовком, переключатель из кнопок (со значками или словами),
     /// кнопка-значок «вкл / выкл», плитка инструмента, пояснение, которое раскрывается по клику, плашка посчитанного числа, разделитель, поле материала.
-    /// Цветные зоны окна — в <see cref="LiveBuilderWindowZones"/>. Цвета — под светлую и тёмную тему редактора.
+    /// Цветные зоны окна — в <see cref="LiveBuilderZoneFrame"/>. Цвета — под светлую и тёмную тему редактора.
     /// </summary>
     public static class LiveBuilderWindowControls
     {
@@ -319,7 +319,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static void DrawToolTileLook(Rect rect, LiveBuilderTool tool, bool isSelected, bool isHovered)
         {
-            var fill = isSelected ? LiveBuilderWindowZones.ColorOf(LiveBuilderZoneColor.Tool) : isHovered ? HoverColor : TileColor;
+            var fill = isSelected ? LiveBuilderZoneFrame.ColorOf(LiveBuilderZoneColor.Tool) : isHovered ? HoverColor : TileColor;
             GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, fill, 0f, 4f);
 
             if (!isSelected)

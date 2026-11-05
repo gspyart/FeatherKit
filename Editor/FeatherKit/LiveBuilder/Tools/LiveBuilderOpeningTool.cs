@@ -49,8 +49,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public override string Hint => cutterGesture.IsActive ? cutterGesture.Hint : openingPlacer.Hint;
 
 
-        // ── Что правит ───────────────────────────────────────────────────
+        // ── Что правит: проверка ─────────────────────────────────────────
 
+        // Вырезы и вырезающие коробки.
         protected override bool CanEditTarget(Component target)
         {
             return target is GeometryCutter || target is BoxModelPart { Mode: BoxModelPartMode.Cut };
@@ -155,6 +156,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Отпустил: протянутый проём готов; иначе клик по стене ставит проём готового размера.
         public override bool OnMouseUp(Event current)
         {
             if (cutterGesture.IsActive)
@@ -182,12 +184,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно сцены: отмена и вид ─────────────────────────────────────
 
+        // Бросить протянутый проём.
         public override void Cancel()
         {
             cutterGesture.Cancel();
         }
 
 
+        // Протянутый проём или где встанет проём готового размера.
         public override void DrawPreview()
         {
             if (cutterGesture.IsActive)

@@ -15,6 +15,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Вложенный объект из коробок и стена по линии — сами по себе, их содержимое не наше. В здание по контуру заходим:
     /// лестницы и вырезы его интерьера — коробки этого объекта. Привязка к этажам на самом объекте (вложенный объект в здании —
     /// шахта, лестничная клетка) — все его коробки ещё раз на каждом этаже повтора, как у группы повтора.
+    /// Привязка внутри уже привязанного (коробка в привязанном объекте или группе) копий не добавляет: этажи уже повторены снаружи,
+    /// иначе копии перемножились бы — три этажа на три этажа.
     /// </summary>
     public static class BoxModelShapeCollector
     {
@@ -35,10 +37,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var boxes = new List<BoxModelSolverBox>();
             var count = 1;
             var step = Vector3.zero;
-            TryGetStoreyCopies(model, model.transform, ref count, ref step);
+            var isModelLinked = TryGetStoreyCopies(model, model.transform, ref count, ref step);
 
             for (var copy = 0; copy < count && boxes.Count < MaxSolverBoxes; copy++)
-                CollectChildren(model, model.transform, step * copy, boxes, ramps);
+                CollectChildren(model, model.transform, step * copy, isModelLinked, boxes, ramps);
 
             WarnIfOverLimit(model, boxes.Count);
             return boxes;
@@ -71,25 +73,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var ramps = new List<BoxModelRampShape>();
             CollectOwn(model, group, Vector3.zero, boxes, ramps);
-            CollectChildren(model, group, Vector3.zero, boxes, ramps);
+            CollectChildren(model, group, Vector3.zero, IsInsideStoreyCopies(model, group), boxes, ramps);
             return boxes;
         }
 
 
         // Дети узла по порядку; у повтора — его содержимое на каждый шаг. Дошли до предела коробок — дальше не идём.
-        private static void CollectChildren(BoxModel model, Transform node, Vector3 offset, List<BoxModelSolverBox> boxes, List<BoxModelRampShape> ramps)
+        // isInsideStoreyCopies — узел или кто-то над ним уже повторён по этажам: привязки детей копий не добавляют.
+        private static void CollectChildren(BoxModel model, Transform node, Vector3 offset, bool isInsideStoreyCopies, List<BoxModelSolverBox> boxes,
+            List<BoxModelRampShape> ramps)
         {
             foreach (Transform child in node)
             {
-                if (!child.gameObject.activeSelf || child.GetComponent<BoxModel>() != null || child.GetComponent<SplineWall>() != null)
+                if (!IsOwnPiece(child))
                     continue;
 
                 var repeat = child.GetComponent<BoxModelRepeat>();
                 var count = repeat != null ? repeat.Count : 1;
                 var step = repeat != null ? repeat.Step : Vector3.zero;
-
-                if (repeat == null)
-                    TryGetStoreyCopies(model, child, ref count, ref step);
+                var isChildLinked = repeat == null && !isInsideStoreyCopies && TryGetStoreyCopies(model, child, ref count, ref step);
 
                 for (var copy = 0; copy < count; copy++)
                 {
@@ -98,20 +100,70 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                     var copyOffset = offset + step * copy;
                     CollectOwn(model, child, copyOffset, boxes, ramps);
-                    CollectChildren(model, child, copyOffset, boxes, ramps);
+                    CollectChildren(model, child, copyOffset, isInsideStoreyCopies || isChildLinked, boxes, ramps);
                 }
             }
         }
 
         // Привязан к этажам здания — копии на этажах выше, шаг — этаж здания в осях объекта. У группы повтора копии считает сама группа.
-        private static void TryGetStoreyCopies(BoxModel model, Transform node, ref int count, ref Vector3 step)
+        private static bool TryGetStoreyCopies(BoxModel model, Transform node, ref int count, ref Vector3 step)
         {
-            if (!node.TryGetComponent<SplineBuildingStoreyLink>(out var link) || !link.IsValid)
-                return;
+            if (!IsLinkedToStoreys(node))
+                return false;
 
+            var link = node.GetComponent<SplineBuildingStoreyLink>();
             var building = link.Building;
             count = link.CopiesFrom(link.Storey);
             step = model.transform.InverseTransformVector(building.transform.up * building.StoreyHeight);
+            return true;
+        }
+
+
+        // ── Привязки к этажам ────────────────────────────────────────────
+
+        // Узел или кто-то над ним в этом объекте, вместе с самим объектом, привязан к этажам: этажи ему уже повторяет та привязка.
+        public static bool IsInsideStoreyCopies(BoxModel model, Transform node)
+        {
+            for (var current = node; current != null; current = current.parent)
+            {
+                if (IsLinkedToStoreys(current))
+                    return true;
+
+                if (current == model.transform)
+                    break;
+            }
+
+            return false;
+        }
+
+
+        // Под узлом есть привязанные к этажам коробки, комнаты, лестницы или группы — свои, не вложенных объектов и стен.
+        // Спрятанные из-за пропавшего этажа — тоже: привязка на них осталась.
+        public static bool HasStoreyLinksInside(Transform node)
+        {
+            foreach (Transform child in node)
+                if (!IsNestedConstruction(child) && (IsLinkedToStoreys(child) || HasStoreyLinksInside(child)))
+                    return true;
+
+            return false;
+        }
+
+        private static bool IsLinkedToStoreys(Transform node)
+        {
+            return node.TryGetComponent<SplineBuildingStoreyLink>(out var link) && link.IsValid;
+        }
+
+
+        // Включённый кусок этого объекта — его коробки расчёта наши.
+        private static bool IsOwnPiece(Transform child)
+        {
+            return child.gameObject.activeSelf && !IsNestedConstruction(child);
+        }
+
+        // Вложенный объект из коробок или стена по линии — сами по себе, их содержимое не наше.
+        private static bool IsNestedConstruction(Transform child)
+        {
+            return child.GetComponent<BoxModel>() != null || child.GetComponent<SplineWall>() != null;
         }
 
         // Коробка или лестница на самом узле.

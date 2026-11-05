@@ -150,12 +150,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
             HintChanged?.Invoke();
         }
 
-        // Этаж — здания под мышью, если инструмент строит в нём, иначе уровня; дальше — что говорит инструмент.
+        // Этаж — здания под мышью, если инструмент строит в нём, иначе уровня; дальше — что говорит инструмент
+        // и, если он выделяет вглубь, «клик ещё раз — глубже» у мыши. Зовут только при отрисовке сцены — тут есть Event.current.
         private string CurrentHint()
         {
-            var buildingStorey = hoveredBuildingContext is { IsBuildingAlive: true } ? CurrentTool.BuildingStoreyHint(hoveredBuildingContext) : null;
+            var tool = CurrentTool;
+            var buildingStorey = hoveredBuildingContext is { IsBuildingAlive: true } ? tool.BuildingStoreyHint(hoveredBuildingContext) : null;
             var storey = buildingStorey ?? "Этаж " + LiveBuilderStoreys.CurrentStorey + (LiveBuilderStoreys.IsSectionEnabled ? ", разрез" : "");
-            return storey + " · " + CurrentTool.Hint;
+            var depthClickHint = tool.ShowsDepthClickHint ? LiveBuilderDepthClick.HintAt(Event.current.mousePosition, tool) : "";
+            return storey + " · " + tool.Hint + depthClickHint;
         }
 
 

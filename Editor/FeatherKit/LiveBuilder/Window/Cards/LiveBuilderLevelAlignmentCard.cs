@@ -15,7 +15,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public override bool Draw(GameObject selected)
         {
-            if (LiveBuilderOwnComponentCard.OwnComponentOf(selected) is not SplineBuilding building || SplineBuildingLevelAlignment.IsAlignedToLevel(building))
+            if (OwnComponentOf(selected) is not SplineBuilding building || SplineBuildingLevelAlignment.IsAlignedToLevel(building))
                 return false;
 
             using (LiveBuilderWindowControls.Card("Этажи уровня"))

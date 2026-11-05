@@ -47,7 +47,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Поиск ────────────────────────────────────────────────────────
 
         // Вырезы, которые режут эту постройку в границах её меша (в мире).
-        // Порядок — по форме и месту выреза, а не по номеру объекта: номер новый в каждой сессии, а от порядка зависят меш и подпись.
+        // Порядок — по форме и месту выреза в осях постройки (тот же ключ, что в подписи), а не по номеру объекта и не по месту в мире:
+        // номер новый в каждой сессии, а постройку с её вырезами двигают целиком — от порядка зависят меш и подпись.
         public static List<GeometryCutter> CuttersFor(Component owner, Bounds worldBounds)
         {
             var cutters = new List<GeometryCutter>();
@@ -56,15 +57,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return cutters;
 
             worldBounds.Expand(BoundsMargin * 2f);
-            var keys = new List<(Hash128 Key, GeometryCutter Cutter)>();
 
             foreach (var cutter in CandidatesFor(owner))
                 if (cutter != null && CanCut(cutter, owner) && WorldBoundsOf(cutter).Intersects(worldBounds))
-                    keys.Add((ShapeKeyOf(cutter, Matrix4x4.identity), cutter));
+                    cutters.Add(cutter);
 
-            keys.Sort((first, second) => first.Key.CompareTo(second.Key));
+            var ordered = KeysInOwnerSpace(owner, cutters);
+            cutters.Clear();
 
-            foreach (var (_, cutter) in keys)
+            foreach (var (_, cutter) in ordered)
                 cutters.Add(cutter);
 
             return cutters;
@@ -113,8 +114,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
         // Режет ли вырез этот вид постройки: всё — любую; только перекрытия — пол, перекрытия и крышу зданий; только стены — стены по линии и стены зданий.
+        // Здание целиком (его спрашивают, когда ищут вырезы снаружи префаба) — и стены, и перекрытия: подходит любой вид.
         private static bool IsTargetKind(LiveBuilderCutTargets targets, Component owner)
         {
+            if (owner is SplineBuilding)
+                return true;
+
             var buildingPart = owner as SplineBuildingPart;
 
             return targets switch
@@ -210,12 +215,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return "";
 
             // Хеш, а не строка с матрицами: подпись сверяют на каждый проход очереди у каждой части здания.
+            // Ключи — по порядку в осях постройки, как у CuttersFor: подпись не зависит от того, в каком порядке пришёл список.
             var key = new Hash128();
 
-            foreach (var cutter in cutters)
+            foreach (var (cutterKey, _) in KeysInOwnerSpace(owner, cutters))
             {
-                var cutterKey = ShapeKeyOf(cutter, owner.transform.worldToLocalMatrix);
-                key.Append(ref cutterKey);
+                var appendedKey = cutterKey;
+                key.Append(ref appendedKey);
             }
 
             return CutterKeyPrefix + key;
@@ -229,22 +235,35 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return index >= 0 ? signature.Substring(0, index) : signature;
         }
 
-        // Форма и место выреза в осях toSpace: сдвинули дыру — ключ другой.
-        private static Hash128 ShapeKeyOf(GeometryCutter cutter, Matrix4x4 toSpace)
+        // Ключ каждого выреза в осях постройки — и вырезы по этим ключам. Один порядок и для вычитания, и для подписи.
+        private static List<(Hash128 Key, GeometryCutter Cutter)> KeysInOwnerSpace(Component owner, List<GeometryCutter> cutters)
+        {
+            var keys = new List<(Hash128 Key, GeometryCutter Cutter)>(cutters.Count);
+
+            foreach (var cutter in cutters)
+                keys.Add((ShapeKeyOf(cutter, owner.transform), cutter));
+
+            keys.Sort((first, second) => first.Key.CompareTo(second.Key));
+            return keys;
+        }
+
+        // Форма и место выреза в осях space: сдвинули дыру — ключ другой. Место и размеры — с округлением,
+        // место — через общего с постройкой предка (<see cref="LiveBuilderStableHash"/>): двигают постройку с вырезами — ключ тот же.
+        private static Hash128 ShapeKeyOf(GeometryCutter cutter, Transform space)
         {
             var key = new Hash128();
-            var cutterToSpace = toSpace * GeometryCutterOutline.ShapeToWorld(cutter);
-            key.Append(ref cutterToSpace);
+            var shapeToSpace = LiveBuilderStableHash.RelativeMatrix(space, cutter.transform) * Matrix4x4.Translate(cutter.ShapeOffset);
+            LiveBuilderStableHash.AppendQuantizedMatrix(ref key, shapeToSpace);
             key.Append((int)cutter.Shape);
-            key.Append(cutter.Width);
-            key.Append(cutter.Height);
-            key.Append(cutter.Depth);
-            key.Append(cutter.TopCornerRadius);
-            key.Append(cutter.BottomCornerRadius);
+            LiveBuilderStableHash.AppendQuantized(ref key, cutter.Width);
+            LiveBuilderStableHash.AppendQuantized(ref key, cutter.Height);
+            LiveBuilderStableHash.AppendQuantized(ref key, cutter.Depth);
+            LiveBuilderStableHash.AppendQuantized(ref key, cutter.TopCornerRadius);
+            LiveBuilderStableHash.AppendQuantized(ref key, cutter.BottomCornerRadius);
             key.Append(cutter.CornerSegments);
             key.Append(cutter.CircleSegments);
             key.Append(cutter.CopiesUp);
-            key.Append(cutter.CopyStep);
+            LiveBuilderStableHash.AppendQuantized(ref key, cutter.CopyStep);
             key.Append(BoxModelSideMaterials.KeyOf(cutter.RevealMaterial));
 
             // Что и где режет — только если не по умолчанию: подписи старых построек остаются прежними.

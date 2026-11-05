@@ -45,8 +45,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public override string Hint => stairsGesture.IsActive ? stairsGesture.Hint : "Протяни по полу прямоугольник лестницы, потом мышью высоту. Клик — выделить";
 
 
-        // ── Что правит ───────────────────────────────────────────────────
+        // ── Что правит: проверка ─────────────────────────────────────────
 
+        // Только лестницы.
         protected override bool CanEditTarget(Component target)
         {
             return target is BoxModelStairs;
@@ -55,6 +56,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно ─────────────────────────────────────────────────────────
 
+        // Вид ступеней и размер новой лестницы.
         public override void DrawSettings()
         {
             using (LiveBuilderWindowControls.Card("Вид"))
@@ -117,6 +119,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Протянул по полу — прямоугольник лестницы: длина и ширина.
         public override void OnMouseDrag(Ray downRay, Ray worldRay, bool canBeginGesture)
         {
             if (canBeginGesture && !stairsGesture.IsActive)
@@ -154,12 +157,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Бросить начатую лестницу.
         public override void Cancel()
         {
             stairsGesture.Cancel();
         }
 
 
+        // Как встанет рисуемая лестница.
         public override void DrawPreview()
         {
             stairsGesture.DrawPreview();

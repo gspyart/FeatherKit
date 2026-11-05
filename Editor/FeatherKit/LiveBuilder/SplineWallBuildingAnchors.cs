@@ -20,12 +20,21 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private const float OnWallTolerance = SplineWallBuildingSides.OnWallTolerance;
 
 
-        // Все перегородки зданий сцены или открытого префаба.
+        // Все перегородки зданий сцены или открытого префаба. Ошибка в одной не останавливает остальные.
         public static void SyncAll()
         {
             foreach (var wall in StageUtility.GetCurrentStageHandle().FindComponentsOfType<SplineWall>())
-                if (wall.TryGetComponent<SplineBuildingStoreyLink>(out var link) && link.IsValid)
-                    Sync(wall, link.Building);
+            {
+                try
+                {
+                    if (wall.TryGetComponent<SplineBuildingStoreyLink>(out var link) && link.IsValid)
+                        Sync(wall, link.Building);
+                }
+                catch (System.Exception exception)
+                {
+                    Debug.LogException(exception, wall);
+                }
+            }
         }
 
         // Двигали только здание, и число его точек то же, — точки за ним. Иначе, если что-то поменялось, — запомнить заново.
@@ -217,7 +226,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var hash = new Hash128();
             LiveBuilderStableHash.AppendSplines(ref hash, container);
-            LiveBuilderStableHash.AppendMatrix(ref hash, building.transform.worldToLocalMatrix * wall.transform.localToWorldMatrix);
+            LiveBuilderStableHash.AppendQuantizedPlacement(ref hash, building.transform, wall.transform);
             return LiveBuilderStableHash.ToNonZeroInt(hash);
         }
 

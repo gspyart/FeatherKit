@@ -122,7 +122,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderSyncEdits.RecordPrefabInstance(building);
             }
 
-            if (isHierarchyChanged && building.gameObject.scene.IsValid())
+            if (!isHierarchyChanged)
+                return;
+
+            // Части и группы этажей добавились или ушли — места объектов в иерархии, запомненные на проход, уже не те.
+            LiveBuilderHierarchyOrder.ForgetPassPaths();
+
+            if (building.gameObject.scene.IsValid())
                 EditorSceneManager.MarkSceneDirty(building.gameObject.scene);
         }
 
@@ -243,7 +249,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 var cutBoxes = SplineWallRebuilder.CutBoxesHashOf(model, building, true);
                 hash.Append(ref cutBoxes);
-                LiveBuilderStableHash.AppendMatrix(ref hash, model.transform.worldToLocalMatrix * building.transform.localToWorldMatrix);
+                LiveBuilderStableHash.AppendQuantizedPlacement(ref hash, model.transform, building.transform);
             }
 
             return hash.ToString();

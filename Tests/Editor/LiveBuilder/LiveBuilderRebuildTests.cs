@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using FeatherKit.EditorTools.LiveBuilder;
 using FeatherKit.LiveBuilder;
 using NUnit.Framework;
@@ -10,7 +11,8 @@ namespace FeatherKit.Tests.LiveBuilder
 {
     /// <summary>
     /// Пересборка и файлы мешей: окно на одном этаже пересобирает только этот этаж; экземпляр префаба под чужим вырезом получает свой меш
-    /// и возвращается к мешу префаба, когда выреза нет; копия не перезаписывает общий с оригиналом файл; хеш линии не зависит от языка системы;
+    /// и возвращается к мешу префаба, когда выреза нет; общего родителя двигают — подпись стены та же; объект целиком в вырезе готов
+    /// после одной пересборки; копия не перезаписывает общий с оригиналом файл; хеш линии не зависит от языка системы;
     /// уборка находит брошенные файлы мешей и не трогает нужные — и те, на которые ссылается только ScriptableObject.
     /// </summary>
     public class LiveBuilderRebuildTests
@@ -95,6 +97,49 @@ namespace FeatherKit.Tests.LiveBuilder
             Object.DestroyImmediate(outsideCutter.gameObject);
             Assert.IsTrue(BoxModelPrefabInstances.UsesPrefabGeometry(instance, out var isRechecked), "вырез убрали — снова меш префаба");
             Assert.IsTrue(isRechecked, "и сверено заново — снимутся лишние правки меша");
+        }
+
+
+        // ── Подписи ──────────────────────────────────────────────────────
+
+        // Двигают и поворачивают общего родителя объекта и его стены — подпись стены та же: стена не пересобирается на каждом шаге.
+        [Test]
+        public void MovingCommonParent_KeepsWallSignature()
+        {
+            var parent = new GameObject("Common Parent").transform;
+            parent.position = Origin;
+            var model = BoxModelFactory.CreateModel(Origin);
+            model.transform.SetParent(parent, true);
+            model.transform.localRotation = Quaternion.Euler(0f, 13f, 0f);
+
+            var wall = testScene.CreateWall(model, Vector3.zero, new Vector3(10f, 0f, 0f));
+            var signature = wall.BuiltSignature;
+
+            for (var step = 1; step <= 12; step++)
+            {
+                parent.position += new Vector3(0.137f * step, 0.011f, -0.293f * step);
+                parent.rotation *= Quaternion.Euler(0f, 7.3f, 0f);
+                SplineWallRebuilder.Rebuild(wall);
+
+                Assert.AreEqual(signature, wall.BuiltSignature, "шаг " + step + ": подпись стены та же");
+            }
+        }
+
+
+        // Объект целиком в вырезе: меш пустой — и после одной пересборки он готов, а не пересобирается на каждом проходе.
+        [Test]
+        public void ModelInsideCutter_UpToDateAfterOneRebuild()
+        {
+            var model = BoxModelFactory.CreateModel(Origin);
+            BoxModelFactory.CreatePart(model, Vector3.zero, Vector3.one, BoxModelPartMode.Add);
+            BoxModelFactory.CreateCutter(null, Origin + new Vector3(0.5f, -1f, 0.5f), Quaternion.identity, new Vector2(4f, 4f), 4f);
+            BoxModelRebuilder.Rebuild(model);
+
+            var mesh = model.GetComponent<MeshFilter>().sharedMesh;
+            var isMeshUpToDate = typeof(BoxModelRebuilder).GetMethod("IsMeshUpToDate", BindingFlags.NonPublic | BindingFlags.Static);
+
+            Assert.AreEqual(0, mesh.vertexCount, "объект целиком в вырезе — меш пустой");
+            Assert.IsTrue((bool)isMeshUpToDate.Invoke(null, new object[] { model, mesh }), "и уже готов");
         }
 
 

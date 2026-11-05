@@ -26,6 +26,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Меши, чьи вершины уже сверены с коробками: номер меша → подпись, число вершин и габарит на момент сверки.
         private static readonly Dictionary<EntityId, string> VerifiedMeshes = new();
 
+        // Габарит меша до вырезов, в осях объекта: по нему ищут вырезы, как при записи. По прорезанному мешу нельзя — объект целиком
+        // в вырезе пустой, вырез «пропадает», подпись не сходится, и объект пересобирался бы на каждой правке. Помнится до перезагрузки скриптов;
+        // есть запись — меш собран в эту сессию, и пустой он законно.
+        private static readonly Dictionary<EntityId, Bounds> UncutBoundsByModel = new();
+
 
         // ── Пересборка ───────────────────────────────────────────────────
 
@@ -57,17 +62,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // подпись совпадает, а меш пустой или старый. Поэтому сверяем ещё и сами вершины.
         // Сверка вершин — один раз на меш и подпись: дальше хватает числа вершин и габарита, иначе каждая правка в сцене перебирала бы все меши.
         // Прорезанный вырезами или со срезанными рёбрами меш с коробками по вершинам уже не сверить — хватает подписи и непустого меша.
+        // Пустой — тоже готовый, если его собрали в эту сессию: объект целиком в вырезе.
         private static bool IsMeshUpToDate(BoxModel model, Mesh mesh)
         {
             var result = GetBuildResult(model);
-            var cutters = GeometryCutterLookup.CuttersFor(model, GeometryCutterLookup.WorldBoundsOf(model.GetComponent<MeshRenderer>()));
+            var cutters = GeometryCutterLookup.CuttersFor(model, UncutWorldBoundsOf(model));
             var signature = result.Signature + GeometryCutterLookup.KeyOf(model, cutters);
 
             if (model.BuiltSignature != signature || mesh == null)
                 return false;
 
             if (cutters.Count > 0 || IsCutAfterSurfaces(model, result))
-                return mesh.vertexCount > 0;
+                return mesh.vertexCount > 0 || UncutBoundsByModel.ContainsKey(model.GetEntityId());
 
             var verifiedKey = result.Signature + "|" + mesh.vertexCount + "|" + mesh.bounds;
 
@@ -79,6 +85,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             VerifiedMeshes[mesh.GetEntityId()] = verifiedKey;
             return true;
+        }
+
+        // Габарит до вырезов; не помнится (скрипты перезагрузились) — габарит готового меша.
+        private static Bounds UncutWorldBoundsOf(BoxModel model)
+        {
+            return UncutBoundsByModel.TryGetValue(model.GetEntityId(), out var uncutBounds)
+                ? GeometryCutterLookup.WorldBoundsOf(uncutBounds, model.transform)
+                : GeometryCutterLookup.WorldBoundsOf(model.GetComponent<MeshRenderer>());
         }
 
 
@@ -114,7 +128,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
             // Зовут и сразу после правки, до того как о ней узнала очередь, — считаем заново.
             BuildVersionsByModel.Remove(model.GetEntityId());
             var result = GetBuildResult(model);
-            var written = LiveBuilderMeshWriter.Write(model, null, mesh => FillWithBevel(mesh, model, result));
+            var written = LiveBuilderMeshWriter.Write(model, null, mesh =>
+            {
+                var materials = FillWithBevel(mesh, model, result);
+                UncutBoundsByModel[model.GetEntityId()] = mesh.bounds;
+                return materials;
+            });
             var signature = result.Signature + GeometryCutterLookup.KeyOf(model, written.Cutters);
             var isSceneChanged = written.IsNewMesh || model.BuiltSignature != signature;
 

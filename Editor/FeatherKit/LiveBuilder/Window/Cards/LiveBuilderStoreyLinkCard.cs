@@ -8,6 +8,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Карточка «Этажи в здании» зоны «Выделено» — у всего, что стоит в здании: привязано — этаж и повтор (инспектор привязки);
     /// не привязано — кнопка привязать. Привязать можно перегородку, вырез, лестницу, коробку, комнату и целый объект из коробок внутри здания —
     /// не само здание и не его собранные части.
+    /// Одна привязка на цепочку копий: коробку, комнату и лестницу в уже привязанном объекте или группе не привязать — этажи им уже повторены;
+    /// объект, в котором уже привязаны свои коробки, — тоже (<see cref="BoxModelShapeCollector"/>). Стене и вырезу копии даёт только своя привязка —
+    /// им можно всегда.
     /// </summary>
     public sealed class LiveBuilderStoreyLinkCard : LiveBuilderSelectionCard
     {
@@ -16,6 +19,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public override int Order => 70;
 
+
+        // ── Рисование ────────────────────────────────────────────────────
 
         public override bool Draw(GameObject selected)
         {
@@ -39,6 +44,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             using (LiveBuilderWindowControls.Card("Этажи в здании"))
             {
+                var repeatedReason = StoreyCopiesReasonOf(selected);
+
+                if (repeatedReason != null)
+                {
+                    LiveBuilderWindowControls.Note(repeatedReason);
+                    return true;
+                }
+
                 LiveBuilderWindowControls.Note("Стоит в здании, но не следит за его этажами.");
 
                 if (GUILayout.Button(new GUIContent("Привязать к этажам здания «" + building.name + "»",
@@ -60,6 +73,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 || selected.GetComponent<BoxModel>() != null;
         }
 
+        // Почему привязать нельзя: копии по этажам уже даёт привязка выше или внутри — своя их перемножила бы. Можно — null.
+        private static string StoreyCopiesReasonOf(GameObject selected)
+        {
+            if (selected.TryGetComponent<BoxModel>(out var model))
+                return BoxModelShapeCollector.HasStoreyLinksInside(model.transform)
+                    ? "Внутри уже привязаны свои коробки, комнаты или лестницы. Целиком — сначала сними их привязки."
+                    : null;
+
+            var isModelPiece = selected.GetComponent<BoxModelPart>() != null || selected.GetComponent<BoxModelRoom>() != null
+                               || selected.GetComponent<BoxModelStairs>() != null;
+            var ownerModel = isModelPiece && selected.transform.parent != null ? selected.transform.parent.GetComponentInParent<BoxModel>() : null;
+
+            return ownerModel != null && BoxModelShapeCollector.IsInsideStoreyCopies(ownerModel, selected.transform.parent)
+                ? "Уже повторяется по этажам вместе с объектом или группой, в которой стоит."
+                : null;
+        }
+
+
+        // ── Конец ────────────────────────────────────────────────────────
 
         public override void Dispose()
         {

@@ -58,19 +58,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // fill кладёт в меш геометрию и отдаёт материалы его частей. Вырезы — known, а нет их — те, что режут собранную геометрию.
         // Файл — свой у постройки (fileName — имя нового файла; пусто — имя объекта).
+        // Новый файл встаёт на объект сразу, до сборки: упала сборка — следующий проход возьмёт этот же файл, а не заведёт ещё один.
         public static LiveBuilderMeshWriteResult Write(Component owner, string fileName, System.Func<Mesh, Material[]> fill, List<GeometryCutter> knownCutters = null)
         {
             var filter = owner.GetComponent<MeshFilter>();
             ReleaseIfNotOwn(owner, filter);
             var mesh = BoxModelMeshStorage.GetOrCreateMeshFile(owner, fileName);
-            var materials = fill(mesh);
-
-            var cutters = knownCutters ?? GeometryCutterLookup.CuttersFor(owner, GeometryCutterLookup.WorldBoundsOf(mesh, owner.transform));
-            materials = GeometryCutterApplier.Cut(mesh, owner.transform, cutters, materials);
-
-            EditorUtility.SetDirty(mesh);
-            BoxModelMeshStorage.RequestSave(mesh);
-
             var isNewMesh = filter.sharedMesh != mesh;
 
             if (isNewMesh)
@@ -79,6 +72,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 EditorUtility.SetDirty(filter);
                 LiveBuilderSyncEdits.RecordPrefabInstance(filter);
             }
+
+            var materials = fill(mesh);
+            var cutters = knownCutters ?? GeometryCutterLookup.CuttersFor(owner, GeometryCutterLookup.WorldBoundsOf(mesh, owner.transform));
+            materials = GeometryCutterApplier.Cut(mesh, owner.transform, cutters, materials);
+
+            EditorUtility.SetDirty(mesh);
+            BoxModelMeshStorage.RequestSave(mesh);
 
             var renderer = owner.GetComponent<MeshRenderer>();
 

@@ -47,8 +47,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public override string Hint => PathHint(wallGesture);
 
 
-        // ── Что правит ───────────────────────────────────────────────────
+        // ── Что правит: проверка ─────────────────────────────────────────
 
+        // Только стены по линии.
         protected override bool CanEditTarget(Component target)
         {
             return target is SplineWall;
@@ -57,6 +58,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно ─────────────────────────────────────────────────────────
 
+        // Линия, размер и материал новой стены.
         public override void DrawSettings()
         {
             using (LiveBuilderWindowControls.Card("Линия"))

@@ -49,8 +49,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public override string Hint => PathHint(buildingGesture);
 
 
-        // ── Что правит ───────────────────────────────────────────────────
+        // ── Что правит: проверка ─────────────────────────────────────────
 
+        // Только здания по контуру.
         protected override bool CanEditTarget(Component target)
         {
             return target is SplineBuilding;
@@ -59,6 +60,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно ─────────────────────────────────────────────────────────
 
+        // Контур, этажи, стены и перекрытия, материалы нового здания.
         public override void DrawSettings()
         {
             using (LiveBuilderWindowControls.Card("Контур"))
@@ -84,6 +86,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             LiveBuilderWindowControls.Explanation("Building", "Здание встанет на выбранный этаж: его пол — на полу этажа, этажи — те же, что в окне.");
         }
 
+        // Тип и толщина стен, толщина перекрытий, есть ли пол и крыша.
         private static void DrawWallsAndSlabs()
         {
             using (LiveBuilderWindowControls.Card("Стены и перекрытия"))
@@ -110,6 +113,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
         }
 
+        // Материалы стен снаружи и изнутри, пола, потолка и крыши.
         private static void DrawMaterials()
         {
             using (LiveBuilderWindowControls.Card("Материалы"))
@@ -126,7 +130,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // ── Окно сцены ───────────────────────────────────────────────────
+        // ── Окно сцены: подсказка ────────────────────────────────────────
 
         // Здание строится новым, не внутри другого — в подсказке этаж уровня.
         public override string BuildingStoreyHint(LiveBuilderBuildingContext context)

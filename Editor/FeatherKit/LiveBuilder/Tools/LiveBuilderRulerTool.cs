@@ -56,8 +56,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public override string Hint => ruler.Hint;
 
 
-        // ── Что правит ───────────────────────────────────────────────────
+        // ── Что правит: проверка ─────────────────────────────────────────
 
+        // Ничего не правит.
         protected override bool CanEditTarget(Component target)
         {
             return false;
@@ -66,6 +67,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно ─────────────────────────────────────────────────────────
 
+        // Как читать цвета замера.
         public override void DrawSettings()
         {
             using (LiveBuilderWindowControls.Card("Как читать"))
@@ -75,8 +77,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // ── Окно сцены ───────────────────────────────────────────────────
+        // ── Окно сцены: мышь ─────────────────────────────────────────────
 
+        // Конец линейки следит за мышью.
         public override bool OnMouseMove(Ray worldRay, Event current)
         {
             ruler.UpdateHover(worldRay);
@@ -84,6 +87,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Клик — начало линейки, следующий — конец.
         public override bool OnMouseDown(Ray worldRay, Event current)
         {
             ruler.Click(worldRay);
@@ -91,12 +95,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // ── Окно сцены: отмена и вид ─────────────────────────────────────
+
+        // Бросить начатый замер.
         public override void Cancel()
         {
             ruler.Cancel();
         }
 
 
+        // Линия замера, расстояние и допрыгнет ли.
         public override void DrawPreview()
         {
             ruler.DrawPreview();

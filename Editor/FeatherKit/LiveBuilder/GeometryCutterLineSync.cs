@@ -24,15 +24,24 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private const float RotationTolerance = 0.01f;
 
 
-        // Все вырезы на линии — сцены или открытого префаба. Подпись каждой линии считаем один раз на проход.
+        // Все вырезы на линии — сцены или открытого префаба. Подпись каждой линии считаем один раз на проход. Ошибка в одном не останавливает остальные.
         public static void SyncAll()
         {
             var lineHashes = new Dictionary<SplineContainer, int>();
             var stage = StageUtility.GetCurrentStageHandle();
 
             foreach (var cutter in stage.FindComponentsOfType<GeometryCutter>())
-                if (cutter.FollowsWallLine && TryGetLine(cutter, lineHashes, out var owner, out var container, out var lineHash))
-                    SyncCutter(cutter, owner, container, lineHash);
+            {
+                try
+                {
+                    if (cutter.FollowsWallLine && TryGetLine(cutter, lineHashes, out var owner, out var container, out var lineHash))
+                        SyncCutter(cutter, owner, container, lineHash);
+                }
+                catch (System.Exception exception)
+                {
+                    Debug.LogException(exception, cutter);
+                }
+            }
         }
 
         // Линия стены или здания, в котором лежит вырез.

@@ -65,7 +65,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             hash.Append((int)building.ContourSide);
             hash.Append(building.CurveStep);
             hash.Append(building.CornerSegments);
-            LiveBuilderStableHash.AppendMatrix(ref hash, building.transform.worldToLocalMatrix * wall.transform.localToWorldMatrix);
+            LiveBuilderStableHash.AppendQuantizedPlacement(ref hash, building.transform, wall.transform);
             LiveBuilderStableHash.AppendSplines(ref hash, building.GetComponent<SplineContainer>());
         }
 

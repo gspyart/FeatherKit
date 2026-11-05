@@ -267,7 +267,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 var cutBoxes = CutBoxesHashOf(model, wall, false);
                 hash.Append(ref cutBoxes);
-                LiveBuilderStableHash.AppendMatrix(ref hash, model.transform.worldToLocalMatrix * wall.transform.localToWorldMatrix);
+                LiveBuilderStableHash.AppendQuantizedPlacement(ref hash, model.transform, wall.transform);
             }
 
             return hash + GeometryCutterLookup.KeyOf(wall, cutters);

@@ -17,7 +17,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public override bool Draw(GameObject selected)
         {
-            var component = LiveBuilderOwnComponentCard.OwnComponentOf(selected);
+            var component = OwnComponentOf(selected);
 
             if (component is not (SplineWall or SplineBuilding))
                 return false;

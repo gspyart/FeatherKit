@@ -9,7 +9,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Окно Live Builder — пульт инструмента сборки уровня, одной колонкой сверху вниз, по тому, от чего настройка зависит:
     /// - шапка — включён ли Live Builder, «i» — все пояснения сразу, клавиатура — клавиши
     /// - палитра — инструменты плитками в два ряда (<see cref="LiveBuilderToolPalette"/>), выбранная залита синим; цифра на плитке — клавиша в окне сцены
-    /// - цветные зоны (<see cref="LiveBuilderWindowZone"/>, вид — <see cref="LiveBuilderWindowZones"/>) — окно находит их само и ставит по порядку:
+    /// - цветные зоны (<see cref="LiveBuilderWindowZone"/>, вид — <see cref="LiveBuilderZoneFrame"/>) — окно находит их само и ставит по порядку:
     ///   серая «Общее» — действует всегда: этаж, сетка, вид; не прокручивается (<see cref="LiveBuilderGlobalZone"/>);
     ///   синяя — настройки выбранного инструмента, только те, что на него действуют (<see cref="LiveBuilderToolZone"/>);
     ///   оранжевая «Выделено» — числа и действия выделенного; зоны нет, пока не выделено своё (<see cref="LiveBuilderSelectionZone"/>);
@@ -212,7 +212,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (zone.IsScrolled != isScrolled || !zone.IsVisible)
                     continue;
 
-                using (var scope = LiveBuilderWindowZones.Begin(zone.ZoneColor, zone.Title, zone.Detail, zone.Icon, zone.PreferenceKey, zone.IsExpandedByDefault))
+                using (var scope = LiveBuilderZoneFrame.Begin(zone.ZoneColor, zone.Title, zone.Detail, zone.Icon, zone.PreferenceKey, zone.IsExpandedByDefault))
                     if (scope.IsExpanded)
                         zone.Draw();
             }
@@ -247,8 +247,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 if (isActive)
                 {
-                    EditorGUI.DrawRect(rect, LiveBuilderWindowZones.TintOf(LiveBuilderZoneColor.Tool, 0.14f));
-                    EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), LiveBuilderWindowZones.ColorOf(LiveBuilderZoneColor.Tool));
+                    EditorGUI.DrawRect(rect, LiveBuilderZoneFrame.TintOf(LiveBuilderZoneColor.Tool, 0.14f));
+                    EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), LiveBuilderZoneFrame.ColorOf(LiveBuilderZoneColor.Tool));
                     LiveBuilderToolIcons.Draw(new Rect(inner.x, inner.y + 1f, HintIconSize, HintIconSize), LiveBuilderToolPalette.Current, LiveBuilderIconCache.ThemedColor);
                 }
                 else

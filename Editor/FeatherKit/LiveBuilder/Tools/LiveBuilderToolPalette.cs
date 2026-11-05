@@ -15,8 +15,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Раньше инструмент помнился номером в списке — он читается один раз и переписывается в Id.
         private const string NumberPreferenceKey = "FeatherKit.LiveBuilder.Tool";
 
-        // Номер за концом старого списка — бывший «Вырез»: он теперь в «Проёме».
-        private const string RemovedToolId = "Opening";
+        // Номер за концом старого списка — бывший «Вырез»: его заменил «Проём», на него и переводим.
+        private const string ReplacementForRemovedToolId = "Opening";
 
         // Номер в старом списке → Id.
         private static readonly string[] IdsByOldNumber = { "Box", "Room", "Building", "Wall", "Opening", "Stairs", "Ruler", "Select" };
@@ -31,17 +31,20 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public static IReadOnlyList<LiveBuilderTool> Tools => tools ??= CreateTools();
 
-        // Запомнен инструмент, которого больше нет, — «Выделение».
+        // Запомнен инструмент, которого больше нет, — «Выделение». Чужой экземпляр (не из палитры) — тот же инструмент палитры по Id;
+        // такого Id в палитре нет — не меняется.
         public static LiveBuilderTool Current
         {
             get => current ??= FindById(StoredId()) ?? Get<LiveBuilderSelectTool>();
             set
             {
-                if (value == null || Current == value)
+                var paletteTool = value != null ? FindById(value.Id) : null;
+
+                if (paletteTool == null || Current == paletteTool)
                     return;
 
-                current = value;
-                EditorPrefs.SetString(PreferenceKey, value.Id);
+                current = paletteTool;
+                EditorPrefs.SetString(PreferenceKey, paletteTool.Id);
                 Changed?.Invoke();
                 SceneView.RepaintAll();
             }
@@ -50,6 +53,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Инструменты ──────────────────────────────────────────────────
 
+        // Инструмент палитры этого вида; нет такого — null.
         public static T Get<T>() where T : LiveBuilderTool
         {
             foreach (var tool in Tools)
@@ -77,6 +81,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Место инструмента в палитре, с нуля; не из палитры — -1.
         public static int IndexOf(LiveBuilderTool tool)
         {
             for (var index = 0; index < Tools.Count; index++)
@@ -87,6 +92,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // По одному экземпляру каждого наследника, по месту в палитре.
         private static List<LiveBuilderTool> CreateTools()
         {
             var created = LiveBuilderTypeCatalog.CreateAll<LiveBuilderTool>();
@@ -95,6 +101,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Инструмент палитры с этим Id; нет такого — null.
         private static LiveBuilderTool FindById(string id)
         {
             foreach (var tool in Tools)
@@ -114,7 +121,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return EditorPrefs.GetString(PreferenceKey, "");
 
             var number = EditorPrefs.GetInt(NumberPreferenceKey, -1);
-            var id = number >= 0 && number < IdsByOldNumber.Length ? IdsByOldNumber[number] : RemovedToolId;
+            var id = number >= 0 && number < IdsByOldNumber.Length ? IdsByOldNumber[number] : ReplacementForRemovedToolId;
             EditorPrefs.SetString(PreferenceKey, id);
             return id;
         }

@@ -10,6 +10,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// привязки к зданиям → точки перегородок на стенах здания → проёмы и вырезы на своих местах линии → объекты из коробок → здания → стены по линии. Каждый следующий шаг берёт уже свежее от предыдущего
     /// (вырезы объекта режут здания и стены, привязки задают копии по этажам), поэтому одна правка — один проход, без отставания.
     /// Заодно говорит <see cref="BoxModelPrefabInstances"/>, какие экземпляры префабов трогали: дорогая сверка их правок — только у них.
+    /// На время прохода вырезы сцены, число пользователей мешей и места объектов в иерархии считаются один раз.
     /// </summary>
     [InitializeOnLoad]
     public static class LiveBuilderRebuildQueue
@@ -57,6 +58,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             isPassRunning = true;
             GeometryCutterLookup.BeginPass();
             LiveBuilderMeshWriter.BeginPass();
+            LiveBuilderHierarchyOrder.BeginPass();
 
             try
             {
@@ -70,6 +72,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
             finally
             {
+                LiveBuilderHierarchyOrder.EndPass();
                 LiveBuilderMeshWriter.EndPass();
                 GeometryCutterLookup.EndPass();
                 isPassRunning = false;

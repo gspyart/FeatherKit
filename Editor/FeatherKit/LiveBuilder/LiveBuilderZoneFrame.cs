@@ -9,7 +9,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// и серое пояснение. Клик по заголовку сворачивает зону, свёрнута или нет — помнится у каждого человека.
     /// Цвета — под светлую и тёмную тему редактора.
     /// </summary>
-    public static class LiveBuilderWindowZones
+    public static class LiveBuilderZoneFrame
     {
         private const string ExpandedPreferencePrefix = "FeatherKit.LiveBuilder.Section.";
         private const float HeaderHeight = 24f;

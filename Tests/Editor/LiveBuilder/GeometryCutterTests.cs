@@ -10,7 +10,8 @@ using UnityEngine.Splines;
 namespace FeatherKit.Tests.LiveBuilder
 {
     /// <summary>
-    /// Вырез (<see cref="GeometryCutter"/>) в стенах и зданиях: прорезает дыру, копии вверх, едет за точками стены, встаёт на все этажи здания,
+    /// Вырез (<see cref="GeometryCutter"/>) в стенах и зданиях: прорезает дыру, копии вверх, едет за точками стены, стена со своими вырезами
+    /// переезжает без перерезки, встаёт на все этажи здания,
     /// ряд копий модификатором Array встаёт «от края» по размеру выреза; сдвиг формы двигает дыру, а не объект, и дыру держит её отрезок стены.
     /// </summary>
     public class GeometryCutterTests
@@ -73,6 +74,27 @@ namespace FeatherKit.Tests.LiveBuilder
 
             Assert.That(Vector3.Distance(window.transform.position, Origin + new Vector3(5f, 0.5f, 5f)), Is.LessThan(0.01f), "вырез — на середине нового отрезка");
             Assert.That(Vector3.Angle(window.transform.right, new Vector3(1f, 0f, 1f)), Is.LessThan(0.5f), "и повёрнут вдоль него");
+        }
+
+
+        // Стену двигают и поворачивают вместе с её проёмами: подпись та же — стену не перерезают на каждом шаге,
+        // а порядок проёмов не зависит от того, где стена в мире.
+        [Test]
+        public void MovingWallWithChildCutters_KeepsSignature()
+        {
+            var wall = testScene.CreateWall(Vector3.zero, new Vector3(10f, 0f, 0f));
+            CreateWindow(wall, 1f, 2f, 1.5f);
+            CreateWindow(wall, 6f, 2f, 1.5f);
+            var signature = wall.BuiltSignature;
+
+            for (var step = 1; step <= 12; step++)
+            {
+                wall.transform.position += new Vector3(0.137f * step, 0.011f, -0.293f * step);
+                wall.transform.rotation *= Quaternion.Euler(0f, 7.3f, 0f);
+                SplineWallRebuilder.Rebuild(wall);
+
+                Assert.AreEqual(signature, wall.BuiltSignature, "шаг " + step + ": подпись стены та же");
+            }
         }
 
 

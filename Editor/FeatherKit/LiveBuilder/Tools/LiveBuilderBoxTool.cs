@@ -61,9 +61,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public override bool DrawsSnapCursor => true;
 
         // Что рисуешь сейчас, иначе — про грани или выделенную коробку.
-        public override string Hint => StageHint + LiveBuilderDepthClick.HintAt(Event.current.mousePosition, this);
-
-        private string StageHint
+        public override string Hint
         {
             get
             {
@@ -83,9 +81,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
         }
 
+        public override bool ShowsDepthClickHint => true;
 
-        // ── Что правит ───────────────────────────────────────────────────
 
+        // ── Что правит: проверка ─────────────────────────────────────────
+
+        // Только коробки.
         protected override bool CanEditTarget(Component target)
         {
             return target is BoxModelPart;
@@ -94,6 +95,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно ─────────────────────────────────────────────────────────
 
+        // Режим рисования, что выделяет клик и куда встанет коробка.
         public override void DrawSettings()
         {
             using (LiveBuilderWindowControls.Card("Рисование"))
@@ -214,6 +216,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно сцены: отмена и вид ─────────────────────────────────────
 
+        // Бросить начатую коробку.
         public override void Cancel()
         {
             drawGesture.Cancel();
@@ -221,6 +224,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Как встанет рисуемая коробка.
         public override void DrawPreview()
         {
             drawGesture.DrawPreview();

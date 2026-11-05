@@ -46,22 +46,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public override bool DrawsSurfaceHover => true;
 
         // У выделенного контура — про его точки, в режиме «Грани» — про грани, у коробки — про выдавливание.
-        public override string Hint
-        {
-            get
-            {
-                var hint = LiveBuilderContourHandles.IsShown ? LiveBuilderContourHandles.Hint
-                    : BoxModelSelectionModeSetting.IsSelectingFaces ? FaceSelectionHint
-                    : IsBoxSelected ? BoxModelPartExtrusion.Hint
-                    : SelectHint;
+        public override string Hint => LiveBuilderContourHandles.IsShown ? LiveBuilderContourHandles.Hint
+            : BoxModelSelectionModeSetting.IsSelectingFaces ? FaceSelectionHint
+            : IsBoxSelected ? BoxModelPartExtrusion.Hint
+            : SelectHint;
 
-                return hint + LiveBuilderDepthClick.HintAt(Event.current.mousePosition, this);
-            }
-        }
+        public override bool ShowsDepthClickHint => true;
 
 
-        // ── Что правит ───────────────────────────────────────────────────
+        // ── Что правит: проверка ─────────────────────────────────────────
 
+        // Правит всё.
         protected override bool CanEditTarget(Component target)
         {
             return true;
@@ -70,6 +65,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно ─────────────────────────────────────────────────────────
 
+        // Что выделяет клик и пояснение.
         public override void DrawSettings()
         {
             using (LiveBuilderWindowControls.Card("Клик"))

@@ -59,8 +59,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
             : "Протяни по полу — комната. Клик — выделить";
 
 
-        // ── Что правит ───────────────────────────────────────────────────
+        // ── Что правит: проверка ─────────────────────────────────────────
 
+        // Комнаты обоих видов: прямоугольником и по контуру.
         protected override bool CanEditTarget(Component target)
         {
             return target is BoxModelRoom || IsContourRoom(target);
@@ -85,6 +86,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно ─────────────────────────────────────────────────────────
 
+        // Форма, размер и материалы новой комнаты.
         public override void DrawSettings()
         {
             using (LiveBuilderWindowControls.Card("Форма"))
@@ -160,6 +162,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Как встанет рисуемая комната.
         public override void DrawPreview()
         {
             if (PathGesture != null)

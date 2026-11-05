@@ -60,10 +60,21 @@ namespace FeatherKit.Tests.LiveBuilder
 
             var ray = new Ray(Origin + new Vector3(4f, building.FirstFloorWorldHeight - Origin.y + 1.5f, 4f), Vector3.down);
 
-            Assert.IsFalse(BoxModelPicker.TryPickSurface(ray, out _), "пол здания закрывает объект под ним");
-            Assert.IsTrue(BoxModelDrawPlaneFinder.TryFind(ray, false, out var plane, out var localPoint));
-            Assert.AreSame(buildingModel, plane.Model, "коробка встаёт в объект здания");
-            Assert.AreEqual(building.FirstFloorWorldHeight, plane.FrameToWorld.MultiplyPoint3x4(localPoint).y, 0.01f, "на пол здания");
+            // Пол здания — на 0,2 м: шаг сетки — свой, а не из настроек человека (на шаге 0,5 высота прилипла бы к нулю).
+            var previousGridStep = LiveBuilderGrid.CurrentStep;
+            LiveBuilderGrid.SetStep(0.1f);
+
+            try
+            {
+                Assert.IsFalse(BoxModelPicker.TryPickSurface(ray, out _), "пол здания закрывает объект под ним");
+                Assert.IsTrue(BoxModelDrawPlaneFinder.TryFind(ray, false, out var plane, out var localPoint));
+                Assert.AreSame(buildingModel, plane.Model, "коробка встаёт в объект здания");
+                Assert.AreEqual(building.FirstFloorWorldHeight, plane.FrameToWorld.MultiplyPoint3x4(localPoint).y, 0.01f, "на пол здания");
+            }
+            finally
+            {
+                LiveBuilderGrid.SetStep(previousGridStep);
+            }
         }
 
 
