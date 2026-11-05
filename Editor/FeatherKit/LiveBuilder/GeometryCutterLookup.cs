@@ -8,7 +8,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Какие вырезы (<see cref="GeometryCutter"/>) режут постройку: включённые, пересекают её габарит, не её дочерние объекты, режут её вид
-    /// (всё, только перекрытия, только стены). Где режет: в своей группе — только ближайшую постройку над вырезом и вложенное в неё;
+    /// (всё, только перекрытия, только стены). Где режет: в своей группе — только ближайшую постройку над вырезом и вложенное в неё,
+    /// но не заходит во вложенную группу — другой объект из коробок (<see cref="LiveBuilderGroups"/>);
     /// везде — вырез внутри самой постройки режет её всегда, чужую — если не из одного с ней префаба, а в открытом префабе — никогда:
     /// дверь-префаб режет стену, куда её поставили, а не свою раму.
     /// На время прохода очереди пересборки вырезы сцены собираются один раз. Отсюда же — подпись: двинул вырез — постройка пересоберётся.
@@ -100,7 +101,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (CutsOnlyOwnGroup(cutter))
             {
                 var group = OwnGroupOf(cutter);
-                return group != null && construction.IsChildOf(group);
+                return group != null && construction.IsChildOf(group) && IsInSameModelGroup(cutter, construction);
             }
 
             if (cutter.transform.IsChildOf(construction))
@@ -128,6 +129,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderCutTargets.WallsOnly => owner is SplineWall || buildingPart != null && buildingPart.Kind == SplineBuildingPartKind.Walls,
                 _ => true
             };
+        }
+
+        // Постройка в той же группе, что и вырез: ближайший объект из коробок над ней (или она сама) — тот же, что над вырезом.
+        // Вложенная группа — граница: вырез снаружи в неё не заходит, а вырез внутри неё режет её саму и всё, что в ней.
+        private static bool IsInSameModelGroup(GeometryCutter cutter, Transform construction)
+        {
+            return LiveBuilderGroups.GroupOf(construction) == LiveBuilderGroups.GroupOf(cutter.transform.parent);
         }
 
         // Режет только в своей группе: так задано, или «авто» и над вырезом есть постройка.

@@ -7,7 +7,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Создаёт объекты Live Builder с Undo, по правилам набора — материал и группа из настроек проекта, статика:
-    /// объекты из коробок, коробки, комнаты и лестницы в них, стены по линии, здания по контуру и проёмы в них.
+    /// объекты из коробок и пустые группы, коробки, комнаты и лестницы в них, стены по линии, здания по контуру и проёмы в них.
     /// </summary>
     public static class BoxModelFactory
     {
@@ -36,6 +36,34 @@ namespace FeatherKit.EditorTools.LiveBuilder
             // Иначе Ctrl+Z убирает коробку или здание, а пустой объект остаётся.
             Undo.RegisterCreatedObjectUndo(modelObject, "Create Box Model");
             return model;
+        }
+
+        // Пустая группа «Group» — объект из коробок без коробок (<see cref="LiveBuilderGroups"/>): в конце списка родителя, на его точке.
+        // Родителя нет — туда же, куда новый объект: Default Parent, открытый префаб, группа новых объектов из настроек проекта.
+        public static BoxModel CreateGroup(Transform parent)
+        {
+            var groupObject = new GameObject("Group");
+
+            if (parent != null)
+            {
+                groupObject.transform.SetParent(parent, false);
+                groupObject.transform.SetAsLastSibling();
+            }
+            else
+            {
+                ObjectFactory.PlaceGameObject(groupObject, null);
+
+                if (groupObject.transform.parent == null)
+                    PutIntoLevelGeometry(groupObject);
+            }
+
+            GameObjectUtility.SetStaticEditorFlags(groupObject, (StaticEditorFlags)~0);
+
+            var group = groupObject.AddComponent<BoxModel>();
+            group.DefaultMaterial = LoadDefaultMaterial();
+
+            Undo.RegisterCreatedObjectUndo(groupObject, "Create Group");
+            return group;
         }
 
         // Группа ищется только в сцене самого объекта: при нескольких открытых сценах объект не уезжает в чужую.

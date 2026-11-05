@@ -7,8 +7,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Зона «Выделено» окна Live Builder: числа и действия выделенного вместо прицеливания мышью — карточками (<see cref="LiveBuilderSelectionCard"/>):
-    /// коробка, «повторить», повтор, свои поля постройки, её точки, этажи уровня и здания, что внутри объекта, часть здания.
-    /// Карточки находит сама и рисует по их порядку. Зоны нет, пока не выделено что-то от Live Builder.
+    /// коробка, «повторить», повтор, свои поля постройки, её точки, этажи уровня и здания, что внутри объекта, группа, часть здания.
+    /// Карточки находит сама и рисует по их порядку. Зоны нет, пока не выделен объект сцены: у чужого объекта — только карточка «Группа».
     /// </summary>
     public sealed class LiveBuilderSelectionZone : LiveBuilderWindowZone
     {
@@ -50,13 +50,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Выделенное ───────────────────────────────────────────────────
 
-        // Выделено что-то от Live Builder — есть что показать в зоне выделенного.
+        // Выделен объект сцены — есть что показать: у построек Live Builder — их карточки, у любого объекта — «Группа».
         public static bool HasEditableSelection()
         {
             var selected = Selection.activeGameObject;
 
             if (selected == null)
                 return false;
+
+            if (selected.scene.IsValid())
+                return true;
 
             return selected.GetComponentInParent<BoxModel>() != null || selected.GetComponentInParent<SplineWall>() != null
                 || selected.GetComponentInParent<SplineBuilding>() != null || selected.GetComponent<BoxModelRepeat>() != null

@@ -13,6 +13,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// а отставший от сцены файл меша догоняется при открытии сцены. Хранит наружные поверхности и коробки расчёта для выбора кликом.
     /// Фаска рёбер (<see cref="BoxModelBevel"/>) — часть сборки: после поверхностей, до вырезов.
     /// Общий меш копий и префабов не перезаписывает — экземпляры префабов разбирает <see cref="BoxModelPrefabInstances"/>.
+    /// Объект без единой коробки (пустая группа, <see cref="LiveBuilderGroups"/>) — без меша и без файла.
     /// </summary>
     public static class BoxModelRebuilder
     {
@@ -63,9 +64,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Сверка вершин — один раз на меш и подпись: дальше хватает числа вершин и габарита, иначе каждая правка в сцене перебирала бы все меши.
         // Прорезанный вырезами или со срезанными рёбрами меш с коробками по вершинам уже не сверить — хватает подписи и непустого меша.
         // Пустой — тоже готовый, если его собрали в эту сессию: объект целиком в вырезе.
+        // Пустая группа — без коробок совсем — готова, когда меша нет вовсе: файла ей не заводим.
         private static bool IsMeshUpToDate(BoxModel model, Mesh mesh)
         {
             var result = GetBuildResult(model);
+
+            if (result.Boxes.Count == 0)
+                return mesh == null;
+
             var cutters = GeometryCutterLookup.CuttersFor(model, UncutWorldBoundsOf(model));
             var signature = result.Signature + GeometryCutterLookup.KeyOf(model, cutters);
 
@@ -109,6 +115,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var sourceMesh = source != null ? source.GetComponent<MeshFilter>().sharedMesh : null;
             var result = GetBuildResult(instance);
 
+            // Пустая группа в префабе — меша нет и у него.
+            if (result.Boxes.Count == 0)
+                return source != null && sourceMesh == null;
+
             // Подпись префаба — без части вырезов: свои вырезы префаба режут его меш, а экземпляр их не считает.
             return source != null && GeometryCutterLookup.WithoutCutterKey(source.BuiltSignature) == result.Signature && sourceMesh != null
                    && (IsCutAfterSurfaces(instance, result) ? sourceMesh.vertexCount > 0 : BoxModelMeshBuilder.IsBuiltFrom(sourceMesh, result.Surfaces));
@@ -128,6 +138,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
             // Зовут и сразу после правки, до того как о ней узнала очередь, — считаем заново.
             BuildVersionsByModel.Remove(model.GetEntityId());
             var result = GetBuildResult(model);
+
+            if (result.Boxes.Count == 0)
+            {
+                ClearEmptyGroup(model, result.Signature);
+                return;
+            }
+
             var written = LiveBuilderMeshWriter.Write(model, null, mesh =>
             {
                 var materials = FillWithBevel(mesh, model, result);
@@ -150,6 +167,31 @@ namespace FeatherKit.EditorTools.LiveBuilder
             // Вырезы объекта режут его стены и здания — им тоже пора свериться.
             LiveBuilderRebuildQueue.RequestCheck();
         }
+
+        // Объект без единой коробки — группа, в которой пока только другие объекты: файла меша нет, меша и коллайдера тоже.
+        // Появятся коробки — заведётся свой файл, как у нового объекта.
+        private static void ClearEmptyGroup(BoxModel model, string signature)
+        {
+            var filter = model.GetComponent<MeshFilter>();
+            var isSceneChanged = filter.sharedMesh != null || model.BuiltSignature != signature;
+
+            if (filter.sharedMesh != null)
+            {
+                filter.sharedMesh = null;
+                LiveBuilderSyncEdits.RecordPrefabInstance(filter);
+            }
+
+            LiveBuilderMeshWriter.UpdateCollider(model, model.HasCollider, null);
+            model.BuiltSignature = signature;
+
+            if (isSceneChanged)
+            {
+                EditorUtility.SetDirty(filter);
+                EditorUtility.SetDirty(model);
+                LiveBuilderSyncEdits.RecordPrefabInstance(model);
+            }
+        }
+
 
         // Меш из наружных поверхностей, рёбра срезаны фаской, если она задана, потом — скосы рёбер коробок. Вырезы режут потом — уже готовое.
         private static Material[] FillWithBevel(Mesh mesh, BoxModel model, BoxModelBuildResult result)

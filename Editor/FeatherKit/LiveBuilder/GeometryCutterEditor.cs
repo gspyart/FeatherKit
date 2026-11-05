@@ -86,7 +86,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             else if (scope == GeometryCutterScope.Everything || group == null)
                 EditorGUILayout.LabelField("Режет всё, что пересекает", EditorStyles.wordWrappedMiniLabel);
             else
-                EditorGUILayout.LabelField("Режет только внутри «" + group.name + "»", EditorStyles.wordWrappedMiniLabel);
+                EditorGUILayout.LabelField("Режет только внутри «" + group.name + "», во вложенные группы не заходит", EditorStyles.wordWrappedMiniLabel);
         }
 
 
