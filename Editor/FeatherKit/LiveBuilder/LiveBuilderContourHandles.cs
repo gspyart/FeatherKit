@@ -41,8 +41,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public static bool IsShown => LiveBuilderContourSelection.Owner != null;
 
         public static string Hint => LiveBuilderContourSelection.Knots.Count > 0
-            ? "Выбрано точек: " + LiveBuilderContourSelection.Knots.Count + ". Тяни точку или стрелки в середине — двигать все" +
-              (LiveBuilderContourSelection.Owner is SplineWall ? " (вверх тоже)" : "") + ", клавиши-стрелки — на шаг сетки, Delete — убрать, " +
+            ? "Выбрано точек: " + LiveBuilderContourSelection.Knots.Count + ". Тяни точку или ручки переноса в середине — двигать все" +
+              (LiveBuilderContourSelection.Owner is SplineWall ? " (вверх тоже)" : "") + ", клавиши ←↑→↓ — на шаг сетки, Delete — убрать, " +
               "двойной клик — угол, плавно или Безье, у угла — голубая ручка: скругление, Esc — снять выбор"
             : "Точки контура: тяни — двигать, «+» — новая точка, рамка по пустому месту или Shift+клик — выбрать несколько, двойной клик — угол, плавно или Безье" +
               (LiveBuilderContourSelection.Owner is SplineWall ? ", C — замкнуть или разомкнуть" : "");

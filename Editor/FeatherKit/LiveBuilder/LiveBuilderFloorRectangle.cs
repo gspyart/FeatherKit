@@ -106,7 +106,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (BoxModelPicker.TryPickSurface(worldRay, out var surfaceHit) && surfaceHit.Surface.Face == TopFace)
                 return TryFindCeilingAbove(surfaceHit.Model, surfaceHit.LocalPoint, out _)
-                    ? "вырезом в доме «" + surfaceHit.Model.name + "»: без своих стен"
+                    ? "пустотой в доме «" + surfaceHit.Model.name + "»: без своих стен"
                     : "на «" + surfaceHit.Model.name + "», со своими стенами, полом и потолком";
 
             var selected = BoxModelActions.SelectedModel();

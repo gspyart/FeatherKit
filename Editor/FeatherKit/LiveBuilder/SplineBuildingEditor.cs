@@ -61,9 +61,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Лестницы и коробки интерьера идут по осям объекта из коробок: здание, повёрнутое внутри него, с ними разъедется.
         private static void DrawRotationWarning(SplineBuilding building)
         {
-            var model = building.transform.parent != null ? building.transform.parent.GetComponentInParent<BoxModel>() : null;
-
-            if (model == null || Quaternion.Angle(model.transform.rotation, building.transform.rotation) < 0.01f)
+            if (!LiveBuilderLevelCheck.IsRotatedInsideModel(building))
                 return;
 
             EditorGUILayout.HelpBox("Здание повёрнуто внутри своего объекта из коробок: лестницы и коробки интерьера идут по осям объекта и разъедутся со зданием. " +

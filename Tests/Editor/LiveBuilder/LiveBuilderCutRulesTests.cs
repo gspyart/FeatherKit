@@ -53,21 +53,45 @@ namespace FeatherKit.Tests.LiveBuilder
         }
 
 
-        // Коробку выше стены проверяют сразу, без пересборки стены; «Поставить ниже» — и она снова режет.
+        // Порядок резки виден сразу, без пересборки стены: ниже стены — «режет», переставили выше — «после неё, целая»; «Поставить ниже» — снова режет.
         [Test]
-        public void CutBoxAboveWall_IsReportedRightAway_AndPlaceBelowFixesIt()
+        public void CutOrder_IsShownRightAway_AndPlaceBelowFixesIt()
         {
             var model = BoxModelFactory.CreateModel(Origin);
             var wall = testScene.CreateWall(model, Vector3.zero, new Vector3(10f, 0f, 0f));
             var box = BoxModelFactory.CreatePart(model, new Vector3(4f, 0.5f, -1f), new Vector3(6f, 2.5f, 1f), BoxModelPartMode.Cut);
-            box.transform.SetSiblingIndex(0);
             BoxModelRebuilder.ForgetCachedResults();
 
             LiveBuilderCutOrderNotices.CheckNow(box);
-            Assert.Contains(wall, LiveBuilderCutOrderNotices.TargetsSkippedBy(box), "коробка выше стены — сразу в списке");
+            Assert.Contains(wall, LiveBuilderCutOrderNotices.TargetsCutBy(box), "коробка ниже стены — режет её");
+            Assert.IsEmpty(LiveBuilderCutOrderNotices.TargetsSkippedBy(box), "и целых после неё нет");
+
+            box.transform.SetSiblingIndex(0);
+            BoxModelRebuilder.ForgetCachedResults();
+            LiveBuilderCutOrderNotices.CheckNow(box);
+            Assert.Contains(wall, LiveBuilderCutOrderNotices.TargetsSkippedBy(box), "переставили выше стены — стена после неё, целая");
+            Assert.IsEmpty(LiveBuilderCutOrderNotices.TargetsCutBy(box), "и уже не режет");
 
             Assert.IsTrue(LiveBuilderCutOrderNotices.TryPlaceBelow(box, wall), "у них общий родитель — поставить можно");
-            Assert.IsEmpty(LiveBuilderCutOrderNotices.TargetsSkippedBy(box), "ниже стены — уже режет");
+            Assert.IsEmpty(LiveBuilderCutOrderNotices.TargetsSkippedBy(box), "ниже стены — снова режет");
+        }
+
+
+        // Проверка уровня находит коробку выше стены, которую она задевает, и здание с перекрещённым контуром — не только у выделенного.
+        [Test]
+        public void LevelCheck_FindsCutBoxAboveWall_AndCrossedContour()
+        {
+            var model = BoxModelFactory.CreateModel(Origin);
+            testScene.CreateWall(model, Vector3.zero, new Vector3(10f, 0f, 0f));
+            var box = BoxModelFactory.CreatePart(model, new Vector3(4f, 0.5f, -1f), new Vector3(6f, 2.5f, 1f), BoxModelPartMode.Cut);
+            box.transform.SetSiblingIndex(0);
+            var crossed = testScene.CreateBuilding(1, new Vector3(20f, 0f, 0f), new Vector3(28f, 0f, 8f), new Vector3(28f, 0f, 0f), new Vector3(20f, 0f, 8f));
+            BoxModelRebuilder.ForgetCachedResults();
+
+            var issues = LiveBuilderLevelCheck.FindIssues();
+
+            Assert.IsTrue(issues.Exists(issue => issue.Target == box.gameObject), "коробка выше стены — в списке");
+            Assert.IsTrue(issues.Exists(issue => issue.Target == crossed.gameObject), "здание-бабочка — в списке");
         }
 
 

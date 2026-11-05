@@ -76,9 +76,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // В инструментах линии клик по своему готовому (стене в «Стене», зданию в «Здании») выделяет его, а не начинает новую линию.
         // Не своё или пусто — false: клик достанется рисованию.
-        public static bool TrySelectOwn(Event current, LiveBuilderTool tool)
+        public static bool TrySelectOwn(Ray worldRay, LiveBuilderTool tool)
         {
-            var clicked = ClickedObject(LiveBuilderSceneHit.Find(HandleUtility.GUIPointToWorldRay(current.mousePosition)));
+            var clicked = ClickedObject(LiveBuilderSceneHit.Find(worldRay));
 
             if (clicked == null || !tool.CanEdit(clicked))
                 return false;

@@ -66,7 +66,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var selectHotkey = LiveBuilderToolPalette.HotkeyOf(LiveBuilderToolPalette.Get<LiveBuilderSelectTool>());
                 LiveBuilderWindowControls.Explanation("В сцене, в «Выделении» (" + selectHotkey + ") или в инструменте этой постройки: тяни точку, «+» на отрезке — новая точка, " +
                                                       "«+» за концом — продлить, Shift+клик или Shift+рамка — выбрать несколько, двойной клик — угол → плавно → Безье, " +
-                                                      "у Безье тяни усы, у угла — голубая ручка скругления, стрелки — на шаг сетки, Delete — убрать.");
+                                                      "у Безье тяни усы, у угла — голубая ручка скругления, клавиши ←↑→↓ — на шаг сетки, Delete — убрать.");
             }
         }
 

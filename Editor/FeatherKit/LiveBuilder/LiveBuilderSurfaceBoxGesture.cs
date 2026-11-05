@@ -29,7 +29,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public string Hint => !isChoosingDepth
             ? "Косая поверхность: тяни прямоугольник прямо по ней. Отпусти — дальше глубина"
-            : "Мышь от поверхности — коробка наружу, внутрь — вырез: " + LiveBuilderSceneText.FormatMeters(Mathf.Abs(depth)) + " м. Клик — готово, Esc — отмена";
+            : "Мышь от поверхности — коробка наружу, внутрь — проём: " + LiveBuilderSceneText.FormatMeters(Mathf.Abs(depth)) + " м. Клик — готово, Esc — отмена";
 
         private bool IsCutting => BoxModelDrawModeSetting.Current switch
         {
@@ -188,7 +188,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             var label = LiveBuilderSceneText.FormatMeters(size.x) + " × " + LiveBuilderSceneText.FormatMeters(size.y) + " м" +
-                        (isChoosingDepth ? " × " + LiveBuilderSceneText.FormatMeters(Mathf.Abs(depth)) + " м · " + (IsCutting ? "вырез" : "коробка") : "");
+                        (isChoosingDepth ? " × " + LiveBuilderSceneText.FormatMeters(Mathf.Abs(depth)) + " м · " + (IsCutting ? "проём" : "коробка") : "");
             LiveBuilderSceneText.DrawLabel(rectangle.PointAt(min + size) + offset, label);
         }
     }

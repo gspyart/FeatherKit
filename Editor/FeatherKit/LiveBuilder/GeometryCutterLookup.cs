@@ -138,15 +138,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return LiveBuilderGroups.GroupOf(construction) == LiveBuilderGroups.GroupOf(cutter.transform.parent);
         }
 
-        // Режет только в своей группе: так задано, или «авто» и над вырезом есть постройка.
+        // Режет только в своей группе: не «Всё вокруг» и над проёмом есть постройка. Старое «Своя группа» — как «Авто»:
+        // разница была только без постройки, где оно молча ничего не резало.
         private static bool CutsOnlyOwnGroup(GeometryCutter cutter)
         {
-            return cutter.Scope switch
-            {
-                GeometryCutterScope.OwnGroup => true,
-                GeometryCutterScope.Everything => false,
-                _ => OwnGroupOf(cutter) != null
-            };
+            return cutter.Scope != GeometryCutterScope.Everything && OwnGroupOf(cutter) != null;
         }
 
 

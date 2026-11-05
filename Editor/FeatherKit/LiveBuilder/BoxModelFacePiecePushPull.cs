@@ -156,7 +156,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return;
 
             var label = !push.HasDepth
-                ? "тяни — коробка, толкай — вырез"
+                ? "тяни — коробка, толкай — вырезающая коробка"
                 : (push.Box.Mode == BoxModelPartMode.Add ? "вытянуть " : "вырезать ") + LiveBuilderSceneText.FormatMeters(push.Box.Size[push.Piece.Piece.Axis]) + " м";
 
             LiveBuilderSceneText.DrawLabel(model.transform.TransformPoint(push.Piece.Piece.Center), label);

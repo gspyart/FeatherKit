@@ -22,7 +22,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static readonly string[] ContourKeys =
         {
-            "точки: клик — выбрать, стрелки выбранных — двигать, у стены и вверх",
+            "точки: клик — выбрать, ручки переноса — двигать выбранные, у стены и вверх; ←↑→↓ — на клетку",
             "Delete — убрать точки, двойной клик — угол / плавно / Безье"
         };
 
@@ -30,7 +30,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             "квадрат на грани — размер; Alt — обе грани, Alt+Shift — все",
             "Ctrl + тянуть квадрат — выдавить новую коробку",
-            "стрелки-ручки — перенос, Shift — копия; точно — «Перенос и копии» в окне"
+            "ручки переноса — тянуть, Shift — копия; точно — «Перенос и копии» в окне"
         };
 
         private static readonly string[] CommonKeys =

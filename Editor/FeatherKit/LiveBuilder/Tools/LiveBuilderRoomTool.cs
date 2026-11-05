@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.Splines;
 using static FeatherKit.EditorTools.LiveBuilder.LiveBuilderIconRasterizer;
 
 namespace FeatherKit.EditorTools.LiveBuilder
@@ -30,7 +29,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public override string DisplayName => "Комната";
 
         public override string Tooltip => "Пустая комната на высоту этажа: стены, пол, потолок. Прямоугольник — протяни по полу, по контуру — кликами точки. " +
-                                          "В здании — только недостающие перегородки, внутри дома из коробок — вырез или стены";
+                                          "В здании — только недостающие перегородки, внутри дома из коробок — пустота или стены";
 
         public override int PaletteOrder => 2;
 
@@ -85,23 +84,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Комнаты обоих видов: прямоугольником и по контуру.
         protected override bool CanEditTarget(Component target)
         {
-            return target is BoxModelRoom || IsContourRoom(target);
-        }
-
-        // Комната по контуру: в пустоте — здание в один этаж, в здании и в доме из коробок — замкнутая стена по линии.
-        private static bool IsContourRoom(Component target)
-        {
-            if (target is SplineBuilding building)
-                return building.StoreyCount == 1;
-
-            if (target is not SplineWall wall || !wall.TryGetComponent<SplineContainer>(out var container))
-                return false;
-
-            foreach (var spline in container.Splines)
-                if (spline.Closed)
-                    return true;
-
-            return false;
+            return LiveBuilderRooms.IsRoom(target);
         }
 
 
@@ -114,7 +97,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 LiveBuilderRoomSettings.Shape = (LiveBuilderRoomShape)LiveBuilderWindowControls.Switch(
                     new GUIContent("Рисовать", "Прямоугольник — протянул по полу. По контуру — кликами точки, любая форма; " +
-                                               "в доме из коробок по контуру встают стены до его потолка, а не вырез"),
+                                               "в доме из коробок по контуру встают стены до его потолка, а не пустота"),
                     (int)LiveBuilderRoomSettings.Shape, ("Прямоугольник", LiveBuilderOptionIcon.Rectangle), ("По контуру", LiveBuilderOptionIcon.Contour));
 
                 LiveBuilderRoomSettings.WallSide = WallSideOf(LiveBuilderToolSettingsFields.DrawLineSideSwitch(LineSideOf(LiveBuilderRoomSettings.WallSide)));
@@ -128,7 +111,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                         "Потолок", "Плита потолка над комнатой. Нет — сверху открыто: двор, крыша без парапета");
                 }
 
-                LiveBuilderWindowControls.Explanation("Прямоугольник в доме из коробок вырезается — своих стен у него нет.");
+                LiveBuilderWindowControls.Explanation("Прямоугольник в доме из коробок — пустота в нём: своих стен у неё нет.");
             }
         }
 

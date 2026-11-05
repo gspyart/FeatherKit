@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using FeatherKit.LevelDesign;
 using FeatherKit.LiveBuilder;
 using UnityEditor;
@@ -7,16 +6,20 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка «Повтор» вкладки «Выделено» — одна на все способы повторить: что сейчас повторяет выделенное (этажи здания, группа повтора,
-    /// копии вверх, ряд Array) и что можно сделать здесь же: коробки и лестницы — завернуть в повтор с готовым шагом (вверх на этаж, вдоль X, вдоль Z),
-    /// проём — ряд вдоль стены. Сами числа — там, где живут: у группы повтора — её карточка, по этажам здания — «Этажи в здании», ряд — модификатор Array.
-    /// Механизмов четыре, а место, где их видно, одно.
+    /// Карточка «Повтор» вкладки «Выделено» — одно место для всех способов повторить, и числа правятся прямо здесь: «Сколько всего» и шаг
+    /// у группы повтора (её саму или ту, в которой стоит выделенное), копии вверх у стены и проёма вне здания, ряд Array у проёма.
+    /// По этажам здания — строкой: там повтор задаёт «На этажах» у привязки. Не повторяется — один блок «Повторить»: сколько всего
+    /// и куда — вверх на этаж, по X, по Z; какой механизм встанет (группа повтора, копии вверх, ряд Array), решает карточка сама.
     /// </summary>
     public sealed class LiveBuilderRepeatCard : LiveBuilderSelectionCard
     {
-        // Ряд проёмов по умолчанию: столько штук, через столько метров между ними.
-        private const int RowCount = 3;
+        // Зазор между проёмами в новом ряду, м.
         private const float RowGap = 1f;
+
+        private const int MaxNewCount = 50;
+
+        // «Сколько всего» у нового повтора — помнится до перезагрузки скриптов.
+        private static int newRepeatCount = 3;
 
 
         public override int Order => 20;
@@ -24,25 +27,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public override bool Draw(GameObject selected)
         {
-            if (selected == null || !IsRepeatable(selected))
+            if (selected == null)
+                return false;
+
+            var ownRepeat = selected.GetComponent<BoxModelRepeat>();
+
+            if (ownRepeat == null && !IsRepeatable(selected))
                 return false;
 
             using (LiveBuilderWindowControls.Card("Повтор"))
             {
-                var status = StatusOf(selected);
+                var isRepeated = ownRepeat != null
+                    ? DrawRepeatGroup(ownRepeat, "Группа повтора: всё внутри — ещё раз на каждый шаг.")
+                    : DrawCurrentRepeats(selected);
 
-                if (status.Count == 0)
-                    LiveBuilderWindowControls.Note("Не повторяется.");
+                if (!isRepeated)
+                    DrawNewRepeat(selected);
 
-                foreach (var line in status)
-                    LiveBuilderWindowControls.Note(line);
-
-                DrawWrapActions(selected);
-                DrawCutterRowAction(selected);
-
-                LiveBuilderWindowControls.Explanation("Повторить можно четырьмя способами, а видно их все здесь: в здании — по его этажам («Этажи в здании»); " +
-                                                      "коробки и лестницы — группой повтора; стены и проёмы в здании — копии вверх, их задаёт «На этажах» у привязки к зданию; проёмы вдоль стены — рядом Array. " +
-                                                      "Копии считаются из оригинала: правишь один — меняются все.");
+                LiveBuilderWindowControls.Explanation("Копии считаются из оригинала: правишь один — меняются все. В здании этажи повторяет «На этажах» у привязки, " +
+                                                      "а не эта карточка. Исключение для одной копии — коробка ниже группы в списке объектов: она главнее.");
             }
 
             return true;
@@ -51,87 +54,220 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Коробка, комната, лестница, объект из коробок, стена и проём — то, что умеет повторяться. Здание — само этажи, его части — нет.
         private static bool IsRepeatable(GameObject selected)
         {
-            return BoxModelShapeCollector.IsPiece(selected) || selected.GetComponent<BoxModel>() != null || selected.GetComponent<SplineWall>() != null || selected.GetComponent<GeometryCutter>() != null;
+            return BoxModelShapeCollector.IsPiece(selected) || selected.GetComponent<BoxModel>() != null
+                   || selected.GetComponent<SplineWall>() != null || selected.GetComponent<GeometryCutter>() != null;
         }
 
 
         // ── Что повторяет сейчас ─────────────────────────────────────────
 
-        // Все способы, которые сейчас дают выделенному копии, — по строке на каждый.
-        private static List<string> StatusOf(GameObject selected)
+        // Все способы, которые сейчас дают выделенному копии, — каждый своими числами. Повторяется хоть чем-то — true.
+        private static bool DrawCurrentRepeats(GameObject selected)
         {
-            var lines = new List<string>();
-            var isLinked = selected.TryGetComponent<SplineBuildingStoreyLink>(out var link) && link.IsValid;
+            var isRepeated = DrawStoreyLinkLine(selected);
+            var parentRepeat = NearestParentRepeat(selected.transform);
 
-            if (isLinked)
-                lines.Add("По этажам здания «" + link.Building.name + "» — меняется в «Этажи в здании» ниже.");
-            else if (BoxModelShapeCollector.IsPieceInsideStoreyCopies(selected.transform))
-                lines.Add("По этажам здания — вместе с объектом или группой, в которой стоит.");
+            if (parentRepeat != null)
+                isRepeated |= DrawRepeatGroup(parentRepeat, "В группе повтора «" + parentRepeat.name + "»:");
 
-            for (var parent = selected.transform.parent; parent != null; parent = parent.parent)
-                if (parent.TryGetComponent<BoxModelRepeat>(out var repeat))
-                    lines.Add("В повторе «" + repeat.name + "»: всего " + repeat.Count + ", шаг " + StepText(repeat.Step) + ".");
-
-            if (!isLinked && selected.TryGetComponent<IStoreyCopies>(out var storeyCopies) && storeyCopies.CopiesUp > 1)
-                lines.Add("Копии вверх: всего " + storeyCopies.CopiesUp + ", через " + LiveBuilderSceneText.FormatMeters(storeyCopies.CopyStep) + " м.");
-
-            if (selected.TryGetComponent<ArrayModifier>(out var array))
-                lines.Add("Рядом Array: всего " + array.Counts.x * array.Counts.y * array.Counts.z + " — числа в его компоненте.");
-
-            return lines;
+            isRepeated |= DrawCopiesUp(selected);
+            isRepeated |= DrawArrayRow(selected);
+            return isRepeated;
         }
 
-        private static string StepText(Vector3 step)
+        // По этажам здания — только строкой: числа у привязки, в карточке «Этажи в здании».
+        private static bool DrawStoreyLinkLine(GameObject selected)
         {
-            return LiveBuilderSceneText.FormatMeters(step.x) + " × " + LiveBuilderSceneText.FormatMeters(step.y) + " × " + LiveBuilderSceneText.FormatMeters(step.z) + " м";
-        }
-
-
-        // ── Что можно сделать ────────────────────────────────────────────
-
-        // Коробки и лестницы — завернуть в повтор: вверх на этаж (вне здания — там этажи повторяет привязка), вдоль X, вдоль Z.
-        private static void DrawWrapActions(GameObject selected)
-        {
-            if (LiveBuilderRepeatActions.SelectedPieces().Count == 0)
-                return;
-
-            if (!LiveBuilderRepeatActions.CanWrapSelection(out var reason))
+            if (selected.TryGetComponent<SplineBuildingStoreyLink>(out var link) && link.IsValid)
             {
-                LiveBuilderWindowControls.Note("Завернуть в повтор нельзя: " + reason);
-                return;
+                LiveBuilderWindowControls.Note("По этажам здания «" + link.Building.name + "» — «На этажах» в карточке «Этажи в здании».");
+                return true;
+            }
+
+            if (!BoxModelShapeCollector.IsPieceInsideStoreyCopies(selected.transform))
+                return false;
+
+            LiveBuilderWindowControls.Note("По этажам здания — вместе с объектом или группой, в которой стоит.");
+            return true;
+        }
+
+        private static BoxModelRepeat NearestParentRepeat(Transform node)
+        {
+            return node.parent != null ? node.parent.GetComponentInParent<BoxModelRepeat>() : null;
+        }
+
+
+        // Сколько всего и шаг группы повтора — прямо здесь; «шаг — этаж» и «убрать повтор».
+        private static bool DrawRepeatGroup(BoxModelRepeat repeat, string title)
+        {
+            LiveBuilderWindowControls.Note(title);
+
+            var count = EditorGUILayout.IntSlider(new GUIContent("Сколько всего", "Вместе с оригиналом. Ручка повтора в окне сцены делает то же"),
+                repeat.Count, 1, BoxModelRepeat.MaxCount);
+            var step = EditorGUILayout.Vector3Field(new GUIContent("Шаг, м", "Сдвиг каждой следующей копии в осях объекта"), repeat.Step);
+
+            if (count != repeat.Count || step != repeat.Step)
+            {
+                Undo.RecordObject(repeat, "Edit Repeat");
+                repeat.Count = count;
+                repeat.Step = step;
             }
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                var bounds = LiveBuilderRepeatActions.SelectedBounds();
+                if (GUILayout.Button(new GUIContent("Шаг — этаж", "Шаг вверх на высоту этажа")))
+                {
+                    Undo.RecordObject(repeat, "Edit Repeat");
+                    repeat.Step = new Vector3(0f, LiveBuilderStoreys.StoreyHeight, 0f);
+                }
 
-                if (!IsInBuilding(selected) && GUILayout.Button(new GUIContent("Повтор вверх ↑", "Группа повтора, шаг — высота этажа")))
-                    LiveBuilderRepeatActions.WrapSelection(new Vector3(0f, LiveBuilderStoreys.StoreyHeight, 0f));
-
-                if (GUILayout.Button(new GUIContent("По X", "Шаг — ширина выделенного по X, по сетке")))
-                    LiveBuilderRepeatActions.WrapSelection(new Vector3(StepAround(bounds.size.x), 0f, 0f));
-
-                if (GUILayout.Button(new GUIContent("По Z", "Шаг — ширина выделенного по Z, по сетке")))
-                    LiveBuilderRepeatActions.WrapSelection(new Vector3(0f, 0f, StepAround(bounds.size.z)));
+                if (GUILayout.Button(new GUIContent("Убрать повтор", "Копии исчезнут, оригинал останется на месте")))
+                {
+                    LiveBuilderRepeatActions.Unwrap(repeat);
+                    GUIUtility.ExitGUI();
+                }
             }
+
+            return true;
         }
 
-        // Проём без ряда — «Ряд вдоль стены»: модификатор Array, копии встают по ширине проёма через зазор.
-        private static void DrawCutterRowAction(GameObject selected)
-        {
-            if (!selected.TryGetComponent<GeometryCutter>(out var cutter) || selected.GetComponent<ArrayModifier>() != null)
-                return;
 
-            if (!GUILayout.Button(new GUIContent("Ряд вдоль стены ×" + RowCount,
-                    "Ещё копии этого проёма вдоль стены через " + LiveBuilderSceneText.FormatMeters(RowGap) + " м — модификатор Array; сколько и зазор — в его компоненте")))
+        // Копии вверх у стены или проёма вне здания — сколько и шаг; в здании их задаёт привязка, тогда не здесь.
+        private static bool DrawCopiesUp(GameObject selected)
+        {
+            if (selected.GetComponent<SplineBuildingStoreyLink>() != null || !selected.TryGetComponent<IStoreyCopies>(out var copies) || copies.CopiesUp <= 1)
+                return false;
+
+            LiveBuilderWindowControls.Note("Копии вверх:");
+            var count = EditorGUILayout.IntSlider(new GUIContent("Сколько всего", "Друг над другом, вместе с этим"), copies.CopiesUp, 1, 60);
+            var step = EditorGUILayout.FloatField(new GUIContent("Шаг вверх, м", "Обычно высота этажа"), copies.CopyStep);
+
+            if (count != copies.CopiesUp || !Mathf.Approximately(step, copies.CopyStep))
+            {
+                Undo.RecordObject((Object)copies, "Edit Copies Up");
+                copies.CopiesUp = count;
+                copies.CopyStep = Mathf.Max(0.1f, step);
+            }
+
+            return true;
+        }
+
+
+        // Ряд Array у проёма — сколько в ряд и зазор; остальное — в компоненте Array.
+        private static bool DrawArrayRow(GameObject selected)
+        {
+            if (!selected.TryGetComponent<ArrayModifier>(out var array))
+                return false;
+
+            LiveBuilderWindowControls.Note("Ряд (Array) — сетка и прочее в его компоненте:");
+            var counts = array.Counts;
+            var count = EditorGUILayout.IntSlider(new GUIContent("Сколько в ряд", "Вместе с этим, вдоль его X"), counts.x, 1, 60);
+            var gap = array.StepsFromSize
+                ? EditorGUILayout.FloatField(new GUIContent("Зазор, м", "Между соседними, от края до края"), array.Gap.x)
+                : array.Gap.x;
+
+            if (count == counts.x && Mathf.Approximately(gap, array.Gap.x))
+                return true;
+
+            Undo.RecordObject(array, "Edit Array Row");
+            array.Counts = new Vector3Int(count, counts.y, counts.z);
+            array.Gap = new Vector3(gap, array.Gap.y, array.Gap.z);
+            ArrayModifierBuilder.Rebuild(array);
+            return true;
+        }
+
+
+        // ── Повторить ────────────────────────────────────────────────────
+
+        // Не повторяется — сколько всего и куда; механизм — по тому, что выделено: проём — ряд Array, стена вне здания — копии вверх,
+        // коробки, лестницы и группы — группа повтора.
+        private static void DrawNewRepeat(GameObject selected)
+        {
+            newRepeatCount = EditorGUILayout.IntSlider(new GUIContent("Сколько всего", "Вместе с оригиналом"), newRepeatCount, 2, MaxNewCount);
+
+            if (selected.TryGetComponent<GeometryCutter>(out var cutter))
+                DrawCutterRow(cutter);
+            else if (selected.TryGetComponent<SplineWall>(out var wall))
+                DrawWallCopiesUp(wall);
+            else
+                DrawWrapActions(selected);
+        }
+
+        // Проём — ряд вдоль стены: модификатор Array, копии встают по ширине проёма через зазор.
+        private static void DrawCutterRow(GeometryCutter cutter)
+        {
+            if (!GUILayout.Button(new GUIContent("Повторить вдоль стены", "Ещё проёмы рядом через " + LiveBuilderSceneText.FormatMeters(RowGap) + " м — модификатор Array")))
                 return;
 
             var array = Undo.AddComponent<ArrayModifier>(cutter.gameObject);
-            array.Counts = new Vector3Int(RowCount, 1, 1);
+            array.Counts = new Vector3Int(newRepeatCount, 1, 1);
             array.StepsFromSize = true;
             array.Gap = new Vector3(RowGap, 0f, 0f);
             ArrayModifierBuilder.Rebuild(array);
+            GUIUtility.ExitGUI();
         }
+
+        // Стена вне здания — копии вверх на высоту этажа; в здании этажи задаёт привязка.
+        private static void DrawWallCopiesUp(SplineWall wall)
+        {
+            if (IsInBuilding(wall.gameObject))
+            {
+                LiveBuilderWindowControls.Note("В здании стену повторяет «На этажах» у привязки.");
+                return;
+            }
+
+            if (!GUILayout.Button(new GUIContent("Повторить вверх ↑", "Та же стена на этажах выше: шаг — высота этажа")))
+                return;
+
+            IStoreyCopies copies = wall;
+            Undo.RecordObject(wall, "Copies Up");
+            copies.CopiesUp = newRepeatCount;
+            copies.CopyStep = LiveBuilderStoreys.StoreyHeight;
+        }
+
+        // Коробки и лестницы — завернуть в группу повтора: вверх на этаж (вне здания — там этажи повторяет привязка), вдоль X, вдоль Z.
+        private static void DrawWrapActions(GameObject selected)
+        {
+            // Объект или группу целиком повтор не повторяет: свои коробки он считает сам.
+            if (LiveBuilderRepeatActions.SelectedPieces().Count == 0)
+            {
+                LiveBuilderWindowControls.Note("Объект из коробок целиком — «Копии ×N» в карточке «Перенос и копии»; повтор — у его коробок, комнат и лестниц.");
+                return;
+            }
+
+            if (!LiveBuilderRepeatActions.CanWrapSelection(out var reason))
+            {
+                LiveBuilderWindowControls.Note("Повторить нельзя: " + reason);
+                return;
+            }
+
+            var bounds = LiveBuilderRepeatActions.SelectedBounds();
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (!IsInBuilding(selected) && GUILayout.Button(new GUIContent("Вверх ↑", "Шаг — высота этажа")))
+                    Wrap(new Vector3(0f, LiveBuilderStoreys.StoreyHeight, 0f));
+
+                if (GUILayout.Button(new GUIContent("По X", "Шаг — ширина выделенного по X, по сетке")))
+                    Wrap(new Vector3(StepAround(bounds.size.x), 0f, 0f));
+
+                if (GUILayout.Button(new GUIContent("По Z", "Шаг — ширина выделенного по Z, по сетке")))
+                    Wrap(new Vector3(0f, 0f, StepAround(bounds.size.z)));
+            }
+        }
+
+        private static void Wrap(Vector3 step)
+        {
+            var repeat = LiveBuilderRepeatActions.WrapSelection(step);
+
+            if (repeat != null)
+                repeat.Count = newRepeatCount;
+
+            GUIUtility.ExitGUI();
+        }
+
+
+        // ── Помощники ────────────────────────────────────────────────────
 
         // Выделенное — в здании по контуру: этажи там повторяет привязка к зданию.
         private static bool IsInBuilding(GameObject selected)

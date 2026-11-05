@@ -5,9 +5,9 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка «Выделено» про коробки: одна — режим и размер, у вырезающей — что она не режет из-за порядка в иерархии и кнопка поправить,
-    /// скосы рёбер (<see cref="BoxModelChamferPanel"/>), а под свёрнутым «Ещё» — угол в осях объекта,
-    /// у вырезающей — что она режет из стен и зданий, материалы сторон; несколько — сколько их. Всё с Undo.
+    /// Карточка «Выделено» про коробки: одна — режим и размер; у вырезающей — что она режет из стен и зданий и порядок резки: что режет,
+    /// что стоит после неё в списке и потому целое, «Поставить ниже» (<see cref="LiveBuilderCutOrderNotices"/>);
+    /// скосы рёбер (<see cref="BoxModelChamferPanel"/>), а под свёрнутым «Ещё» — угол в осях объекта, материалы сторон; несколько — сколько их. Всё с Undo.
     /// </summary>
     public sealed class LiveBuilderBoxPartCard : LiveBuilderSelectionCard
     {
@@ -26,7 +26,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return parts.Count > 0;
         }
 
-        // Сверху — режим и размер, их меняют каждый раз; угол, что режет и материалы — под «Ещё».
+        // Сверху — режим и размер, их меняют каждый раз, у вырезающей — «Режет» и порядок резки; угол и материалы — под «Ещё».
         private static void DrawPart(BoxModelPart part)
         {
             var model = part.GetComponentInParent<BoxModel>();
@@ -50,33 +50,55 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (GUILayout.Button(new GUIContent("Добавить ⇄ Вырезать", "У выделенных коробок: добавляющие вырезают, вырезающие добавляют")))
                     BoxModelActions.ToggleModeOfSelectedParts();
 
-                DrawSkippedTargets(part);
+                if (part.Mode == BoxModelPartMode.Cut)
+                {
+                    DrawCutTargets(part);
+                    DrawCutOrder(part);
+                }
             }
 
             BoxModelChamferPanel.Draw(part);
 
-            if (!LiveBuilderWindowControls.MoreSection("SelectedBox", IsMoreChanged(part), part.Mode == BoxModelPartMode.Cut ? "угол, что режет, материалы" : "угол, материалы"))
+            if (!LiveBuilderWindowControls.MoreSection("SelectedBox", IsMoreChanged(part), "угол, материалы"))
                 return;
 
             DrawPlacement(part, model);
             DrawMaterials(part);
         }
 
-        // Вырезающая коробка стоит выше стены или здания и потому их не режет — видно здесь, а не только в консоли, с починкой одной кнопкой.
-        private static void DrawSkippedTargets(BoxModelPart part)
+        // Что вырезающая коробка режет из стен по линии и зданий объекта. Свои коробки объекта режет всегда.
+        private static void DrawCutTargets(BoxModelPart part)
         {
-            if (part.Mode != BoxModelPartMode.Cut)
+            var targets = (LiveBuilderCutTargets)LiveBuilderWindowControls.Switch(new GUIContent("Режет",
+                    "Что режет из стен по линии и зданий этого объекта; свои коробки режет всегда. " +
+                    "Всё — стены и перекрытия. Перекрытия — дыра под лестницу или шахту: стены и перегородки не трогает. " +
+                    "Стены — проём: пол и потолок целы. Режет только то, что выше неё в списке объектов"),
+                (int)part.CutTargets, "Всё", "Только перекрытия", "Только стены");
+
+            if (targets == part.CutTargets)
                 return;
 
-            LiveBuilderCutOrderNotices.CheckNow(part);
+            Undo.RecordObject(part, "Change Cut Targets");
+            part.CutTargets = targets;
+        }
 
-            foreach (var target in LiveBuilderCutOrderNotices.TargetsSkippedBy(part))
+        // Порядок резки, как слои: что коробка режет и что стоит после неё в списке объектов — поверх дыры, целое; такое — поставить коробку ниже.
+        private static void DrawCutOrder(BoxModelPart part)
+        {
+            LiveBuilderCutOrderNotices.CheckNow(part);
+            var cut = LiveBuilderCutOrderNotices.TargetsCutBy(part);
+            var skipped = LiveBuilderCutOrderNotices.TargetsSkippedBy(part);
+
+            if (cut.Count > 0)
+                LiveBuilderWindowControls.Note("Режет: " + NamesOf(cut) + ".");
+
+            foreach (var target in skipped)
             {
-                EditorGUILayout.HelpBox("Не режет «" + target.name + "»: стоит выше в иерархии. Режет только то, что выше неё.", MessageType.Warning);
+                LiveBuilderWindowControls.Note("Не режет «" + target.name + "»: стоит после неё в списке — поверх дыры.");
 
                 if (target.transform.parent != part.transform.parent)
                 {
-                    LiveBuilderWindowControls.Note("Они в разных группах: перетащи коробку в Hierarchy ниже «" + target.name + "», не вынимая из её объекта.");
+                    LiveBuilderWindowControls.Note("Резать её — перетащи коробку в Hierarchy ниже «" + target.name + "», не вынимая из её объекта.");
                     continue;
                 }
 
@@ -86,19 +108,26 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     GUIUtility.ExitGUI();
                 }
             }
+
+            LiveBuilderWindowControls.Explanation("Коробки, стены и здания работают по порядку списка объектов, как слои: вырезающая режет то, что выше неё; " +
+                                                  "что ниже — поставлено после, поверх дыры. Так можно вырезать, добавить и вырезать снова.");
+        }
+
+        private static string NamesOf(System.Collections.Generic.List<Component> targets)
+        {
+            return string.Join(", ", targets.ConvertAll(target => "«" + target.name + "»"));
         }
 
 
-        // «Ещё» раскрыто само, если вырезающая режет не всё или задан хоть один материал.
+        // «Ещё» раскрыто само, если задан хоть один материал.
         private static bool IsMoreChanged(BoxModelPart part)
         {
-            return (part.Mode == BoxModelPartMode.Cut && part.CutTargets != LiveBuilderCutTargets.Everything)
-                || part.Material != null || part.BottomMaterial != null || part.SideMaterial != null || part.TopMaterial != null
+            return part.Material != null || part.BottomMaterial != null || part.SideMaterial != null || part.TopMaterial != null
                 || part.RightMaterial != null || part.LeftMaterial != null || part.FrontMaterial != null || part.BackMaterial != null;
         }
 
 
-        // Угол в осях объекта; у вырезающей — что она режет.
+        // Угол в осях объекта.
         private static void DrawPlacement(BoxModelPart part, BoxModel model)
         {
             using (LiveBuilderWindowControls.Card("Место"))
@@ -111,28 +140,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     Undo.RecordObject(part.transform, "Move Box");
                     part.transform.position = model.transform.TransformPoint(newMin);
                 }
-
-                if (part.Mode == BoxModelPartMode.Cut)
-                    DrawCutTargets(part);
             }
         }
-
-        // Что вырезающая коробка режет из стен по линии и зданий объекта. Свои коробки объекта режет всегда.
-        private static void DrawCutTargets(BoxModelPart part)
-        {
-            var targets = (LiveBuilderCutTargets)LiveBuilderWindowControls.Switch(new GUIContent("Режет",
-                    "Что режет из стен по линии и зданий этого объекта; свои коробки режет всегда. " +
-                    "Всё — стены и перекрытия. Перекрытия — дыра под лестницу или шахту: стены и перегородки не трогает. " +
-                    "Стены — проём: пол и потолок целы. Режет только то, что выше неё в иерархии"),
-                (int)part.CutTargets, "Всё", "Перекрытия", "Стены");
-
-            if (targets == part.CutTargets)
-                return;
-
-            Undo.RecordObject(part, "Change Cut Targets");
-            part.CutTargets = targets;
-        }
-
 
         private static void DrawMaterials(BoxModelPart part)
         {

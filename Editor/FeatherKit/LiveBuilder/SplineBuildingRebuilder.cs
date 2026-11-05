@@ -173,13 +173,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (!box.CutsSlabs)
                     continue;
 
-                if (!box.IsBelow(owner))
-                {
-                    if (owner is SplineBuilding building)
-                        ReportIfWouldCutSlabs(building, model, box);
+                var isBelow = box.IsBelow(owner);
 
-                    continue;
+                if (owner is SplineBuilding building && TouchesSlabs(building, model, box))
+                {
+                    if (isBelow)
+                        LiveBuilderCutOrderNotices.ReportBoxCuts(box.Owner, building);
+                    else
+                        LiveBuilderCutOrderNotices.ReportBoxAboveTarget(box.Owner, building);
                 }
+
+                if (!isBelow)
+                    continue;
 
                 var min = box.Box.MinInMeters;
                 var max = box.Box.MaxInMeters;
@@ -205,8 +210,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Коробка выше здания в иерархии, а задевает его пол, перекрытие или крышу — старая сцена: сказать в консоль, что теперь не режет.
-        private static void ReportIfWouldCutSlabs(SplineBuilding building, BoxModel model, BoxModelSolverBox box)
+        // Коробка задевает пол, перекрытие или крышу здания — для порядка резки: режет она их или стоит выше и не режет.
+        private static bool TouchesSlabs(SplineBuilding building, BoxModel model, BoxModelSolverBox box)
         {
             var localBounds = new Bounds();
             localBounds.SetMinMax(box.Box.MinInMeters, box.Box.MaxInMeters);
@@ -214,10 +219,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             foreach (var part in building.GetComponentsInChildren<SplineBuildingPart>(false))
                 if (part.Kind != SplineBuildingPartKind.Walls && GeometryCutterLookup.WorldBoundsOf(part.UncutBounds, part.transform).Intersects(boxBounds))
-                {
-                    LiveBuilderCutOrderNotices.ReportBoxAboveTarget(box.Owner, building);
-                    return;
-                }
+                    return true;
+
+            return false;
         }
 
 

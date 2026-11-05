@@ -87,10 +87,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 selected = partBuilding.gameObject;
 
             if (selected.TryGetComponent<SplineBuilding>(out var building))
-                return TryDescribeMeshes("Здание, этажей: " + building.StoreyCount, selected, out info);
+                return TryDescribeMeshes(LiveBuilderRooms.IsContourRoom(building) ? "Комната" : "Здание, этажей: " + building.StoreyCount, selected, out info);
 
-            if (selected.TryGetComponent<SplineWall>(out _))
-                return TryDescribeMeshes("Стена", selected, out info);
+            if (selected.TryGetComponent<SplineWall>(out var wall))
+                return TryDescribeMeshes(LiveBuilderRooms.IsContourRoom(wall) ? "Комната" : "Стена", selected, out info);
 
             if (selected.TryGetComponent<BoxModel>(out var model))
                 return TryDescribeMeshes(model.transform.parent != null && model.transform.parent.GetComponentInParent<BoxModel>() != null ? "Группа" : "Объект из коробок",

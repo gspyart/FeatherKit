@@ -51,6 +51,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static bool lastIsFound;
         private static BoxModelSurfaceHit lastHit;
 
+        // Объекты из коробок сцены — до правки сцены, пока работает окно сцены: искать их на каждое движение мыши — лишняя работа.
+        private static readonly List<BoxModel> SceneModels = new();
+        private static int sceneModelsVersion = -1;
+        private static StageHandle sceneModelsStage;
+
         // Все попадания луча по коллайдерам, по дальности, — тоже на одно событие: подсветка, прицел и разбор под мышью пускают тот же луч.
         private static RaycastHit[] lastPhysicsHits;
         private static Ray lastPhysicsRay;
@@ -91,7 +96,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             hit = default;
             var bestDistance = float.MaxValue;
 
-            foreach (var model in StageUtility.GetCurrentStageHandle().FindComponentsOfType<BoxModel>())
+            foreach (var model in ModelsOfScene())
             {
                 // Выключенный объект — как в Unity: не ловится и не служит опорой.
                 if (!model.gameObject.activeInHierarchy || !TryPickOnModel(model, worldRay, out var modelHit) || modelHit.Distance >= bestDistance)
@@ -112,6 +117,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 && (!physicsHit.collider.TryGetComponent<BoxModel>(out var hitModel) || IsInCutterHole(CuttersOf(hitModel), physicsHit.point, CutterHoleMargin));
 
             return !isHiddenBehindOtherGeometry;
+        }
+
+
+        // Объекты из коробок текущей сцены или префаба. В окне сцены — из памяти до следующей правки; без него (проверки) — каждый раз заново.
+        private static IReadOnlyList<BoxModel> ModelsOfScene()
+        {
+            var stage = StageUtility.GetCurrentStageHandle();
+
+            if (Event.current == null)
+                return stage.FindComponentsOfType<BoxModel>();
+
+            if (sceneModelsVersion == BoxModelRebuilder.SceneVersion && sceneModelsStage == stage && !SceneModels.Contains(null))
+                return SceneModels;
+
+            SceneModels.Clear();
+            SceneModels.AddRange(stage.FindComponentsOfType<BoxModel>());
+            sceneModelsVersion = BoxModelRebuilder.SceneVersion;
+            sceneModelsStage = stage;
+            return SceneModels;
         }
 
 
@@ -191,7 +215,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var hits = new List<BoxModelSurfaceHit>();
 
-            foreach (var model in StageUtility.GetCurrentStageHandle().FindComponentsOfType<BoxModel>())
+            foreach (var model in ModelsOfScene())
                 if (model.gameObject.activeInHierarchy)
                     CollectHitsOnModel(model, worldRay, hits);
 

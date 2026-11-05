@@ -27,7 +27,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // Подсказка про грани — общая у «Выделения» и «Коробки»: обе правят грани.
         protected const string FaceSelectionHint = "Клик — выделить кусок грани, двойной клик — грань целиком, Shift — добавить или убрать. " +
-                                                   "Стрелки — двигать выделенное: кусок тянешь — новая коробка, толкаешь — вырез; грань с Ctrl — выдавить";
+                                                   "Ручка у выделенного куска: тянешь — новая коробка, толкаешь — вырезающая коробка; грань с Ctrl — выдавить";
 
 
         // ── Выделенное ───────────────────────────────────────────────────
@@ -199,7 +199,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (PathGesture == null)
                 return false;
 
-            if (PathGesture.IsActive || current.shift || !LiveBuilderClickSelection.TrySelectOwn(current, this))
+            if (PathGesture.IsActive || current.shift || !LiveBuilderClickSelection.TrySelectOwn(worldRay, this))
                 PathGesture.Click(worldRay, current.shift);
 
             return true;

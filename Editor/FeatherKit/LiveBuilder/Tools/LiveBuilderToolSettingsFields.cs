@@ -15,7 +15,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var selectionMode = (BoxModelSelectionMode)LiveBuilderWindowControls.Switch(
                 new GUIContent("Клик выделяет", "Коробки — коробку целиком, тянешь точки на её гранях. " +
-                                                "Грани — видимый кусок грани, двойной клик — грань целиком, Shift — несколько; стрелки двигают все"),
+                                                "Грани — видимый кусок грани, двойной клик — грань целиком, Shift — несколько; ручка двигает все"),
                 (int)BoxModelSelectionModeSetting.Current, ("Коробки", LiveBuilderOptionIcon.Boxes), ("Грани", LiveBuilderOptionIcon.Faces));
 
             if (selectionMode != BoxModelSelectionModeSetting.Current)

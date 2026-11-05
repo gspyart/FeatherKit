@@ -20,7 +20,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             using (LiveBuilderWindowControls.Card("Перенос и копии"))
             {
                 LiveBuilderExactMove.Offset = EditorGUILayout.Vector3Field(
-                    new GUIContent("Сдвиг, м", "На сколько сдвинуть или где встанет первая копия. Оси — как у стрелок: у коробки, комнаты и лестницы — оси их объекта"),
+                    new GUIContent("Сдвиг, м", "На сколько сдвинуть или где встанет первая копия. Оси — как у ручек переноса: у коробки, комнаты и лестницы — оси их объекта"),
                     LiveBuilderExactMove.Offset);
 
                 LiveBuilderExactMove.CopyCount = EditorGUILayout.IntSlider(

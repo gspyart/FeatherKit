@@ -126,7 +126,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return ForStairs(stairs);
 
             if (gameObject.TryGetComponent<GeometryCutter>(out var cutter))
-                return new LiveBuilderMaterialSlot(cutter, "стенки выреза", material => cutter.RevealMaterial = material);
+                return new LiveBuilderMaterialSlot(cutter, "откосы проёма", material => cutter.RevealMaterial = material);
 
             if (gameObject.TryGetComponent<SplineWall>(out var wall))
                 return ForWall(wall);

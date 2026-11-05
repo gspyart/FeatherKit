@@ -57,7 +57,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (LiveBuilderInspectorLayout.Foldout("GeometryCutter.Targets", "Что и где режет", IsAnyTargetCuttingNonDefault()))
             {
-                LiveBuilderInspectorLayout.Properties(serializedObject, "cutTargets", "scope");
+                LiveBuilderInspectorLayout.Properties(serializedObject, "cutTargets");
+                DrawScopeSwitch();
                 DrawScopeResult(cutter);
             }
 
@@ -73,7 +74,26 @@ namespace FeatherKit.EditorTools.LiveBuilder
             serializedObject.ApplyModifiedProperties();
         }
 
-        // Где режет на деле: внутри какой постройки или всё вокруг. Своя группа без постройки над вырезом — ничего не режет.
+        // Где режет — два варианта: «Авто» или «Всё вокруг». Старое «Своя группа» показывается и сохраняется как «Авто».
+        private void DrawScopeSwitch()
+        {
+            var scope = serializedObject.FindProperty("scope");
+            var isEverything = scope.enumValueIndex == (int)GeometryCutterScope.Everything;
+
+            EditorGUI.showMixedValue = scope.hasMultipleDifferentValues;
+            var choice = LiveBuilderWindowControls.Switch(new GUIContent("Где режет",
+                    "Авто — внутри постройки режет только её и вложенное в неё, в корне уровня — всё, что пересекает. Всё вокруг — всё, что пересекает, через любые группы"),
+                isEverything ? 1 : 0, "Авто", "Всё вокруг");
+            EditorGUI.showMixedValue = false;
+
+            var newScope = choice == 1 ? GeometryCutterScope.Everything : GeometryCutterScope.Automatic;
+
+            // Только по клику: от одного выделения старое «Своя группа» не перезаписывается — оно и так работает как «Авто».
+            if (choice != (isEverything ? 1 : 0))
+                scope.enumValueIndex = (int)newScope;
+        }
+
+        // Где режет на деле: внутри какой постройки или всё вокруг.
         private void DrawScopeResult(GeometryCutter cutter)
         {
             if (targets.Length > 1)
@@ -82,10 +102,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var group = GeometryCutterLookup.OwnGroupOf(cutter);
             var scope = cutter.Scope;
 
-            if (scope == GeometryCutterScope.OwnGroup && group == null)
-                EditorGUILayout.HelpBox("Над вырезом нет постройки — своей группы нет, он ничего не режет. Положи его в стену, здание или объект из коробок.",
-                    MessageType.Warning);
-            else if (scope == GeometryCutterScope.Everything || group == null)
+            if (scope == GeometryCutterScope.Everything || group == null)
                 EditorGUILayout.LabelField("Режет всё, что пересекает", EditorStyles.wordWrappedMiniLabel);
             else
                 EditorGUILayout.LabelField("Режет только внутри «" + group.name + "», во вложенные группы не заходит", EditorStyles.wordWrappedMiniLabel);

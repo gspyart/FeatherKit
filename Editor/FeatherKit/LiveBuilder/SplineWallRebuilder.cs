@@ -130,7 +130,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     continue;
 
                 if (box.IsBelow(owner))
-                    AddCutBoxHoles(owner, model, path, box.Box, holes);
+                    AddCutBoxHolesAndReport(owner, model, path, box, holes);
                 else
                     ReportIfWouldCut(owner, model, path, box);
             }
@@ -138,7 +138,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return holes;
         }
 
-        // Коробка выше стены в иерархии, а прорезала бы её — старая сцена: сказать в консоль, что теперь не режет.
+        // Проёмы коробки, что стоит ниже стены, — и сказать о них порядку резки: коробка её режет.
+        private static void AddCutBoxHolesAndReport(Component owner, BoxModel model, SplineWallPath path, BoxModelSolverBox box, List<SplineWallHole> holes)
+        {
+            var countBefore = holes.Count;
+            AddCutBoxHoles(owner, model, path, box.Box, holes);
+
+            if (holes.Count > countBefore)
+                LiveBuilderCutOrderNotices.ReportBoxCuts(box.Owner, owner);
+        }
+
+        // Коробка выше стены в иерархии, а прорезала бы её — стена поставлена после коробки: сказать порядку резки, что не режет.
         private static void ReportIfWouldCut(Component owner, BoxModel model, SplineWallPath path, BoxModelSolverBox box)
         {
             var skippedHoles = new List<SplineWallHole>();

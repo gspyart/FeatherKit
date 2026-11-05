@@ -10,7 +10,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public sealed class LiveBuilderGroupCard : LiveBuilderSelectionCard
     {
-        private const string IsolationTooltip = "Группа — граница: вырезы снаружи её не режут, её вырезы режут только внутри.";
+        private const string IsolationTooltip = "Группа — граница: проёмы и вырезающие коробки снаружи её не режут, а её — режут только внутри.";
 
 
         public override int Order => 85;
@@ -24,7 +24,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             using (LiveBuilderWindowControls.Card("Группа"))
             {
                 if (selected.GetComponent<BoxModel>() != null)
-                    LiveBuilderWindowControls.Note("Группа: вырезы снаружи её не трогают.");
+                    LiveBuilderWindowControls.Note("Группа: проёмы и вырезающие коробки снаружи её не трогают.");
 
                 var canGroup = LiveBuilderGroups.CanGroup(Selection.gameObjects, out var reason);
 
