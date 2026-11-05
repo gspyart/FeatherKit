@@ -3,12 +3,13 @@ using FeatherKit.LiveBuilder;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Splines;
 
 namespace FeatherKit.Tests.LiveBuilder
 {
     /// <summary>
     /// Перенос и копия стрелками Live Builder (<see cref="LiveBuilderMoveHandle"/>): сдвиг целыми клетками сетки, копия сразу за оригиналом и только
-    /// с первого целого шага; подпись здания — в его осях и только по задевающим его вырезающим коробкам: здание едет со своей дырой без пересборки,
+    /// с первого целого шага; выбранные точки стены едут стрелками вместе, и вверх (<see cref="LiveBuilderContourMoveHandle"/>); подпись здания — в его осях и только по задевающим его вырезающим коробкам: здание едет со своей дырой без пересборки,
     /// копия здания поодаль оригинал не трогает. И здание под мышью: платформа перед зданием закрывает пол за ней.
     /// </summary>
     public class LiveBuilderMoveCopyTests
@@ -75,6 +76,41 @@ namespace FeatherKit.Tests.LiveBuilder
             Assert.That(Vector3.Distance(original.transform.position, start), Is.LessThan(0.0001f), "оригинал стоит");
             Assert.AreEqual(original.transform.GetSiblingIndex() + 1, copy.transform.GetSiblingIndex(), "копия — сразу за оригиналом");
             Assert.That(Vector3.Distance(copy.transform.position, start + new Vector3(step * 3f, 0f, 0f)), Is.LessThan(0.0001f), "копия — на три клетки дальше");
+        }
+
+
+        // ── Точки контура ────────────────────────────────────────────────
+
+        [Test]
+        public void SelectedWallPoints_MoveTogetherByGridSteps()
+        {
+            var wall = testScene.CreateWall(Vector3.zero, new Vector3(4f, 0f, 0f), new Vector3(8f, 0f, 0f));
+            var container = wall.GetComponent<SplineContainer>();
+            var step = LiveBuilderGrid.StepOn(2);
+            var stepUp = LiveBuilderGrid.StepOn(1);
+
+            try
+            {
+                LiveBuilderContourSelection.SetOwner(wall);
+                LiveBuilderContourSelection.Add(0, 1);
+                LiveBuilderContourSelection.Add(0, 2);
+
+                var handle = new LiveBuilderContourMoveHandle();
+                var center = Origin + new Vector3(6f, 0f, 0f);
+                handle.BeginDrag(wall, container, center, Quaternion.identity, true);
+                handle.DragTo(wall, container, center + new Vector3(0f, stepUp * 2.2f, step * 3.4f));
+                handle.EndDrag();
+            }
+            finally
+            {
+                LiveBuilderContourSelection.SetOwner(null);
+            }
+
+            var spline = container.Spline;
+            var shift = new Vector3(0f, stepUp * 2f, step * 3f);
+            Assert.That(Vector3.Distance(spline[0].Position, Vector3.zero), Is.LessThan(0.0001f), "невыбранная точка стоит");
+            Assert.That(Vector3.Distance(spline[1].Position, new Vector3(4f, 0f, 0f) + shift), Is.LessThan(0.0001f), "выбранная — на целые клетки, и вверх");
+            Assert.That(Vector3.Distance(spline[2].Position, new Vector3(8f, 0f, 0f) + shift), Is.LessThan(0.0001f), "вторая выбранная — так же");
         }
 
 

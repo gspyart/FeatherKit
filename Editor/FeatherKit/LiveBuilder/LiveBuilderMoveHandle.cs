@@ -49,7 +49,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             EndDragIfReleased();
 
             // Тянут стрелки выреза — свои стрелки не рисуем: две ручки в одном месте спорили бы за мышь.
-            if (isDragging && !isSelectionDrag)
+            // Выбраны точки контура — у них свои стрелки (<see cref="LiveBuilderContourMoveHandle"/>), стрелки всего объекта спрятаны.
+            if ((isDragging && !isSelectionDrag) || (!isDragging && LiveBuilderContourSelection.Knots.Count > 0))
                 return;
 
             var targets = isDragging ? new List<Transform>(Targets) : MovableSelection(tool);

@@ -10,6 +10,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Правка контура уже построенного: точки выделенного здания, стены по линии или комнаты по контуру — прямо в окне сцены, как в tsitski.
     /// Здесь — ручки на контуре и порядок, кто первым забирает событие:
     /// - клик по точке — выбрать её; Shift+клик — добавить или убрать; двойной клик — вид по кругу: угол → плавно → Безье
+    /// - рамка по пустому месту — выбрать точки в ней (с Shift — добавить); у выбранных — стрелки переноса по осям (<see cref="LiveBuilderContourMoveHandle"/>)
     /// - «+» посередине отрезка — новая точка, её сразу можно тянуть; «+» за концом открытой линии — продлить её
     /// - у выбранной точки Безье — два уса; у выбранного угла — голубая ручка скругления (<see cref="LiveBuilderCornerRadiusHandle"/>)
     /// Перетаскивание — <see cref="LiveBuilderContourDrag"/>, рамка выбора — <see cref="LiveBuilderContourBoxSelect"/>,
@@ -30,6 +31,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private readonly LiveBuilderContourDrag drag = new();
         private readonly LiveBuilderContourBoxSelect boxSelect = new();
+        private readonly LiveBuilderContourMoveHandle moveHandle = new();
 
         // Свои ручки этого кадра — чтобы отличить нажатие по пустому месту от нажатия по точке.
         private readonly HashSet<int> ownControls = new();
@@ -39,20 +41,21 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public static bool IsShown => LiveBuilderContourSelection.Owner != null;
 
         public static string Hint => LiveBuilderContourSelection.Knots.Count > 0
-            ? "Выбрано точек: " + LiveBuilderContourSelection.Knots.Count + ". Тяни — двигать, стрелки — на шаг сетки, Delete — убрать, " +
-              "двойной клик — угол, плавно или Безье, у Безье — тяни усы, у угла — голубая ручка: скругление, Esc — снять выбор"
-            : "Точки контура: тяни — двигать, «+» — новая точка, Shift+клик или Shift+рамка — выбрать несколько, двойной клик — угол, плавно или Безье" +
+            ? "Выбрано точек: " + LiveBuilderContourSelection.Knots.Count + ". Тяни точку или стрелки в середине — двигать все" +
+              (LiveBuilderContourSelection.Owner is SplineWall ? " (вверх тоже)" : "") + ", клавиши-стрелки — на шаг сетки, Delete — убрать, " +
+              "двойной клик — угол, плавно или Безье, у угла — голубая ручка: скругление, Esc — снять выбор"
+            : "Точки контура: тяни — двигать, «+» — новая точка, рамка по пустому месту или Shift+клик — выбрать несколько, двойной клик — угол, плавно или Безье" +
               (LiveBuilderContourSelection.Owner is SplineWall ? ", C — замкнуть или разомкнуть" : "");
 
-        // Тянут точку, ус или рамку — мышь занята правкой контура.
-        public bool IsGestureActive => drag.IsDragging || boxSelect.IsSelecting;
+        // Тянут точку, ус, рамку или стрелки выбранных — мышь занята правкой контура.
+        public bool IsGestureActive => drag.IsDragging || boxSelect.IsSelecting || moveHandle.IsDragging;
 
 
         // ── Окно сцены ───────────────────────────────────────────────────
 
         // Звать до общего элемента инструмента: точки и «+» ближе к мыши забирают нажатие себе.
         // canEdit — правит ли этот контур выбранный инструмент; не правит — видна только линия контура, без ручек.
-        // allowsBoxSelect — Shift+рамка по пустому месту; в инструментах линии выключена: там Shift+клик ставит плавную точку.
+        // allowsBoxSelect — рамка по пустому месту; в инструментах линии выключена: там нажатие по пустому начинает новую линию.
         public void OnSceneGUI(System.Predicate<Component> canEdit, bool allowsBoxSelect)
         {
             var owner = SelectedOwner();
@@ -89,7 +92,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             LiveBuilderContourDrawing.DrawContourLines(owner);
 
-            if (DoTangents(owner, container, dragControl) || DoCornerRadii(owner, container))
+            // Стрелки выбранных — раньше точек и усов: что лежит под ними, забирает нажатие себе.
+            if (moveHandle.Draw(owner, container) || DoTangents(owner, container, dragControl) || DoCornerRadii(owner, container))
                 return;
 
             for (var splineIndex = 0; splineIndex < container.Splines.Count; splineIndex++)
@@ -115,11 +119,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Бросить перетаскивание и рамку: мышь освобождается, уже сдвинутые точки остаются. Зовёт и Esc инструмента.
+        // Бросить перетаскивание, рамку и стрелки: мышь освобождается, уже сдвинутые точки остаются. Зовёт и Esc инструмента.
         public void Cancel()
         {
             drag.End();
             boxSelect.Cancel();
+            moveHandle.EndDrag();
         }
 
         // Одно здание, стена по линии или комната по контуру в выделении; иначе — null.

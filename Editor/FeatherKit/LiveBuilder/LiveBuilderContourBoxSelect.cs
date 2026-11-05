@@ -6,19 +6,22 @@ using UnityEngine.Splines;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Рамка выбора в правке контура (<see cref="LiveBuilderContourHandles"/>): Shift + нажатие по пустому месту и протянуть —
-    /// отпустил, и точки внутри рамки добавляются к выбору (<see cref="LiveBuilderContourSelection"/>).
-    /// Рамка начинается, только когда мышь сдвинулась на несколько пикселей: Shift+клик без протягивания достаётся обычному выделению.
+    /// Рамка выбора в правке контура (<see cref="LiveBuilderContourHandles"/>), как в Blender и ProBuilder: нажатие по пустому месту и протянуть —
+    /// отпустил, и выбраны точки внутри рамки (<see cref="LiveBuilderContourSelection"/>); с Shift — добавляются к уже выбранным.
+    /// Рамка начинается, только когда мышь сдвинулась на несколько пикселей: клик без протягивания достаётся обычному выделению.
     /// </summary>
     public sealed class LiveBuilderContourBoxSelect
     {
-        // Сдвиг мыши, после которого Shift+нажатие — уже рамка, а не клик, пикс. Как у инструмента: он тоже ждёт этот сдвиг.
+        // Сдвиг мыши, после которого нажатие — уже рамка, а не клик, пикс. Как у инструмента: он тоже ждёт этот сдвиг.
         private const float DragThresholdPixels = 4f;
 
         private bool isSelecting;
 
-        // Shift+нажатие было, но мышь ещё не сдвинулась: может, это просто клик.
+        // Нажатие было, но мышь ещё не сдвинулась: может, это просто клик.
         private bool isWaitingForDrag;
+
+        // С Shift — точки рамки добавляются к выбранным, без него — выбор только они.
+        private bool isAdditive;
 
         // Кому досталось нажатие — у него рамка и забирает мышь, когда протянули.
         private int pressedControl;
@@ -34,16 +37,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public bool IsSelecting => isSelecting;
 
 
-        // Shift + нажатие по пустому месту (не по точке, «+» или усу — их ручки в ownControls) — запомнить: протянут — будет рамка.
-        // Нажатие не забираем: если мышь не сдвинется, это Shift+клик для обычного выделения.
+        // Нажатие по пустому месту (не по точке, «+», усу или стрелкам — их ручки в ownControls) — запомнить: протянут — будет рамка.
+        // Нажатие не забираем: если мышь не сдвинется, это клик для обычного выделения.
         public void TryBegin(HashSet<int> ownControls)
         {
             var current = Event.current;
 
-            if (current.type != EventType.MouseDown || current.button != 0 || current.alt || !current.shift || ownControls.Contains(HandleUtility.nearestControl))
+            if (current.type != EventType.MouseDown || current.button != 0 || current.alt || current.control || ownControls.Contains(HandleUtility.nearestControl))
                 return;
 
             isWaitingForDrag = true;
+            isAdditive = current.shift;
             pressedControl = HandleUtility.nearestControl;
             start = current.mousePosition;
             end = current.mousePosition;
@@ -125,6 +129,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private void SelectInside(Component owner, SplineContainer container)
         {
             var rect = ScreenRect();
+
+            if (!isAdditive)
+                LiveBuilderContourSelection.Clear();
 
             for (var splineIndex = 0; splineIndex < container.Splines.Count; splineIndex++)
             {
