@@ -142,8 +142,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     LiveBuilderSyncEdits.Apply(target, () => storeyCopies.CopiesUp = copies);
             }
 
-            if (link.TryGetComponent<SplineWall>(out var wall))
-                SetIfDifferent(wall, wall.Height, building.ClearHeight, value => wall.Height = value);
+            // Перегородка — до потолка или на весь этаж, как выбрано у неё; своя высота остаётся.
+            if (link.TryGetComponent<SplineWall>(out var wall) && wall.HeightInBuilding != SplineWallHeightInBuilding.Custom)
+            {
+                var wallHeight = wall.HeightInBuilding == SplineWallHeightInBuilding.FullStorey ? building.StoreyHeight : building.ClearHeight;
+                SetIfDifferent(wall, wall.Height, wallHeight, value => wall.Height = value);
+            }
 
             // Лестница во весь этаж следит за высотой этажа; своя высота (полэтажа, площадка) остаётся.
             if (link.TryGetComponent<BoxModelStairs>(out var stairs) && Mathf.Abs(stairs.Height - previousStoreyHeight) < Tolerance)

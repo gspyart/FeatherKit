@@ -4,8 +4,9 @@ using UnityEditor;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Инспектор стены по линии: размер → этажи → вид → тонко. Стена в здании — высота и копии от здания,
-    /// их поля только показаны, а этажи меняются в привязке («Spline Building Storey Link» ниже); у неё же — «не строить стороны вдоль стен здания».
+    /// Инспектор стены по линии: размер → этажи → вид → тонко. Стена в здании — копии от здания, высота — до потолка, на весь этаж или своя
+    /// («Height In Building»); поля от здания только показаны, а этажи меняются в привязке («Spline Building Storey Link» ниже);
+    /// у неё же — «не строить стороны вдоль стен здания».
     /// </summary>
     [CustomEditor(typeof(SplineWall))]
     [CanEditMultipleObjects]
@@ -30,8 +31,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
             // Комнате в здании — какие стороны строить; без здания нечему лежать вдоль.
             if (isLinked)
             {
-                LiveBuilderInspectorLayout.Properties(serializedObject, "skipsSidesAlongBuildingWalls");
-                LiveBuilderInspectorLayout.DrivenValue("Height", LiveBuilderSceneText.FormatMeters(wall.Height) + " м", "До потолка этажа здания");
+                LiveBuilderInspectorLayout.Properties(serializedObject, "skipsSidesAlongBuildingWalls", "heightInBuilding");
+
+                if (wall.HeightInBuilding == SplineWallHeightInBuilding.Custom)
+                    LiveBuilderInspectorLayout.Properties(serializedObject, "height");
+                else
+                    LiveBuilderInspectorLayout.DrivenValue("Height", LiveBuilderSceneText.FormatMeters(wall.Height) + " м",
+                        wall.HeightInBuilding == SplineWallHeightInBuilding.FullStorey ? "Весь этаж здания, сквозь перекрытие" : "До потолка этажа здания");
             }
             else
             {

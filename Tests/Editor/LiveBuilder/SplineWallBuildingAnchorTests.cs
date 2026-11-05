@@ -74,6 +74,26 @@ namespace FeatherKit.Tests.LiveBuilder
         }
 
 
+        // ── Высота перегородки ───────────────────────────────────────────
+
+        // До потолка — этаж минус перекрытие; весь этаж — сквозь перекрытие; своя — сверка не трогает.
+        [Test]
+        public void PartitionHeight_FollowsChosenMode()
+        {
+            var partition = CreatePartition(false, new Vector3(5f, 0f, Inner), new Vector3(5f, 0f, 10f - Inner));
+            Assert.AreEqual(building.ClearHeight, partition.Height, 0.001f, "по умолчанию — до потолка");
+
+            partition.HeightInBuilding = SplineWallHeightInBuilding.FullStorey;
+            SplineBuildingLinkSync.Sync(partition.GetComponent<SplineBuildingStoreyLink>());
+            Assert.AreEqual(building.StoreyHeight, partition.Height, 0.001f, "весь этаж — сквозь перекрытие");
+
+            partition.HeightInBuilding = SplineWallHeightInBuilding.Custom;
+            partition.Height = 2.5f;
+            SplineBuildingLinkSync.Sync(partition.GetComponent<SplineBuildingStoreyLink>());
+            Assert.AreEqual(2.5f, partition.Height, 0.001f, "своя высота остаётся");
+        }
+
+
         // ── Помощники ────────────────────────────────────────────────────
 
         // Перегородка в здании, привязанная к его этажам, — как ставит «Стена» в здании.

@@ -49,6 +49,10 @@ namespace FeatherKit.LiveBuilder
                  "поменял контур комнаты или здания — какие стороны строить, пересчитается само. Работает в привязке к зданию.")]
         [SerializeField] private bool skipsSidesAlongBuildingWalls;
 
+        [Tooltip("Докуда стена в здании. До потолка — этаж минус перекрытие. Весь этаж — сквозь перекрытие до пола следующего: " +
+                 "шахта лифта без щелей между этажами. Своя — высота выше. Работает в привязке к зданию.")]
+        [SerializeField] private SplineWallHeightInBuilding heightInBuilding = SplineWallHeightInBuilding.ToCeiling;
+
         [Space]
         [Header("Копии вверх")]
         [Tooltip("Сколько всего таких стен друг над другом, вместе с этой. Перегородка на все этажи здания — по числу этажей.")]
@@ -106,6 +110,12 @@ namespace FeatherKit.LiveBuilder
         {
             get => height;
             set => height = Mathf.Max(0.05f, value);
+        }
+
+        public SplineWallHeightInBuilding HeightInBuilding
+        {
+            get => heightInBuilding;
+            set => heightInBuilding = value;
         }
 
         public SplineWallAlignment Alignment
