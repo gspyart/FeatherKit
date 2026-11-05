@@ -25,9 +25,29 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Здание стоит низом ровно на этаже уровня и с тем же шагом — его этажи совпадают с этажами окна.
         public static bool IsAlignedToLevel(SplineBuilding building)
         {
+            return IsOnLevelFloor(building) && HasLevelStoreyHeight(building);
+        }
+
+
+        // Низ здания ровно на полу этажа уровня.
+        public static bool IsOnLevelFloor(SplineBuilding building)
+        {
+            return Mathf.Abs(OffsetFromLevelFloorOf(building)) < AlignmentTolerance;
+        }
+
+
+        // Высота этажа здания — как у этажей уровня.
+        public static bool HasLevelStoreyHeight(SplineBuilding building)
+        {
+            return Mathf.Abs(building.StoreyHeight - LiveBuilderStoreys.StoreyHeight) < AlignmentTolerance;
+        }
+
+
+        // На сколько низ здания выше ближайшего пола этажа уровня, м; ниже — со знаком минус.
+        public static float OffsetFromLevelFloorOf(SplineBuilding building)
+        {
             var levelFloor = LiveBuilderStoreys.GroundLevel + BaseStoreyOf(building) * LiveBuilderStoreys.StoreyHeight;
-            return Mathf.Abs(BottomWorldHeightOf(building) - levelFloor) < AlignmentTolerance
-                   && Mathf.Abs(building.StoreyHeight - LiveBuilderStoreys.StoreyHeight) < AlignmentTolerance;
+            return BottomWorldHeightOf(building) - levelFloor;
         }
 
 
@@ -36,9 +56,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             Undo.RecordObjects(new Object[] { building, building.transform }, "Align Building To Storeys");
             building.StoreyHeight = LiveBuilderStoreys.StoreyHeight;
-
-            var levelFloor = LiveBuilderStoreys.GroundLevel + BaseStoreyOf(building) * LiveBuilderStoreys.StoreyHeight;
-            building.transform.position += Vector3.up * (levelFloor - BottomWorldHeightOf(building));
+            building.transform.position -= Vector3.up * OffsetFromLevelFloorOf(building);
         }
 
 

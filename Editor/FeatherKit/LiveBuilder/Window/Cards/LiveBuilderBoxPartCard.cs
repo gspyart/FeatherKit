@@ -5,12 +5,17 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка «Выделено» про коробки: одна — режим и размер; у вырезающей — что она режет из стен и зданий и порядок резки: что режет,
-    /// что стоит после неё в списке и потому целое, «Поставить ниже» (<see cref="LiveBuilderCutOrderNotices"/>);
+    /// Карточка «Выделено» про коробки: одна — режим и размер; у вырезающей — что она режет из стен и зданий («Режет») и какие из них задевает
+    /// сейчас — строкой «Режет: «…»» (порядок в списке для этого не важен, <see cref="BoxModelSolverBox.CutsTarget"/>);
     /// скосы рёбер (<see cref="BoxModelChamferPanel"/>), а под свёрнутым «Ещё» — угол в осях объекта, материалы сторон; несколько — сколько их. Всё с Undo.
     /// </summary>
     public sealed class LiveBuilderBoxPartCard : LiveBuilderSelectionCard
     {
+        // Что задевает выделенная вырезающая коробка — до правки сцены.
+        private static readonly System.Collections.Generic.List<Component> TouchedTargets = new();
+        private static BoxModelPart touchedTargetsPart;
+        private static int touchedTargetsSceneVersion = -1;
+
         public override int Order => 10;
 
 
@@ -26,7 +31,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return parts.Count > 0;
         }
 
-        // Сверху — режим и размер, их меняют каждый раз, у вырезающей — «Режет» и порядок резки; угол и материалы — под «Ещё».
+        // Сверху — режим и размер, их меняют каждый раз, у вырезающей — «Режет» и что она задевает; угол и материалы — под «Ещё».
         private static void DrawPart(BoxModelPart part)
         {
             var model = part.GetComponentInParent<BoxModel>();
@@ -53,7 +58,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (part.Mode == BoxModelPartMode.Cut)
                 {
                     DrawCutTargets(part);
-                    DrawCutOrder(part);
+                    DrawTouchedTargets(part, model);
                 }
             }
 
@@ -72,7 +77,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var targets = (LiveBuilderCutTargets)LiveBuilderWindowControls.Switch(new GUIContent("Режет",
                     "Что режет из стен по линии и зданий этого объекта; свои коробки режет всегда. " +
                     "Всё — стены и перекрытия. Перекрытия — дыра под лестницу или шахту: стены и перегородки не трогает. " +
-                    "Стены — проём: пол и потолок целы. Режет только то, что выше неё в списке объектов"),
+                    "Стены — проём: пол и потолок целы. Порядок в списке объектов не важен: режет всё это, что задевает"),
                 (int)part.CutTargets, "Всё", "Только перекрытия", "Только стены");
 
             if (targets == part.CutTargets)
@@ -82,35 +87,56 @@ namespace FeatherKit.EditorTools.LiveBuilder
             part.CutTargets = targets;
         }
 
-        // Порядок резки, как слои: что коробка режет и что стоит после неё в списке объектов — поверх дыры, целое; такое — поставить коробку ниже.
-        private static void DrawCutOrder(BoxModelPart part)
+        // Какие стены и здания коробка задевает и режет сейчас — одной строкой; порядок в списке объектов для этого не важен.
+        private static void DrawTouchedTargets(BoxModelPart part, BoxModel model)
         {
-            LiveBuilderCutOrderNotices.CheckNow(part);
-            var cut = LiveBuilderCutOrderNotices.TargetsCutBy(part);
-            var skipped = LiveBuilderCutOrderNotices.TargetsSkippedBy(part);
+            var targets = TouchedTargetsOf(part, model);
 
-            if (cut.Count > 0)
-                LiveBuilderWindowControls.Note("Режет: " + NamesOf(cut) + ".");
+            LiveBuilderWindowControls.Note(targets.Count > 0
+                ? "Режет: " + NamesOf(targets) + "."
+                : "Стен и зданий не задевает — режет только коробки объекта.");
+        }
 
-            foreach (var target in skipped)
-            {
-                LiveBuilderWindowControls.Note("Не режет «" + target.name + "»: стоит после неё в списке — поверх дыры.");
+        // Стены и здания объекта вокруг коробки, чей собранный меш она задевает и чей вид режет («Режет»). Раз на правку сцены — карточку рисуют часто.
+        private static System.Collections.Generic.List<Component> TouchedTargetsOf(BoxModelPart part, BoxModel model)
+        {
+            if (part == touchedTargetsPart && BoxModelRebuilder.SceneVersion == touchedTargetsSceneVersion)
+                return TouchedTargets;
 
-                if (target.transform.parent != part.transform.parent)
-                {
-                    LiveBuilderWindowControls.Note("Резать её — перетащи коробку в Hierarchy ниже «" + target.name + "», не вынимая из её объекта.");
-                    continue;
-                }
+            touchedTargetsPart = part;
+            touchedTargetsSceneVersion = BoxModelRebuilder.SceneVersion;
+            TouchedTargets.Clear();
 
-                if (GUILayout.Button(new GUIContent("Поставить ниже «" + target.name + "»", "Коробка встанет сразу за ним в списке объектов — и прорежет его")))
-                {
-                    LiveBuilderCutOrderNotices.TryPlaceBelow(part, target);
-                    GUIUtility.ExitGUI();
-                }
-            }
+            var size = part.Size;
+            var localBounds = new Bounds(BoxModelShapeCollector.LocalMinOf(model, part.transform) + size / 2f, size);
+            var boxBounds = GeometryCutterLookup.WorldBoundsOf(localBounds, model.transform);
+            var stage = UnityEditor.SceneManagement.StageUtility.GetStageHandle(part.gameObject);
 
-            LiveBuilderWindowControls.Explanation("Коробки, стены и здания работают по порядку списка объектов, как слои: вырезающая режет то, что выше неё; " +
-                                                  "что ниже — поставлено после, поверх дыры. Так можно вырезать, добавить и вырезать снова.");
+            // «Только перекрытия» стену режет, только если у неё есть пол или потолок.
+            foreach (var wall in stage.FindComponentsOfType<SplineWall>())
+                if ((part.CutTargets != LiveBuilderCutTargets.SlabsOnly || wall.HasSlabs) && IsTouched(wall, part, boxBounds))
+                    TouchedTargets.Add(wall);
+
+            foreach (var building in stage.FindComponentsOfType<SplineBuilding>())
+                if (IsTouched(building, part, boxBounds))
+                    TouchedTargets.Add(building);
+
+            return TouchedTargets;
+        }
+
+        // Стена или здание в том же объекте, что и коробка, и их меш задевает её габарит.
+        private static bool IsTouched(Component target, BoxModelPart part, Bounds boxBounds)
+        {
+            var targetModel = SplineWallRebuilder.OuterModelOf(target);
+
+            if (targetModel == null || !part.transform.IsChildOf(targetModel.transform) || !target.gameObject.activeInHierarchy)
+                return false;
+
+            foreach (var renderer in target.GetComponentsInChildren<Renderer>())
+                if (renderer.bounds.Intersects(boxBounds))
+                    return true;
+
+            return false;
         }
 
         private static string NamesOf(System.Collections.Generic.List<Component> targets)

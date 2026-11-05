@@ -40,7 +40,7 @@ namespace FeatherKit.Tests.LiveBuilder
         }
 
 
-        // То же в объекте из коробок: его вырезающие коробки ниже стены в иерархии режут и её.
+        // То же в объекте из коробок: его вырезающие коробки режут и её.
         public SplineWall CreateWall(BoxModel parentModel, params Vector3[] points)
         {
             var wall = BoxModelFactory.CreateWall(parentModel, Origin, Quaternion.identity);

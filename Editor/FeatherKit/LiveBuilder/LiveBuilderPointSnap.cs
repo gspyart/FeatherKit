@@ -13,7 +13,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// коробка на полу встаёт вровень с углом здания над ней. Что прилипло — подпись у прицела («угол», «середина», «точка»).
     /// Работает везде, где точка ложится на плоскость рисования (<see cref="BoxModelDrawPlane.SnapOnPlane"/>): коробка, комната, лестница, стена,
     /// здание, линейка. Точки берутся из данных построек (не из меша) и помнятся до следующей правки сцены; на горизонтальной плоскости
-    /// перебираются только соседние по плану (<see cref="LiveBuilderPlanCells"/>). Спрятанное разрезом этажа не ловит. Клавиша S или кнопка в окне —
+    /// перебираются только соседние по плану (<see cref="LiveBuilderPlanCells"/>). Спрятанное разрезом этажа и точки, закрытые от камеры стенами, не ловит. Клавиша S или кнопка в окне —
     /// выключить и включить (<see cref="IsEnabled"/>). Без окна сцены (проверки) не прилипает.
     /// </summary>
     [InitializeOnLoad]
@@ -25,9 +25,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Совпадение точки с последней прилипшей — для подписи, м.
         private const float SamePointTolerance = 0.0005f;
 
+        // Запас у самой точки при проверке, видна ли она, м: грань, на которой точка лежит, её не закрывает.
+        private const float VisibilityMargin = 0.05f;
+
         private const string EnabledPreferenceKey = "FeatherKit.LiveBuilder.PointSnapEnabled";
 
         private static readonly List<(Vector3 Point, string Label)> Points = new();
+
+        // Точки рядом с мышью на этот поиск — по удалённости на экране; один список на все поиски: ищут на каждое движение мыши.
+        private static readonly List<(float Pixels, Vector3 Point, Vector3 Local, string Label)> Candidates = new();
         private static readonly HashSet<Vector3Int> SeenPoints = new();
 
         // Рёбра коробок и отрезки линий — к любой их точке прилипает, если рядом нет угла или середины.
@@ -40,6 +46,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static readonly HashSet<int> NearbyEdges = new();
 
         private static bool isStale = true;
+
+        // Точки держатся как были в начале жеста переноса (<see cref="Hold"/>): то, что едет, не пересобирает их на каждом шаге.
+        private static bool isHeld;
 
         private static Vector3 lastSnappedWorld;
         private static string lastLabel;
@@ -82,8 +91,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var world = frameToWorld.MultiplyPoint3x4(localPoint);
             var mouse = HandleUtility.WorldToGUIPoint(world);
             var reach = HandleUtility.GetHandleSize(world) * 0.5f;
-            var bestPixels = SnapPixels;
             string bestLabel = null;
+            Candidates.Clear();
 
             // Плоскость горизонтальна — точки сносит на неё по Y: соседи по плану те же, перебираем только их.
             var isLevelPlane = Mathf.Abs(((Vector3)frameToWorld.GetColumn(axis)).normalized.y) > 0.999f;
@@ -107,13 +116,20 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 var pixels = (HandleUtility.WorldToGUIPoint(projected) - mouse).magnitude;
 
-                if (pixels >= bestPixels)
-                    continue;
-
-                bestPixels = pixels;
-                bestLabel = label;
-                snappedLocal = local;
+                if (pixels < SnapPixels)
+                    Candidates.Add((pixels, point, local, label));
             }
+
+            // Ближняя к мыши, которую видно: точку за стеной не ловим.
+            Candidates.Sort((first, second) => first.Pixels.CompareTo(second.Pixels));
+
+            foreach (var candidate in Candidates)
+                if (IsVisible(candidate.Point))
+                {
+                    bestLabel = candidate.Label;
+                    snappedLocal = candidate.Local;
+                    break;
+                }
 
             if (bestLabel == null && TrySnapToEdge(frameToWorld, worldToFrame, axis, coordinate, world, mouse, reach, isLevelPlane, out snappedLocal))
                 bestLabel = "на ребре";
@@ -176,13 +192,90 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 var pixels = (HandleUtility.WorldToGUIPoint(projected) - mouse).magnitude;
 
-                if (pixels >= bestPixels)
+                // Ребро за стеной не ловим: та же доля вдоль самого ребра, до сноса на плоскость, должна быть видна.
+                if (pixels >= bestPixels || !IsVisible(Vector3.Lerp(start, end, fraction)))
                     return;
 
                 bestPixels = pixels;
                 found = local;
                 isFound = true;
             }
+        }
+
+
+        // Точки держатся как в начале жеста, пока он идёт: перенос (<see cref="LiveBuilderMoveSnap"/>) не пересобирает их на каждом шаге.
+        public static void Hold()
+        {
+            Refresh();
+            isHeld = true;
+        }
+
+
+        // Жест кончился — со следующего поиска точки снова свежие.
+        public static void Release()
+        {
+            isHeld = false;
+            isStale = true;
+        }
+
+
+        // Ближайшая на экране видимая точка построек к точке мира — для переноса (<see cref="LiveBuilderMoveSnap"/>): без проекции на плоскость.
+        // Перебираются соседи по плану; видимость проверяется от ближнего к дальнему, до первой видимой. Точки внутри ignoredBounds
+        // (то, что сейчас едет) не берутся. Нет ближе SnapPixels или выключено — false.
+        public static bool TryFindPointNear(Vector3 worldPoint, Bounds ignoredBounds, out Vector3 found, out float pixels)
+        {
+            found = default;
+            pixels = SnapPixels;
+
+            if (!IsEnabled || Camera.current == null || Event.current == null)
+                return false;
+
+            Refresh();
+
+            var mouse = HandleUtility.WorldToGUIPoint(worldPoint);
+            var reach = HandleUtility.GetHandleSize(worldPoint) * 0.5f;
+            var isNearbyOnly = PlanCells.TryCollectPoints(worldPoint, reach, NearbyPoints);
+            var count = isNearbyOnly ? NearbyPoints.Count : Points.Count;
+            Candidates.Clear();
+
+            for (var index = 0; index < count; index++)
+            {
+                var (point, label) = Points[isNearbyOnly ? NearbyPoints[index] : index];
+
+                if ((point - worldPoint).sqrMagnitude > reach * reach || ignoredBounds.Contains(point) || LiveBuilderStoreys.IsHiddenBySection(point))
+                    continue;
+
+                var distance = (HandleUtility.WorldToGUIPoint(point) - mouse).magnitude;
+
+                if (distance < SnapPixels)
+                    Candidates.Add((distance, point, point, label));
+            }
+
+            Candidates.Sort((first, second) => first.Pixels.CompareTo(second.Pixels));
+
+            foreach (var candidate in Candidates)
+                if (IsVisible(candidate.Point))
+                {
+                    found = candidate.Point;
+                    pixels = candidate.Pixels;
+                    return true;
+                }
+
+            return false;
+        }
+
+
+        // Видна ли точка из камеры окна сцены: между камерой и ней нет ничего, кроме того, что спрятано разрезом этажа.
+        private static bool IsVisible(Vector3 point)
+        {
+            var camera = Camera.current;
+            var cameraTransform = camera.transform;
+            var origin = camera.orthographic ? point - cameraTransform.forward * camera.farClipPlane : cameraTransform.position;
+            var toPoint = point - origin;
+            var distance = toPoint.magnitude;
+
+            return distance < VisibilityMargin
+                   || !BoxModelPicker.TryRaycastVisible(new Ray(origin, toPoint / distance), distance - VisibilityMargin, out _);
         }
 
 
@@ -197,7 +290,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static void Refresh()
         {
-            if (!isStale)
+            if (!isStale || (isHeld && Points.Count > 0))
                 return;
 
             isStale = false;

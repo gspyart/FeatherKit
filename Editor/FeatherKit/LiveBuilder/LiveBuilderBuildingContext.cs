@@ -169,13 +169,20 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Точка мира внутри здания: в плане — внутри его стен, по высоте — от пола до крыши.
         private static bool Contains(SplineBuilding building, Vector3 worldPoint)
         {
-            var localPoint = building.transform.InverseTransformPoint(worldPoint);
-            var baseHeight = SplineBuildingLevelAlignment.BaseHeightOf(building);
-
-            if (localPoint.y < baseHeight - 0.01f || localPoint.y > baseHeight + building.TotalHeight + 0.01f)
+            if (!IsWithinHeight(building, worldPoint))
                 return false;
 
+            var localPoint = building.transform.InverseTransformPoint(worldPoint);
             return IsInsideInnerContours(building, new Vector2(localPoint.x, localPoint.z));
+        }
+
+
+        // Точка мира по высоте в здании — от низа до крыши, где бы она ни была в плане.
+        public static bool IsWithinHeight(SplineBuilding building, Vector3 worldPoint)
+        {
+            var localHeight = building.transform.InverseTransformPoint(worldPoint).y;
+            var baseHeight = SplineBuildingLevelAlignment.BaseHeightOf(building);
+            return localHeight >= baseHeight - 0.01f && localHeight <= baseHeight + building.TotalHeight + 0.01f;
         }
 
 

@@ -13,7 +13,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public sealed class LiveBuilderRoomTool : LiveBuilderTool
     {
-        private static readonly string[] RectangleKeyHints = { "протянуть по полу — комната, отпустил — готово", "что встанет — в подсказке внизу", "Esc — отмена" };
+        private static readonly string[] RectangleKeyHints = { "протянуть по полу — комната, отпустил — готово", "пока тянешь, «4 X 3» — точные стороны", "что встанет — в подсказке внизу", "Esc — отмена" };
 
         private readonly LiveBuilderRoomGesture rectangleGesture = new();
         private readonly LiveBuilderPathGesture contourGesture = new(LiveBuilderPathKind.Room);
@@ -199,6 +199,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             rectangleGesture.Commit();
             return true;
+        }
+
+
+        // ── Окно сцены: клавиши ──────────────────────────────────────────
+
+        // Прямоугольник тянут — цифры его стороны; иначе — как у линии.
+        public override bool OnKeyDown(Event current)
+        {
+            return rectangleGesture.IsActive ? rectangleGesture.HandleKey(current.keyCode) : base.OnKeyDown(current);
         }
 
 

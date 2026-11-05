@@ -11,7 +11,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Пересобирает части зданий по контуру (<see cref="SplineBuildingPart"/>: стены и пол каждого этажа, крыша),
     /// когда изменились контур, числа или вырезающие коробки объекта вокруг — все части, а когда только вырезы — лишь те части, что они режут. Как у стен по линии: по «подписи»,
     /// меши — файлами рядом со сценой, экземпляр префаба без своих правок берёт меши префаба, общий меш копий не перезаписывается. Вырезающие коробки переводит в дыры перекрытий — прямоугольники в плане здания.
-    /// Режут только коробки ниже здания в иерархии (<see cref="LiveBuilderHierarchyOrder"/>): стены — те, что режут стены, перекрытия — те, что режут перекрытия.
+    /// Режут вырезающие коробки объекта, которые задевают здание (<see cref="BoxModelSolverBox.CutsTarget"/>), где бы ни стояли в списке: стены — те, что режут стены, перекрытия — те, что режут перекрытия.
     /// Когда проверять — решает общая очередь <see cref="LiveBuilderRebuildQueue"/>: здания — после объектов из коробок.
     /// Объекты частей в иерархии — найти, создать, убрать — <see cref="SplineBuildingParts"/>.
     /// </summary>
@@ -125,9 +125,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (!isHierarchyChanged)
                 return;
 
-            // Части и группы этажей добавились или ушли — места объектов в иерархии, запомненные на проход, уже не те.
-            LiveBuilderHierarchyOrder.ForgetPassPaths();
-
             if (building.gameObject.scene.IsValid())
                 EditorSceneManager.MarkSceneDirty(building.gameObject.scene);
         }
@@ -156,8 +153,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Дыры в перекрытиях ───────────────────────────────────────────
 
-        // Вырезающие коробки объекта, в котором лежит здание или замкнутая стена с полом и потолком, — те, что режут перекрытия и стоят ниже неё
-        // в иерархии (в интерьере здания — всегда): прямоугольник в плане владельца и высоты над его линией.
+        // Вырезающие коробки объекта, в котором лежит здание или замкнутая стена с полом и потолком, — те, что режут перекрытия
+        // (<see cref="BoxModelSolverBox.CutsTarget"/>, порядок в списке не важен): прямоугольник в плане владельца и высоты над его линией.
         public static List<SplineBuildingSlabHole> CollectSlabHoles(Component owner)
         {
             var holes = new List<SplineBuildingSlabHole>();
@@ -173,17 +170,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (!box.CutsSlabs)
                     continue;
 
-                var isBelow = box.IsBelow(owner);
-
-                if (owner is SplineBuilding building && TouchesSlabs(building, model, box))
-                {
-                    if (isBelow)
-                        LiveBuilderCutOrderNotices.ReportBoxCuts(box.Owner, building);
-                    else
-                        LiveBuilderCutOrderNotices.ReportBoxAboveTarget(box.Owner, building);
-                }
-
-                if (!isBelow)
+                if (!box.CutsTarget(owner))
                     continue;
 
                 var min = box.Box.MinInMeters;
@@ -207,21 +194,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static Vector2 Flat(Vector3 point)
         {
             return new Vector2(point.x, point.z);
-        }
-
-
-        // Коробка задевает пол, перекрытие или крышу здания — для порядка резки: режет она их или стоит выше и не режет.
-        private static bool TouchesSlabs(SplineBuilding building, BoxModel model, BoxModelSolverBox box)
-        {
-            var localBounds = new Bounds();
-            localBounds.SetMinMax(box.Box.MinInMeters, box.Box.MaxInMeters);
-            var boxBounds = GeometryCutterLookup.WorldBoundsOf(localBounds, model.transform);
-
-            foreach (var part in building.GetComponentsInChildren<SplineBuildingPart>(false))
-                if (part.Kind != SplineBuildingPartKind.Walls && GeometryCutterLookup.WorldBoundsOf(part.UncutBounds, part.transform).Intersects(boxBounds))
-                    return true;
-
-            return false;
         }
 
 

@@ -47,6 +47,22 @@ namespace FeatherKit.Tests.LiveBuilder
         }
 
 
+        // Нажал и тянешь, кнопку не отпустил: пока держишь, можно набирать цифры (<see cref="Type"/>). Отпустить — <see cref="Release"/>.
+        public void Hold(Ray fromRay, Ray toRay)
+        {
+            if (tool.OnMouseDown(fromRay, MouseEvent(EventType.MouseDown, false)))
+                return;
+
+            tool.OnMouseDrag(fromRay, toRay, true);
+        }
+
+
+        public void Release()
+        {
+            tool.OnMouseUp(MouseEvent(EventType.MouseUp, false));
+        }
+
+
         public void Move(Ray worldRay)
         {
             tool.OnMouseMove(worldRay, MouseEvent(EventType.MouseMove, false));

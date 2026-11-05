@@ -142,7 +142,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             using (LiveBuilderWindowControls.Card("Клик"))
                 LiveBuilderCutterSettings.IsSnappedToGrid = LiveBuilderWindowControls.Switch(
-                    new GUIContent("Место", "Где навёл — середина проёма ровно под мышью. По сетке — левый край и низ прилипают к сетке: проёмы встают ровными рядами. " +
+                    new GUIContent("Место", "Где навёл — середина проёма ровно под мышью. По сетке — низ и край проёма, ближний к краю стены, прилипают к сетке от этого края: проёмы встают ровными рядами. " +
                                             "В здании с этажами низ — всегда от пола его этажа, на «Низ над полом»"),
                     LiveBuilderCutterSettings.IsSnappedToGrid, ("Где навёл", LiveBuilderOptionIcon.AtCursor), ("По сетке", LiveBuilderOptionIcon.Grid));
 

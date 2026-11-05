@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FeatherKit.Tests.LiveBuilder
 {
     /// <summary>
-    /// Кого режут вырезающие коробки и вырезы: коробка — только стены и здания выше неё в иерархии (здание-предок — всегда);
+    /// Кого режут вырезающие коробки и проёмы: коробка — стены и здания своего объекта, которые задевает, порядок в списке не важен; пустота комнаты — не перегородки внутри неё;
     /// что режет — всё, только перекрытия или только стены; вырез внутри постройки — только свою группу, «всё вокруг» — и соседей.
     /// </summary>
     public class LiveBuilderCutRulesTests
@@ -30,10 +30,10 @@ namespace FeatherKit.Tests.LiveBuilder
         }
 
 
-        // ── Порядок в иерархии ───────────────────────────────────────────
+        // ── Одно правило резки ───────────────────────────────────────────
 
         [Test]
-        public void CutBox_CutsOnlyWallAboveItInHierarchy()
+        public void CutBox_CutsWall_WhateverItsPlaceInList()
         {
             var model = BoxModelFactory.CreateModel(Origin);
             var wall = testScene.CreateWall(model, Vector3.zero, new Vector3(10f, 0f, 0f));
@@ -42,67 +42,82 @@ namespace FeatherKit.Tests.LiveBuilder
             SplineWallRebuilder.Rebuild(wall);
             var signatureWithHole = wall.BuiltSignature;
 
-            Assert.IsTrue(LiveBuilderTestScene.IsOpen(Origin + new Vector3(5f, 1.5f, -2f), Vector3.forward, 4f), "коробка ниже стены — дыра");
+            Assert.IsTrue(LiveBuilderTestScene.IsOpen(Origin + new Vector3(5f, 1.5f, -2f), Vector3.forward, 4f), "коробка после стены — дыра");
 
             box.transform.SetSiblingIndex(0);
             BoxModelRebuilder.ForgetCachedResults();
             SplineWallRebuilder.Rebuild(wall);
 
-            Assert.IsFalse(LiveBuilderTestScene.IsOpen(Origin + new Vector3(5f, 1.5f, -2f), Vector3.forward, 4f), "коробка выше стены — стена цела");
-            Assert.AreNotEqual(signatureWithHole, wall.BuiltSignature, "порядок — в подписи: переставил — пересборка");
+            Assert.IsTrue(LiveBuilderTestScene.IsOpen(Origin + new Vector3(5f, 1.5f, -2f), Vector3.forward, 4f), "коробка перед стеной — дыра та же");
+            Assert.AreEqual(signatureWithHole, wall.BuiltSignature, "порядок в подписи не участвует: переставил — пересборки нет");
         }
 
 
-        // Порядок резки виден сразу, без пересборки стены: ниже стены — «режет», переставили выше — «после неё, целая»; «Поставить ниже» — снова режет.
+        // Пустота комнаты не режет стену-перегородку внутри неё: у комнаты свои стены, перегородка в ней цела.
         [Test]
-        public void CutOrder_IsShownRightAway_AndPlaceBelowFixesIt()
+        public void RoomInterior_DoesNotCutPartitionInsideIt()
         {
             var model = BoxModelFactory.CreateModel(Origin);
-            var wall = testScene.CreateWall(model, Vector3.zero, new Vector3(10f, 0f, 0f));
-            var box = BoxModelFactory.CreatePart(model, new Vector3(4f, 0.5f, -1f), new Vector3(6f, 2.5f, 1f), BoxModelPartMode.Cut);
-            BoxModelRebuilder.ForgetCachedResults();
+            var partition = testScene.CreateWall(model, new Vector3(1f, 0f, 3f), new Vector3(7f, 0f, 3f));
+            BoxModelFactory.CreateRoom(model, Vector3.zero, new Vector3(8f, 3f, 6f), true);
+            BoxModelRebuilder.Rebuild(model);
+            SplineWallRebuilder.Rebuild(partition);
 
-            LiveBuilderCutOrderNotices.CheckNow(box);
-            Assert.Contains(wall, LiveBuilderCutOrderNotices.TargetsCutBy(box), "коробка ниже стены — режет её");
-            Assert.IsEmpty(LiveBuilderCutOrderNotices.TargetsSkippedBy(box), "и целых после неё нет");
-
-            box.transform.SetSiblingIndex(0);
-            BoxModelRebuilder.ForgetCachedResults();
-            LiveBuilderCutOrderNotices.CheckNow(box);
-            Assert.Contains(wall, LiveBuilderCutOrderNotices.TargetsSkippedBy(box), "переставили выше стены — стена после неё, целая");
-            Assert.IsEmpty(LiveBuilderCutOrderNotices.TargetsCutBy(box), "и уже не режет");
-
-            Assert.IsTrue(LiveBuilderCutOrderNotices.TryPlaceBelow(box, wall), "у них общий родитель — поставить можно");
-            Assert.IsEmpty(LiveBuilderCutOrderNotices.TargetsSkippedBy(box), "ниже стены — снова режет");
+            Assert.IsFalse(LiveBuilderTestScene.IsOpen(Origin + new Vector3(4f, 1.5f, 1.5f), Vector3.forward, 3f), "перегородка внутри комнаты цела");
         }
 
 
-        // Проверка уровня находит коробку выше стены, которую она задевает, и здание с перекрещённым контуром — не только у выделенного.
+        // Проверка уровня находит здание с перекрещённым контуром — не только у выделенного.
         [Test]
-        public void LevelCheck_FindsCutBoxAboveWall_AndCrossedContour()
+        public void LevelCheck_FindsCrossedContour()
         {
-            var model = BoxModelFactory.CreateModel(Origin);
-            testScene.CreateWall(model, Vector3.zero, new Vector3(10f, 0f, 0f));
-            var box = BoxModelFactory.CreatePart(model, new Vector3(4f, 0.5f, -1f), new Vector3(6f, 2.5f, 1f), BoxModelPartMode.Cut);
-            box.transform.SetSiblingIndex(0);
             var crossed = testScene.CreateBuilding(1, new Vector3(20f, 0f, 0f), new Vector3(28f, 0f, 8f), new Vector3(28f, 0f, 0f), new Vector3(20f, 0f, 8f));
-            BoxModelRebuilder.ForgetCachedResults();
 
             var issues = LiveBuilderLevelCheck.FindIssues();
 
-            Assert.IsTrue(issues.Exists(issue => issue.Target == box.gameObject), "коробка выше стены — в списке");
             Assert.IsTrue(issues.Exists(issue => issue.Target == crossed.gameObject), "здание-бабочка — в списке");
         }
 
 
-        // Коробка в интерьере здания: здание — её предок, перекрытие прорезано; перегородка после коробки — цела.
+        // Здание на платформе в полтора метра стоит не на этаже уровня нарочно — не ошибка; промах на 10 см мимо пола — ошибка.
         [Test]
-        public void CutBoxInInterior_CutsBuildingSlab_ButNotPartitionBelowIt()
+        public void LevelCheck_BuildingOnPlatformIsFine_NearMissIsIssue()
+        {
+            var levelStoreyHeight = LiveBuilderStoreys.StoreyHeight;
+            var levelGround = LiveBuilderStoreys.GroundLevel;
+            LiveBuilderStoreys.StoreyHeight = 4f;
+            LiveBuilderStoreys.GroundLevel = 0f;
+
+            try
+            {
+                var onPlatform = testScene.CreateBuilding(1, Vector3.zero, new Vector3(8f, 0f, 0f), new Vector3(8f, 0f, 8f), new Vector3(0f, 0f, 8f));
+                var nearMiss = testScene.CreateBuilding(1, new Vector3(20f, 0f, 0f), new Vector3(28f, 0f, 0f), new Vector3(28f, 0f, 8f), new Vector3(20f, 0f, 8f));
+                SplineBuildingLevelAlignment.AlignToLevel(onPlatform);
+                SplineBuildingLevelAlignment.AlignToLevel(nearMiss);
+                onPlatform.transform.position += Vector3.up * 1.5f;
+                nearMiss.transform.position += Vector3.up * 0.1f;
+
+                var issues = LiveBuilderLevelCheck.FindIssues();
+
+                Assert.IsFalse(issues.Exists(issue => issue.Target == onPlatform.gameObject), "здание на платформе — не в списке");
+                Assert.IsTrue(issues.Exists(issue => issue.Target == nearMiss.gameObject), "промах на 10 см — в списке");
+            }
+            finally
+            {
+                LiveBuilderStoreys.StoreyHeight = levelStoreyHeight;
+                LiveBuilderStoreys.GroundLevel = levelGround;
+            }
+        }
+
+
+        // Коробка в интерьере здания режет и перекрытие, и перегородку, которую задевает, — даже поставленную после неё.
+        [Test]
+        public void CutBoxInInterior_CutsSlabAndPartition_EvenPartitionAfterIt()
         {
             var setup = CreateBuildingWithCutBox(LiveBuilderCutTargets.Everything, isPartitionFirst: false);
 
-            Assert.IsTrue(IsSlabOpen(setup.Building), "перекрытие здания-предка прорезано");
-            Assert.IsFalse(IsPartitionOpen(setup.Building), "перегородка ниже коробки — цела");
+            Assert.IsTrue(IsSlabOpen(setup.Building), "перекрытие прорезано");
+            Assert.IsTrue(IsPartitionOpen(setup.Building), "перегородка после коробки — тоже прорезана: порядок не важен");
         }
 
 

@@ -50,7 +50,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 case SplineWall wall when IsContourRoom(wall):
                     return wall.GetComponentInParent<SplineBuilding>() != null
-                        ? "По контуру в здании: перегородки до потолка этажа, вдоль стен здания своих стен нет."
+                        ? "В здании: перегородки до потолка этажа, вдоль стен здания своих стен нет."
                         : "По контуру: замкнутая стена вокруг; пол и потолок — по переключателям «Пол и потолок».";
 
                 default:

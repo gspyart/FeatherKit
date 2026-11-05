@@ -25,11 +25,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public bool IsActive => rectangle.IsActive;
 
-        public string Hint => rectangle.BuildingContext != null
-            ? "Тяни — комната, встанут только недостающие перегородки. Отпусти — готово"
-            : rectangle.IsInsideModel
-                ? "Тяни — размер комнаты, она вырежется в доме. Отпусти — готово. Esc — отмена"
-                : "Тяни — комната, стены встанут " + WallSideText + ". Отпусти — готово. Esc — отмена";
+        public string Hint => rectangle.TypedText.Length > 0
+            ? "Набрано " + rectangle.TypedText + " м: X — вторая сторона; отпусти — комната ровно такая. Backspace — стереть цифру, Esc — стереть набор"
+            : rectangle.BuildingContext != null
+                ? "Тяни — комната, встанут только недостающие перегородки; «4 X 3» — точно. Отпусти — готово"
+                : rectangle.IsInsideModel
+                    ? "Тяни — размер комнаты, она вырежется в доме; «4 X 3» — точно. Отпусти — готово. Esc — отмена"
+                    : "Тяни — комната, стены встанут " + WallSideText + "; «4 X 3» — точно. Отпусти — готово. Esc — отмена";
 
         private static string WallSideText => LiveBuilderRoomSettings.WallSide switch
         {
@@ -40,6 +42,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // ── Жест ─────────────────────────────────────────────────────────
+
+        // Пока тянешь: цифры и X — точные стороны (<see cref="LiveBuilderFloorRectangle.HandleKey"/>).
+        public bool HandleKey(KeyCode key)
+        {
+            return rectangle.HandleKey(key);
+        }
+
 
         public bool TryBegin(Ray worldRay)
         {

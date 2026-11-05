@@ -83,6 +83,91 @@ namespace FeatherKit.Tests.LiveBuilder
         }
 
 
+        [Test]
+        public void BoxTool_SidesTypedWhileDragging_ThenDepth_MakeExactBox()
+        {
+            var driver = new LiveBuilderToolDriver(LiveBuilderToolPalette.Get<LiveBuilderBoxTool>());
+
+            driver.Hold(FloorRay(0f, 0f), FloorRay(1f, 1f));
+            driver.Type("4x3");
+            driver.Release();
+            driver.Type("2");
+            driver.Press(KeyCode.Return);
+
+            var size = InTestScene<BoxModelPart>().Single().Size;
+            Assert.AreEqual(4f, size.x, 0.001f, "набрано пока тянул — по X");
+            Assert.AreEqual(3f, size.z, 0.001f, "и по Z");
+            Assert.AreEqual(2f, size.y, 0.001f, "глубина — после");
+        }
+
+
+        // Балкон: коробка наружу со стены здания — его часть, и с «И этажи выше» встаёт на все этажи, хотя середина вне его стен.
+        [Test]
+        public void BoxTool_OnOuterWallOfBuilding_WithAllStoreys_AttachesToBuilding()
+        {
+            var model = BoxModelFactory.CreateModel(Origin);
+            var building = testScene.CreateBuilding(model, 2, Vector3.zero, new Vector3(8f, 0f, 0f), new Vector3(8f, 0f, 8f), new Vector3(0f, 0f, 8f));
+            var floor = building.FirstFloorWorldHeight;
+            var allStoreysBefore = LiveBuilderBuildingContext.IsOnAllStoreys;
+            var drawModeBefore = BoxModelDrawModeSetting.Current;
+            LiveBuilderBuildingContext.IsOnAllStoreys = true;
+            BoxModelDrawModeSetting.Current = BoxModelDrawMode.Auto;
+
+            try
+            {
+                var driver = new LiveBuilderToolDriver(LiveBuilderToolPalette.Get<LiveBuilderBoxTool>());
+                driver.Drag(WallRay(floor + 0.5f, 2f), WallRay(floor + 2.5f, 6f));
+                driver.Type("2");
+                driver.Press(KeyCode.Return);
+
+                var link = InTestScene<BoxModelPart>().Single().GetComponent<SplineBuildingStoreyLink>();
+                Assert.IsNotNull(link, "балкон привязан к зданию");
+                Assert.AreEqual(building, link.Building, "к тому, на чьей стене нарисован");
+                Assert.AreEqual(2, link.CopiesFrom(link.Storey), "«И этажи выше» — на обоих этажах");
+            }
+            finally
+            {
+                LiveBuilderBuildingContext.IsOnAllStoreys = allStoreysBefore;
+                BoxModelDrawModeSetting.Current = drawModeBefore;
+            }
+        }
+
+        // Луч с запада на стену x = 0 тестового здания: на высоте мира и в метрах по Z от начала сцены.
+        private static Ray WallRay(float worldHeight, float z)
+        {
+            return new Ray(new Vector3(Origin.x - 10f, worldHeight, Origin.z + z), Vector3.right);
+        }
+
+
+        // ── Комната ──────────────────────────────────────────────────────
+
+        [Test]
+        public void RoomTool_SidesTypedWhileDragging_MakeRoomThatSize()
+        {
+            var shapeBefore = LiveBuilderRoomSettings.Shape;
+            var wallSideBefore = LiveBuilderRoomSettings.WallSide;
+            LiveBuilderRoomSettings.Shape = LiveBuilderRoomShape.Rectangle;
+            LiveBuilderRoomSettings.WallSide = LiveBuilderRoomWallSide.Outward;
+
+            try
+            {
+                var driver = new LiveBuilderToolDriver(LiveBuilderToolPalette.Get<LiveBuilderRoomTool>());
+                driver.Hold(FloorRay(0f, 0f), FloorRay(1f, 1f));
+                driver.Type("5x3,5");
+                driver.Release();
+
+                var size = InTestScene<BoxModelRoom>().Single().Size;
+                Assert.AreEqual(5f, size.x, 0.001f, "внутри по X — набранное");
+                Assert.AreEqual(3.5f, size.z, 0.001f, "по Z — тоже");
+            }
+            finally
+            {
+                LiveBuilderRoomSettings.Shape = shapeBefore;
+                LiveBuilderRoomSettings.WallSide = wallSideBefore;
+            }
+        }
+
+
         // ── Лестница ─────────────────────────────────────────────────────
 
         [Test]

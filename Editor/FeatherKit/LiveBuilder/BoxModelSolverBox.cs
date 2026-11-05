@@ -93,7 +93,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Коробка расчёта — одна коробка так, как её видит решатель: с учётом повторов, ступень лестницы или вырез над ней.
     /// Помнит, откуда взялась (коробка или лестница на сцене): по ней грань выделяется кликом и берёт материал,
-    /// а вырезающая — решает, какие стены и здания объекта режет: что и стоят ли они выше неё в иерархии.
+    /// а вырезающая — решает, какие стены и здания объекта режет (<see cref="CutsTarget"/>): порядок в списке объектов для этого не важен.
     /// Скосы рёбер коробки (<see cref="BoxModelEdgeChamfer"/>) едут с ней и в копии повтора: их срезает <see cref="BoxModelChamferCutter"/>.
     /// </summary>
     public sealed class BoxModelSolverBox
@@ -137,10 +137,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public bool CutsSlabs => Mode == BoxModelPartMode.Cut && CutTargets != LiveBuilderCutTargets.WallsOnly;
 
 
-        // Стена или здание стоит в иерархии выше коробки, которая её дала, — только такое она и режет. Копии повтора — по своему оригиналу.
-        public bool IsBelow(Component target)
+        // Режет ли эта вырезающая коробка стену или здание, которых касается. Коробка и вырез над лестницей — всегда, где бы ни стояли в списке.
+        // Пустота комнаты — только здание: комната открывается в здание, к которому примыкает (эркер), а стены-перегородки внутри неё целы.
+        public bool CutsTarget(Component target)
         {
-            return Owner != null && LiveBuilderHierarchyOrder.IsBefore(target.transform, Owner.transform);
+            return Owner is not BoxModelRoom || target is SplineBuilding;
         }
 
 

@@ -95,6 +95,23 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Посмотреть набранные числа, не стирая набор: можно, пока набирают, — прямоугольник подстраивается на ходу. Недописанное последнее — без него.
+        public bool TryPeekAll(List<float> values)
+        {
+            values.Clear();
+
+            foreach (var part in text.Split(Separator))
+            {
+                if (!TryParse(part, out var meters))
+                    break;
+
+                values.Add(meters);
+            }
+
+            return values.Count > 0;
+        }
+
+
         // Забрать все набранные числа по порядку, м: набор стирается в любом случае. Хоть одно не число или почти ноль — false.
         public bool TryTakeAll(List<float> values)
         {
@@ -104,10 +121,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             foreach (var part in parts)
             {
-                var isNumber = float.TryParse(part.Replace(',', '.'), System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var meters);
-
-                if (!isNumber || meters <= MinLength)
+                if (!TryParse(part, out var meters))
                 {
                     values.Clear();
                     return false;
@@ -117,6 +131,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             return values.Count > 0;
+        }
+
+        // Одно число из набора, м; не число или почти ноль — false.
+        private static bool TryParse(string part, out float meters)
+        {
+            var isNumber = float.TryParse(part.Replace(',', '.'), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out meters);
+            return isNumber && meters > MinLength;
         }
 
 

@@ -46,7 +46,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public override string[] KeyHints { get; } = new[]
         {
-            "протянуть — марш, потом мышью высоту",
+            "протянуть — марш, потом мышью высоту; пока тянешь, «1,2 X 4» — точно",
             "цифры + Enter — точная высота; клик или Enter — готово",
             "Tab — повернуть подъём, Esc — отмена"
         };

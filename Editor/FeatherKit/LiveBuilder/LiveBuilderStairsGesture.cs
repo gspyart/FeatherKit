@@ -56,7 +56,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
             : isChoosingHeight
             ? "Мышь вверх-вниз — высота: " + LiveBuilderSceneText.FormatMeters(chosenHeight) + " м (этаж — " + LiveBuilderSceneText.FormatMeters(StoreyStairsHeight) +
               "); цифры + Enter — точно. Клик или Enter — готово, Tab — повернуть, Esc — отмена"
-            : "Вверх — " + DirectionName(CurrentDirection) + ". Тяни прямоугольник — длина и ширина лестницы. Tab — повернуть. Отпусти — дальше высота. Esc — отмена";
+            : rectangle.TypedText.Length > 0
+            ? "Набрано " + rectangle.TypedText + " м: X — вторая сторона (по X и по Z); отпусти — ровно такая. Esc — стереть набор"
+            : "Вверх — " + DirectionName(CurrentDirection) + ". Тяни прямоугольник — длина и ширина лестницы; «1,2 X 4» — точно. Tab — повернуть. Отпусти — дальше высота. Esc — отмена";
 
         // Куда пойдёт вверх: запомненное, а пока не запомнилось — куда тянут сильнее.
         private BoxModelStairsDirection CurrentDirection => lockedDirection ?? DirectionOf(rectangle.End - rectangle.Start);
@@ -103,8 +105,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Возвращает, забрал ли клавишу.
         public bool HandleKey(KeyCode key)
         {
+            // Пока тянешь прямоугольник: цифры и X — ширина и длина (<see cref="LiveBuilderFloorRectangle.HandleKey"/>).
             if (!IsChoosingHeight)
-                return false;
+                return rectangle.HandleKey(key);
 
             if (typedHeight.TryType(key))
                 return true;

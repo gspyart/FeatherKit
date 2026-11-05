@@ -23,12 +23,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
     /// <summary>
     /// Проверка уровня — всё подозрительное на сцене одним списком, а не только у выделенного: здание с перекрещённым контуром,
-    /// здание, повёрнутое внутри своего объекта, здание не на этажах уровня, привязка к этажу, которого у здания нет (объект спрятан),
-    /// вырезающая коробка, что задевает стену или здание, но стоит выше
-    /// в списке и её не режет (<see cref="LiveBuilderCutOrderNotices"/>). Ищет по кнопке во вкладке «Уровень» — на большом уровне это не бесплатно.
+    /// здание, повёрнутое внутри своего объекта, здание мимо этажей уровня по ошибке, привязка к этажу, которого у здания нет (объект спрятан).
+    /// Здание на платформе или на крыше стоит не на этаже уровня нарочно — это не ошибка. Ищет по кнопке во вкладке «Уровень».
     /// </summary>
     public static class LiveBuilderLevelCheck
     {
+        // Низ здания ближе этого к полу этажа уровня, но не на нём, — похоже на промах, а не на платформу или крышу, м.
+        private const float NearMissDistance = 0.25f;
+
+
         // ── Проверка ─────────────────────────────────────────────────────
 
         public static List<LiveBuilderLevelIssue> FindIssues()
@@ -45,10 +48,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     issues.Add(new LiveBuilderLevelIssue("«" + link.name + "» стоит на этаже " + (link.Storey + 1) + ", а у здания «" + link.Building.name +
                                                          "» этажей " + link.Building.StoreyCount + ": спрятан, пока этаж не вернётся.", link.gameObject));
 
-            foreach (var part in stage.FindComponentsOfType<BoxModelPart>())
-                if (part.Mode == BoxModelPartMode.Cut && part.gameObject.activeInHierarchy)
-                    AddCutOrderIssues(part, issues);
-
             return issues;
         }
 
@@ -61,20 +60,29 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 issues.Add(new LiveBuilderLevelIssue("Здание «" + building.name + "» повёрнуто внутри своего объекта: лестницы и коробки интерьера разъедутся с ним.",
                     building.gameObject));
 
-            if (!SplineBuildingLevelAlignment.IsAlignedToLevel(building))
-                issues.Add(new LiveBuilderLevelIssue("Здание «" + building.name + "» не на этажах уровня: «этаж» в окне и в здании — разные.", building.gameObject));
+            AddLevelStoreyIssue(building, issues);
         }
 
-        // Вырезающая коробка задевает стену или здание, но стоит выше в списке: они поставлены после и целые. Бывает нарочно — проверь.
-        private static void AddCutOrderIssues(BoxModelPart part, List<LiveBuilderLevelIssue> issues)
+        // Мимо этажей уровня — только когда похоже на ошибку: низ промахнулся мимо пола этажа на сантиметры
+        // или стоит на нём, но высота этажа другая — выше первого этажи окна и здания разойдутся.
+        private static void AddLevelStoreyIssue(SplineBuilding building, List<LiveBuilderLevelIssue> issues)
         {
-            LiveBuilderCutOrderNotices.CheckNow(part);
+            if (!SplineBuildingLevelAlignment.IsOnLevelFloor(building))
+            {
+                var offset = SplineBuildingLevelAlignment.OffsetFromLevelFloorOf(building);
 
-            foreach (var target in LiveBuilderCutOrderNotices.TargetsSkippedBy(part))
-                issues.Add(new LiveBuilderLevelIssue("Вырезающая коробка «" + part.name + "» задевает «" + target.name + "», но стоит выше в списке и не режет её. " +
-                                                     "Нарочно — ничего не делай.", part.gameObject));
+                if (Mathf.Abs(offset) < NearMissDistance)
+                    issues.Add(new LiveBuilderLevelIssue("Здание «" + building.name + "» на " + Mathf.Max(1, Mathf.RoundToInt(Mathf.Abs(offset) * 100f)) + " см " +
+                                                         (offset > 0f ? "выше" : "ниже") + " пола этажа уровня — похоже на промах. " +
+                                                         "Выдели его: «Поставить на этажи уровня».", building.gameObject));
+                return;
+            }
+
+            if (!SplineBuildingLevelAlignment.HasLevelStoreyHeight(building))
+                issues.Add(new LiveBuilderLevelIssue("У здания «" + building.name + "» этаж " + LiveBuilderSceneText.FormatMeters(building.StoreyHeight) +
+                                                     " м, у уровня " + LiveBuilderSceneText.FormatMeters(LiveBuilderStoreys.StoreyHeight) +
+                                                     " м: выше первого этажа «этаж» в окне и в здании разойдутся.", building.gameObject));
         }
-
 
         // Здание повёрнуто внутри своего объекта из коробок: лестницы и коробки интерьера идут по осям объекта и разъедутся со зданием.
         public static bool IsRotatedInsideModel(SplineBuilding building)

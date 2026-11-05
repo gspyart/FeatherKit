@@ -34,6 +34,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Сдвиг по сетке в осях стрелок — на столько уже уехало.
         private static Vector3 snappedOffset;
 
+        // Угол переносимого прилип к точке постройки (<see cref="LiveBuilderMoveSnap"/>) — подпись у ручек; нет — null.
+        private static string pointSnapLabel;
+
 
         // Где стрелки, пока тянешь: начало плюс уже сделанный сдвиг по сетке — стрелки идут вместе с постройкой, а не за мышью.
         public static Vector3 HandlePosition => dragStartPosition + dragRotation * snappedOffset;
@@ -173,7 +176,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
             dragStartPosition = handleStart;
             dragRotation = axes;
             snappedOffset = Vector3.zero;
+            pointSnapLabel = null;
             RememberTargets(targets);
+            LiveBuilderMoveSnap.Begin(Targets.Count > 0 ? ActiveTarget(Targets) : null);
         }
 
         private static void RememberTargets(IEnumerable<Transform> targets)
@@ -189,13 +194,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Стрелки ушли сюда: сдвиг — целыми клетками сетки в осях стрелок. Первый целый шаг копии — сначала сама копия.
+        // Стрелки ушли сюда: сдвиг — целыми клетками сетки в осях стрелок, а угол рядом с точкой постройки — к ней. Первый шаг копии — сначала сама копия.
         public static void DragTo(Vector3 handle)
         {
             if (!isDragging)
                 return;
 
-            var offset = LiveBuilderGrid.Snap(Quaternion.Inverse(dragRotation) * (handle - dragStartPosition));
+            var rawOffset = Quaternion.Inverse(dragRotation) * (handle - dragStartPosition);
+            var offset = LiveBuilderMoveSnap.Snap(dragRotation, rawOffset, LiveBuilderGrid.Snap(rawOffset), out pointSnapLabel);
 
             if (offset == snappedOffset)
                 return;
@@ -242,6 +248,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return;
 
             Undo.CollapseUndoOperations(undoGroup);
+            LiveBuilderMoveSnap.End();
             isDragging = false;
             Targets.Clear();
             StartPositions.Clear();
@@ -257,7 +264,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return;
 
             var offsetText = LiveBuilderSceneText.FormatOffset(snappedOffset) ?? (isCopying ? "тяни дальше — копия встанет на клетку сетки" : "0 м");
-            LiveBuilderSceneText.DrawLabel(HandlePosition, isCopying ? "копия · " + offsetText : offsetText);
+            var text = (isCopying ? "копия · " : "") + offsetText + (pointSnapLabel != null ? " · " + pointSnapLabel : "");
+            LiveBuilderSceneText.DrawLabel(HandlePosition, text);
         }
     }
 }

@@ -12,7 +12,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// правка точек, перенос, Ctrl+Z. Как у объектов из коробок — по «подписи», без лишних пересборок; меш — файлом рядом со сценой.
     /// Когда проверять — решает общая очередь <see cref="LiveBuilderRebuildQueue"/>: стены — последними, после коробок и зданий.
     /// Вырезающие коробки объекта, в котором стена лежит, переводит в проёмы в координатах стены: там, где коробка пересекает линию стены,
-    /// стена прорезана насквозь. Режут только коробки ниже стены в иерархии (<see cref="LiveBuilderHierarchyOrder"/>), которые режут стены.
+    /// стена прорезана насквозь. Режут коробки, которые режут стены (<see cref="BoxModelSolverBox.CutsTarget"/>), где бы ни стояли в списке; пустота комнаты стены по линии не режет.
     /// Коробка во всю высоту стены — комната, в которой стена стоит, а не проём: такую стену она не режет.
     /// Вырезы (<see cref="GeometryCutter"/>) вычитаются из готового меша (<see cref="GeometryCutterApplier"/>).
     /// У стены-комнаты в здании стороны на его стенах не строятся (<see cref="SplineWallBuildingSides"/>).
@@ -114,7 +114,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Проёмы ───────────────────────────────────────────────────────
 
-        // Проёмы одного пути в координатах стены или здания — от вырезающих коробок объекта вокруг, что режут стены и стоят ниже в иерархии.
+        // Проёмы одного пути в координатах стены или здания — от вырезающих коробок объекта вокруг, что режут стены (<see cref="BoxModelSolverBox.CutsTarget"/>); порядок в списке не важен.
         // Вырез лестницы и коробка «только перекрытия» стену не пробивают.
         public static List<SplineWallHole> CollectHoles(Component owner, SplineWallPath path)
         {
@@ -129,33 +129,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (!box.CutsWalls)
                     continue;
 
-                if (box.IsBelow(owner))
-                    AddCutBoxHolesAndReport(owner, model, path, box, holes);
-                else
-                    ReportIfWouldCut(owner, model, path, box);
+                if (box.CutsTarget(owner))
+                    AddCutBoxHoles(owner, model, path, box.Box, holes);
             }
 
             return holes;
-        }
-
-        // Проёмы коробки, что стоит ниже стены, — и сказать о них порядку резки: коробка её режет.
-        private static void AddCutBoxHolesAndReport(Component owner, BoxModel model, SplineWallPath path, BoxModelSolverBox box, List<SplineWallHole> holes)
-        {
-            var countBefore = holes.Count;
-            AddCutBoxHoles(owner, model, path, box.Box, holes);
-
-            if (holes.Count > countBefore)
-                LiveBuilderCutOrderNotices.ReportBoxCuts(box.Owner, owner);
-        }
-
-        // Коробка выше стены в иерархии, а прорезала бы её — стена поставлена после коробки: сказать порядку резки, что не режет.
-        private static void ReportIfWouldCut(Component owner, BoxModel model, SplineWallPath path, BoxModelSolverBox box)
-        {
-            var skippedHoles = new List<SplineWallHole>();
-            AddCutBoxHoles(owner, model, path, box.Box, skippedHoles);
-
-            if (skippedHoles.Count > 0)
-                LiveBuilderCutOrderNotices.ReportBoxAboveTarget(box.Owner, owner);
         }
 
         // Где линия стены проходит внутри коробки (в плане) — там проём на высоту коробки. По отрезку на каждый кусок пути.
@@ -305,7 +283,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
         // Вырезающие коробки объекта, которые режут эту стену или здание, — для их подписи: правка добавляющих коробок, материалов и ступеней
-        // их не пересобирает, а переставил коробку выше или ниже в иерархии — пересоберёт. Перекрытия есть только у здания.
+        // их не пересобирает, а сдвинул вырезающую коробку — пересоберёт. Перекрытия есть только у здания.
         // Только коробки, что задевают габарит стены или здания, и их углы — в осях самой стены или здания, с округлением до 0,1 мм:
         // коробка в другом конце объекта (копия здания с лестницей рядом) подпись не меняет, а здание, которое едет вместе со своей лестницей, не пересобирается.
         // Что режет коробка — только если не «всё».
@@ -319,7 +297,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 var isApplied = box.CutsWalls || includesSlabCuts && box.CutsSlabs;
 
-                if (!isApplied || !box.IsBelow(owner))
+                if (!isApplied || !box.CutsTarget(owner))
                     continue;
 
                 var min = modelToOwner.MultiplyPoint3x4(box.Box.MinInMeters);

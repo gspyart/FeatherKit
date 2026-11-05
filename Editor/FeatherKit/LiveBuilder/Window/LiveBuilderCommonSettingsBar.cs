@@ -89,8 +89,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var isEnabled = LiveBuilderPointSnap.IsEnabled;
             var tooltip = isEnabled
-                ? "Прилипание к точкам: включено — к углам, серединам и рёбрам построек рядом с мышью, сильнее сетки. Клик или S в окне сцены — выключить"
-                : "Прилипание к точкам: выключено — только сетка. Клик или S в окне сцены — включить";
+                ? "Прилипание к точкам: включено — к углам, серединам и рёбрам построек рядом с мышью и к направляющим линии, сильнее сетки. Клик или S в окне сцены — выключить"
+                : "Прилипание к точкам и направляющим: выключено — только сетка. Клик или S в окне сцены — включить";
             var isPressed = LiveBuilderWindowControls.IconOnlyToggle(isEnabled, LiveBuilderOptionIcon.SnapPoints, tooltip, GUILayout.Width(IconButtonWidth), GUILayout.Height(18f));
 
             if (isPressed == isEnabled)

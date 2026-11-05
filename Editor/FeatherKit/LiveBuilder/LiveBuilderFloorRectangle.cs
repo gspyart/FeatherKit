@@ -11,6 +11,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// верх объекта из коробок, а если там стена, потолок, другая геометрия или пусто — пол текущего этажа.
     /// Помнит, начат ли он внутри объекта из коробок — на полу под потолком того же объекта или в его сплошном объёме: тогда новое вырезается в нём.
     /// Тот же поиск пола под потолком дома нужен и комнате по контуру — <see cref="TryFindHouseFloor"/>.
+    /// Пока тянешь, стороны можно набрать цифрами: «4 X 3» — ровно 4 по X и 3 по Z от первого угла, в сторону мыши (<see cref="HandleKey"/>).
     /// </summary>
     public sealed class LiveBuilderFloorRectangle
     {
@@ -19,6 +20,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private const int BottomFace = 3;
 
         private bool isStarted;
+
+        // Стороны, набранные цифрами, пока тянешь, и числа из набора — один список на все разборы.
+        private readonly LiveBuilderTypedLength typedSides = new(2);
+        private readonly List<float> typedValues = new();
 
 
         // Начат и не отменён. Здание, на полу которого начали, удалили или отменили — жест кончился сам.
@@ -38,6 +43,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public bool HasArea => !Mathf.Approximately(Start.x, End.x) && !Mathf.Approximately(Start.z, End.z);
 
+        // Стороны, набранные цифрами, как есть: «4×3»; не набирают — пусто.
+        public string TypedText => typedSides.Text;
+
         // Модель, в которую пойдёт новое: та, на чьём полу начали, или выделенная; null — будет новая.
         public BoxModel TargetModel => Plane.Model;
 
@@ -53,6 +61,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public bool TryBegin(Ray worldRay)
         {
             BuildingContext = null;
+            typedSides.Clear();
             var selectedGroup = BoxModelFactory.SelectedBuildingGroup(out var groupBuilding);
 
             if (selectedGroup != null)
@@ -140,11 +149,46 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             if (IsActive && Plane.TryIntersect(worldRay, out var point))
                 End = BuildingContext != null ? SnapInBuilding(point) : Plane.SnapOnPlane(point);
+
+            ApplyTypedSides();
+        }
+
+
+        // Пока тянешь: цифры и X — стороны прямоугольника, Backspace — стереть, Esc при наборе — стереть набор. Возвращает, забрал ли клавишу.
+        public bool HandleKey(KeyCode key)
+        {
+            if (!IsActive)
+                return false;
+
+            if (typedSides.TryType(key))
+            {
+                ApplyTypedSides();
+                return true;
+            }
+
+            if (key != KeyCode.Escape || !typedSides.IsTyping)
+                return false;
+
+            typedSides.Clear();
+            return true;
+        }
+
+        // Набраны обе стороны — прямоугольник ровно такой: от первого угла в ту сторону, куда тянет мышь.
+        private void ApplyTypedSides()
+        {
+            if (!typedSides.TryPeekAll(typedValues) || typedValues.Count < 2)
+                return;
+
+            var end = End;
+            end.x = Start.x + (End.x < Start.x ? -1f : 1f) * typedValues[0];
+            end.z = Start.z + (End.z < Start.z ? -1f : 1f) * typedValues[1];
+            End = end;
         }
 
 
         public void Cancel()
         {
+            typedSides.Clear();
             isStarted = false;
             IsInsideModel = false;
             BuildingContext = null;

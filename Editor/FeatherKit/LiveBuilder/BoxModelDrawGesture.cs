@@ -52,7 +52,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Что делать дальше — для строки-подсказки внизу окна сцены.
         public string Hint => stage switch
         {
-            DrawStage.Rectangle => "Тяни — размер прямоугольника. Отпусти — дальше глубина. Esc — отмена",
+            DrawStage.Rectangle when typedSize.IsTyping => "Набрано " + typedSize.Text + " м: X — вторая сторона; отпусти — прямоугольник ровно такой. Esc — стереть набор",
+            DrawStage.Rectangle => "Тяни — размер прямоугольника; «4 X 3» — точно. Отпусти — дальше глубина. Esc — отмена",
             DrawStage.Depth when typedSize.IsTyping => "Набрано " + typedSize.Text + " м: одно число — глубина, два — стороны, три — всё; X — следующее число. " +
                                                        "Enter — применить, Backspace — стереть цифру, Esc — стереть набор",
             DrawStage.Depth => BoxModelDrawModeSetting.Current == BoxModelDrawMode.Auto && !isCreatingNewModel
@@ -77,6 +78,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             isCreatingNewModel = isForNewModel;
             pathOwner = isForNewModel ? null : PathOwnerUnder(worldRay);
             rectangleEnd = rectangleStart;
+            typedSize.Clear();
             stage = DrawStage.Rectangle;
             return true;
         }
@@ -93,17 +95,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             if (stage == DrawStage.Rectangle && plane.TryIntersect(worldRay, out var localPoint))
                 rectangleEnd = plane.SnapOnPlane(localPoint);
+
+            ApplyTypedSides();
         }
 
 
         // Прямоугольник готов — дальше глубина. Пустой прямоугольник — жест отменяется.
         public bool TryFinishRectangle(Vector2 mousePosition)
         {
+            ApplyTypedSides();
+
             if (stage != DrawStage.Rectangle || !HasArea())
             {
                 Cancel();
                 return false;
             }
+
+            // Набраны ровно стороны — они уже в прямоугольнике; одно или три числа ждут Enter на шаге глубины.
+            if (typedSize.TryPeekAll(typedValues) && typedValues.Count == 2)
+                typedSize.Clear();
 
             depthMouseStart = mousePosition;
             depth = 0f;
@@ -117,6 +127,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public bool HandleKey(KeyCode key, out bool committed)
         {
             committed = false;
+
+            if (stage == DrawStage.Rectangle)
+                return HandleRectangleKey(key);
 
             if (stage != DrawStage.Depth)
                 return false;
@@ -153,6 +166,29 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             committed = Commit();
             return true;
+        }
+
+        // Пока тянешь прямоугольник: цифры и X — его стороны прямо на ходу, Backspace — стереть, Esc при наборе — стереть набор.
+        private bool HandleRectangleKey(KeyCode key)
+        {
+            if (typedSize.TryType(key))
+            {
+                ApplyTypedSides();
+                return true;
+            }
+
+            if (key != KeyCode.Escape || !typedSize.IsTyping)
+                return false;
+
+            typedSize.Clear();
+            return true;
+        }
+
+        // Набраны хотя бы две стороны — прямоугольник ровно такой, в сторону мыши.
+        private void ApplyTypedSides()
+        {
+            if (stage == DrawStage.Rectangle && typedSize.TryPeekAll(typedValues) && typedValues.Count >= 2)
+                ResizeRectangle(typedValues[0], typedValues[1]);
         }
 
         // Стороны прямоугольника — набранные, от угла, где начали тянуть, в ту же сторону. Порядок — как в подписи «2 × 3».
@@ -230,7 +266,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (isNewModel)
                 AttachModelToBuilding(model, part);
             else
-                AttachToBuilding(model, part);
+                AttachToBuilding(model, part, pathOwner as SplineBuilding);
 
             Selection.activeGameObject = part.gameObject;
 
@@ -268,12 +304,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Коробка в здании — его часть, как перегородка: в его интерьер и к его этажу. Вырез в перекрытии с «И этажи выше» —
-        // сразу на всех этажах выше; потом повтор по этажам — в «Этажи в здании».
-        private static void AttachToBuilding(BoxModel model, BoxModelPart part)
+        // Коробка в здании — его часть, как перегородка: в его интерьер и к его этажу. Коробка снаружи на стене здания (балкон, козырёк) — тоже,
+        // если по высоте она в здании. Вырез в перекрытии или балкон с «И этажи выше» — сразу на всех этажах выше; потом повтор по этажам — в «Этажи в здании».
+        private static void AttachToBuilding(BoxModel model, BoxModelPart part, SplineBuilding wallBuilding)
         {
             var center = model.transform.TransformPoint(BoxModelShapeCollector.LocalMinOf(model, part.transform) + part.Size / 2f);
             var building = LiveBuilderBuildingContext.BuildingContaining(model, center);
+
+            if (building == null && IsOnOuterWallOf(wallBuilding, model, center))
+                building = wallBuilding;
 
             if (building == null)
                 return;
@@ -282,6 +321,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (!BoxModelShapeCollector.IsPieceInsideStoreyCopies(part.transform))
                 SplineBuildingLinkSync.Attach(part.gameObject, building, LiveBuilderBuildingContext.IsOnAllStoreys);
+        }
+
+        // Коробку рисовали на стене здания этого же объекта, и её середина по высоте в здании: не на крыше и не под ним.
+        private static bool IsOnOuterWallOf(SplineBuilding wallBuilding, BoxModel model, Vector3 worldCenter)
+        {
+            return wallBuilding != null && SplineWallRebuilder.OuterModelOf(wallBuilding) == model
+                                        && LiveBuilderBuildingContext.IsWithinHeight(wallBuilding, worldCenter);
         }
 
 

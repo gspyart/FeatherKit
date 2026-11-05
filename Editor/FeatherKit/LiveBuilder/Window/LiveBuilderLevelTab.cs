@@ -53,7 +53,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             using (LiveBuilderWindowControls.Card("Проверка уровня"))
             {
                 if (GUILayout.Button(new GUIContent("Проверить уровень", "Всё подозрительное на сцене списком: перекрещённые контуры, повёрнутые здания, " +
-                                                                         "привязка к пропавшему этажу, проём, который ничего не режет, вырезающая коробка выше стены")))
+                                                                         "здание мимо этажей уровня по ошибке, привязка к пропавшему этажу")))
                 {
                     lastIssues = LiveBuilderLevelCheck.FindIssues();
                     lastCheckSceneVersion = BoxModelRebuilder.SceneVersion;

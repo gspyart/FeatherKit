@@ -62,6 +62,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // К чему прилипла точка под мышью: подпись у прицела; пусто — просто по сетке.
         private string snapLabel;
 
+        // Направляющая от последней точки, к которой прилипла точка под мышью (<see cref="LiveBuilderLineGuides"/>); нет — null.
+        private LiveBuilderLineGuide? activeGuide;
+
         // Здание, внутри которого рисуется стена: её пол, высота, толщина и копии по этажам — от него.
         private LiveBuilderBuildingContext buildingContext;
         private LiveBuilderBuildingContext hoveredBuildingContext;
@@ -378,6 +381,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var context = CurrentContext;
             snapLabel = null;
+            activeGuide = null;
 
             if (pathOwner == null && hoveredHouse != null && LiveBuilderFloorRectangle.TryFindHouseFloor(worldRay, out _, out worldPoint, out _))
                 return true;
@@ -396,6 +400,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var wallPoint = context.SnapToWalls(gridPoint);
                 worldPoint = floor.FrameToWorld.MultiplyPoint3x4(wallPoint);
                 snapLabel = (wallPoint - gridPoint).sqrMagnitude > 0.000001f ? "к стене" : LiveBuilderPointSnap.LabelAt(worldPoint);
+                worldPoint = ApplyGuides(floor.FrameToWorld, floor.Axis, floor.FrameToWorld.MultiplyPoint3x4(floorPoint), worldPoint);
                 return true;
             }
 
@@ -416,7 +421,27 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             worldPoint = plane.FrameToWorld.MultiplyPoint3x4(plane.SnapOnPlane(localPoint));
             snapLabel = LiveBuilderPointSnap.LabelAt(worldPoint);
+            worldPoint = ApplyGuides(plane.FrameToWorld, plane.Axis, plane.FrameToWorld.MultiplyPoint3x4(localPoint), worldPoint);
             return true;
+        }
+
+        // Не прилипла к постройке и стене — к направляющей от последней точки: по оси, под 45°, вдоль и поперёк прошлого отрезка (<see cref="LiveBuilderLineGuides"/>).
+        // rawWorldPoint — точка мыши на плоскости, ещё без сетки.
+        private Vector3 ApplyGuides(Matrix4x4 frameToWorld, int planeAxis, Vector3 rawWorldPoint, Vector3 worldPoint)
+        {
+            if (pathOwner == null || snapLabel != null || Container.Spline.Count == 0)
+                return worldPoint;
+
+            var spline = Container.Spline;
+            var last = pathOwner.transform.TransformPoint((Vector3)spline[spline.Count - 1].Position);
+            var previous = spline.Count >= 2 ? (Vector3?)pathOwner.transform.TransformPoint((Vector3)spline[spline.Count - 2].Position) : null;
+
+            if (!LiveBuilderLineGuides.TrySnap(frameToWorld, planeAxis, last, previous, rawWorldPoint, out var snapped, out var guide))
+                return worldPoint;
+
+            activeGuide = guide;
+            snapLabel = guide.Label;
+            return snapped;
         }
 
         // Первая точка — на верх того, что под мышью (коробки, крыши, перекрытия, любой геометрии), если он смотрит вверх: по сетке в плане,
@@ -469,6 +494,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 Handles.color = CrossingColor;
 
             Handles.DrawLine(last, hovered, 2f);
+
+            if (activeGuide is { } guide)
+                LiveBuilderLineGuides.Draw(guide, hovered);
 
             var lengthLabel = isCrossing
                 ? "стороны перекрестятся — пол и крыша не построятся"

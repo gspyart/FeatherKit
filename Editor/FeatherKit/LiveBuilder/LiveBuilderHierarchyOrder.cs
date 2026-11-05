@@ -6,40 +6,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Порядок объектов в иерархии, как его читает глаз сверху вниз: родитель раньше своих детей, дети — по порядку,
-    /// всё, что внутри объекта, — раньше его следующего соседа. По нему вырезающая коробка решает, режет ли она стену или здание:
-    /// режет только то, что выше неё в списке, — как кисти в Unreal BSP и RealtimeCSG.
-    /// Спрашивают о каждой коробке для каждой стены и здания, поэтому на время прохода очереди пересборки (<see cref="LiveBuilderRebuildQueue"/>)
-    /// путь объекта от корня считается один раз. Поменял иерархию посреди прохода — сбрось запомненное (<see cref="ForgetPassPaths"/>).
+    /// всё, что внутри объекта, — раньше его следующего соседа. По нему «В группу» (<see cref="LiveBuilderGroups"/>) кладёт выделенное
+    /// в новую группу в том же порядке, в каком оно стояло. Резку стен и зданий порядок не решает (<see cref="BoxModelSolverBox.CutsTarget"/>).
     /// </summary>
     public static class LiveBuilderHierarchyOrder
     {
-        // Пути объектов от корня на время прохода; вне прохода — null, считаются каждый раз.
-        private static Dictionary<Transform, int[]> passSiblingPaths;
-
-
-        // ── Проход ───────────────────────────────────────────────────────
-
-        public static void BeginPass()
-        {
-            passSiblingPaths = new Dictionary<Transform, int[]>();
-        }
-
-
-        public static void EndPass()
-        {
-            passSiblingPaths = null;
-        }
-
-
-        // Иерархию поменяли посреди прохода (здание добавило или убрало части) — запомненные пути уже не те.
-        public static void ForgetPassPaths()
-        {
-            passSiblingPaths?.Clear();
-        }
-
-
-        // ── Порядок ──────────────────────────────────────────────────────
-
         // first стоит в иерархии раньше second. Сам с собой — нет. Разные сцены — по порядку открытых сцен.
         public static bool IsBefore(Transform first, Transform second)
         {
@@ -51,34 +22,26 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var firstPath = SiblingPathOf(first);
             var secondPath = SiblingPathOf(second);
-            var commonLength = Mathf.Min(firstPath.Length, secondPath.Length);
+            var commonLength = Mathf.Min(firstPath.Count, secondPath.Count);
 
             for (var level = 0; level < commonLength; level++)
                 if (firstPath[level] != secondPath[level])
                     return firstPath[level] < secondPath[level];
 
             // Один — предок другого: предок раньше.
-            return firstPath.Length < secondPath.Length;
+            return firstPath.Count < secondPath.Count;
         }
 
-        // Номера среди соседей от корня сцены до самого объекта; в проходе — из памяти.
-        private static int[] SiblingPathOf(Transform node)
+        // Номера среди соседей от корня сцены до самого объекта.
+        private static List<int> SiblingPathOf(Transform node)
         {
-            if (passSiblingPaths != null && passSiblingPaths.TryGetValue(node, out var remembered))
-                return remembered;
-
             var path = new List<int>();
 
             for (var current = node; current != null; current = current.parent)
                 path.Add(current.GetSiblingIndex());
 
             path.Reverse();
-            var pathArray = path.ToArray();
-
-            if (passSiblingPaths != null)
-                passSiblingPaths[node] = pathArray;
-
-            return pathArray;
+            return path;
         }
 
         private static int SceneIndexOf(Scene scene)
