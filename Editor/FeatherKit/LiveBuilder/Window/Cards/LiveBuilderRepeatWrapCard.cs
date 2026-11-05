@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка «Повторить» зоны «Выделено»: завернуть выделенные коробки и лестницы в повтор с готовым шагом — этажами вверх, вдоль X, вдоль Z.
+    /// Карточка «Повторить» вкладки «Выделено»: завернуть выделенные коробки и лестницы в повтор с готовым шагом — этажами вверх, вдоль X, вдоль Z.
     /// Выделены части разных уровней списка — почему нельзя.
     /// </summary>
     public sealed class LiveBuilderRepeatWrapCard : LiveBuilderSelectionCard

@@ -45,7 +45,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно сцены ───────────────────────────────────────────────────
 
-        public override bool IsBusy => rectangleGesture.IsActive;
+        public override bool IsBusy => rectangleGesture.IsActive || base.IsBusy;
 
         // По контуру — линия кликами; прямоугольником — своё рисование.
         public override LiveBuilderPathGesture PathGesture => LiveBuilderRoomSettings.Shape == LiveBuilderRoomShape.Contour ? contourGesture : null;
@@ -57,6 +57,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public override string Hint => PathGesture != null ? PathHint(PathGesture)
             : rectangleGesture.IsActive ? rectangleGesture.Hint
             : "Протяни по полу — комната. Клик — выделить";
+
+
+        // ── Окно: редкие настройки ───────────────────────────────────────
+
+        public override string MoreSettingsSummary => "толщины, перегородка, материалы";
+
+        public override bool AreMoreSettingsChanged =>
+            (LiveBuilderRoomSettings.Shape == LiveBuilderRoomShape.Contour && LiveBuilderWallSettings.IsSmooth)
+            || !Mathf.Approximately(LiveBuilderRoomSettings.WallThickness, LiveBuilderRoomSettings.FactoryWallThickness)
+            || !Mathf.Approximately(LiveBuilderRoomSettings.SlabThickness, LiveBuilderRoomSettings.FactorySlabThickness)
+            || LiveBuilderToolSettingsFields.IsPartitionChanged()
+            || LiveBuilderRoomSettings.FloorMaterial != null || LiveBuilderRoomSettings.WallMaterial != null || LiveBuilderRoomSettings.CeilingMaterial != null;
 
 
         // ── Что правит: проверка ─────────────────────────────────────────
@@ -86,7 +98,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно ─────────────────────────────────────────────────────────
 
-        // Форма, размер и материалы новой комнаты.
+        // Форма новой комнаты и куда встают стены — меняют каждый раз.
         public override void DrawSettings()
         {
             using (LiveBuilderWindowControls.Card("Форма"))
@@ -96,15 +108,49 @@ namespace FeatherKit.EditorTools.LiveBuilder
                                                "в доме из коробок по контуру встают стены до его потолка, а не вырез"),
                     (int)LiveBuilderRoomSettings.Shape, ("Прямоугольник", LiveBuilderOptionIcon.Rectangle), ("По контуру", LiveBuilderOptionIcon.Contour));
 
-                if (LiveBuilderRoomSettings.Shape == LiveBuilderRoomShape.Contour)
-                    LiveBuilderToolSettingsFields.DrawKnotModeSwitch();
+                LiveBuilderRoomSettings.WallSide = WallSideOf(LiveBuilderToolSettingsFields.DrawLineSideSwitch(LineSideOf(LiveBuilderRoomSettings.WallSide)));
 
-                LiveBuilderRoomSettings.WallSide = (LiveBuilderRoomWallSide)LiveBuilderWindowControls.Switch(
-                    new GUIContent("Стены", "Куда встают стены от того, что рисуешь. Наружу — нарисованное и есть комната изнутри. " +
-                                            "Внутрь — нарисованное — габарит вместе со стенами. По центру — линия идёт по середине стен. " +
-                                            "Прямоугольник в доме из коробок вырезается — своих стен у него нет"),
-                    (int)LiveBuilderRoomSettings.WallSide, "Наружу", "Внутрь", "По центру");
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    LiveBuilderWindowControls.PrefixLabel(new GUIContent("Есть", "У комнаты в пустоте: нажата — есть, бледная — нет. В доме и в здании пол и потолок — их"));
+                    LiveBuilderRoomSettings.HasFloor = LiveBuilderWindowControls.IconToggle(LiveBuilderRoomSettings.HasFloor, LiveBuilderOptionIcon.Floor,
+                        "Пол", "Плита пола под комнатой. Нет — комната стоит прямо на том, что под ней");
+                    LiveBuilderRoomSettings.HasCeiling = LiveBuilderWindowControls.IconToggle(LiveBuilderRoomSettings.HasCeiling, LiveBuilderOptionIcon.Roof,
+                        "Потолок", "Плита потолка над комнатой. Нет — сверху открыто: двор, крыша без парапета");
+                }
+
+                LiveBuilderWindowControls.Explanation("Прямоугольник в доме из коробок вырезается — своих стен у него нет.");
             }
+        }
+
+        // Куда встают стены ↔ где линия относительно них, как у здания: стены внутрь — линия снаружи, стены наружу — линия изнутри.
+        private static int LineSideOf(LiveBuilderRoomWallSide wallSide)
+        {
+            return wallSide switch
+            {
+                LiveBuilderRoomWallSide.Inward => 0,
+                LiveBuilderRoomWallSide.Outward => 1,
+                _ => 2
+            };
+        }
+
+        private static LiveBuilderRoomWallSide WallSideOf(int lineSide)
+        {
+            return lineSide switch
+            {
+                0 => LiveBuilderRoomWallSide.Inward,
+                1 => LiveBuilderRoomWallSide.Outward,
+                _ => LiveBuilderRoomWallSide.Centered
+            };
+        }
+
+
+        // Угол или плавно у контура, толщины, перегородка и материалы.
+        public override void DrawMoreSettings()
+        {
+            if (LiveBuilderRoomSettings.Shape == LiveBuilderRoomShape.Contour)
+                using (LiveBuilderWindowControls.Card("Контур"))
+                    LiveBuilderToolSettingsFields.DrawKnotModeSwitch();
 
             using (LiveBuilderWindowControls.Card("Размер"))
             {
@@ -159,6 +205,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             rectangleGesture.Cancel();
             contourGesture.Finish();
+        }
+
+
+        // Ctrl+Z: прямоугольник бросаем, а в контуре он убирает последнюю точку — его не трогаем.
+        public override void CancelAfterUndo()
+        {
+            rectangleGesture.Cancel();
         }
 
 

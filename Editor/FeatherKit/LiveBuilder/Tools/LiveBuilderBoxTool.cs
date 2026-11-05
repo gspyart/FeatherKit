@@ -54,7 +54,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно сцены ───────────────────────────────────────────────────
 
-        public override bool IsBusy => drawGesture.IsActive || surfaceBoxGesture.IsActive || IsNewModelRequested;
+        // «Новый» — не начатое рисование: цифры по-прежнему меняют инструмент, а смена инструмента «Новый» снимает.
+        public override bool IsBusy => drawGesture.IsActive || surfaceBoxGesture.IsActive;
 
         public override bool DrawsSurfaceHover => !drawGesture.IsActive;
 
@@ -112,8 +113,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 DrawTargetModel();
             }
 
-            LiveBuilderWindowControls.Explanation("Box", "Протяни по поверхности, мышью глубина, клик — готово. Клик по грани — выделить коробку или кусок грани, " +
-                                           "смотря что выбрано в «Клик выделяет». Здесь правятся только коробки; остальное — в своих инструментах или в «Выделении».");
+            LiveBuilderWindowControls.Explanation("Протяни по поверхности, мышью глубина, клик — готово. Клик по грани — выделить коробку или кусок грани, " +
+                                                  "смотря что выбрано в «Клик выделяет». Здесь правятся только коробки; остальное — в своих инструментах или в «Выделении».");
         }
 
         // Куда встанет коробка на пустом месте: в выделенный объект, иначе — новый. По чужой поверхности — всегда в тот объект.
@@ -178,6 +179,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return false;
 
             surfaceBoxGesture.Commit();
+            IsNewModelRequested = false;
             return true;
         }
 
@@ -214,10 +216,31 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // ── Окно сцены: отмена и вид ─────────────────────────────────────
+        // ── Окно сцены: клавиши, отмена и вид ────────────────────────────
 
-        // Бросить начатую коробку.
+        // Esc при нажатом «Новый», пока ничего не рисуешь, — снять «Новый» и остаться в «Коробке».
+        public override bool OnKeyDown(Event current)
+        {
+            if (current.keyCode != KeyCode.Escape || !IsNewModelRequested || IsBusy)
+                return false;
+
+            IsNewModelRequested = false;
+            SceneView.RepaintAll();
+            return true;
+        }
+
+
+        // Бросить начатую коробку и «Новый».
         public override void Cancel()
+        {
+            drawGesture.Cancel();
+            surfaceBoxGesture.Cancel();
+            IsNewModelRequested = false;
+        }
+
+
+        // Ctrl+Z: начатую коробку бросаем, «Новый» остаётся.
+        public override void CancelAfterUndo()
         {
             drawGesture.Cancel();
             surfaceBoxGesture.Cancel();

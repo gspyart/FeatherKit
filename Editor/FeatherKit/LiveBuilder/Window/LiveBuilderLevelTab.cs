@@ -5,35 +5,37 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Зона «Уровень» окна Live Builder — общее на весь уровень, что меняют редко:
+    /// Вкладка «Уровень» окна Live Builder — общее на весь уровень, что меняют редко:
     /// этажи уровня (высота этажа, пол нулевого, высота разреза) и библиотека типов стен — все типы проекта списком,
     /// толщина и материал правятся прямо здесь, стены этих типов перестраиваются сами.
-    /// Внизу — уборка файлов мешей, которые больше никому не нужны. Свёрнута, пока не развернёшь.
+    /// Ниже — уборка файлов мешей, которые больше никому не нужны, и как ведёт себя само окно: переключать ли вкладки самим.
     /// </summary>
-    public sealed class LiveBuilderLevelZone : LiveBuilderWindowZone
+    public sealed class LiveBuilderLevelTab : LiveBuilderWindowTab
     {
-        // ── Зона ─────────────────────────────────────────────────────────
+        // ── Корешок ──────────────────────────────────────────────────────
 
         public override string Title => "Уровень";
 
-        public override string Detail => "этажи, типы стен, меши";
-
         public override Texture2D Icon => LiveBuilderOptionIcons.White(LiveBuilderOptionIcon.Level);
 
-        public override LiveBuilderZoneColor ZoneColor => LiveBuilderZoneColor.Level;
+        public override LiveBuilderTabColor TabColor => LiveBuilderTabColor.Level;
 
-        public override int Order => 3;
+
+        // ── Место ────────────────────────────────────────────────────────
+
+        public override int Order => 2;
 
         public override string PreferenceKey => "Level";
 
-        public override bool IsExpandedByDefault => false;
 
+        // ── Содержимое ───────────────────────────────────────────────────
 
         public override void Draw()
         {
             DrawStoreys();
             DrawWallTypes();
             DrawMeshFiles();
+            DrawWindowBehaviour();
         }
 
 
@@ -127,8 +129,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             using (LiveBuilderWindowControls.Card("Файлы мешей"))
             {
-                LiveBuilderWindowControls.Explanation("MeshFiles", "Удалённые объекты и этажи оставляют файлы мешей в папках «_BoxModels». Кнопка найдёт те, на которые не ссылается " +
-                                               "ни одна сцена и ни один префаб, покажет и уберёт в корзину системы.");
+                LiveBuilderWindowControls.Explanation("Удалённые объекты и этажи оставляют файлы мешей в папках «_BoxModels». Кнопка найдёт те, на которые не ссылается " +
+                                                      "ни одна сцена и ни один префаб, покажет и уберёт в корзину системы.");
 
                 if (GUILayout.Button(new GUIContent("Убрать лишние меши…", "Проверяет все сцены и префабы проекта и открытую сцену с несохранёнными правками")))
                 {
@@ -136,6 +138,19 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     GUIUtility.ExitGUI();
                 }
             }
+        }
+
+
+        // ── Окно ─────────────────────────────────────────────────────────
+
+        // Переключать ли вкладки самим: выделил постройку — «Выделено», выбрал инструмент — «Инструмент».
+        private static void DrawWindowBehaviour()
+        {
+            using (LiveBuilderWindowControls.Card("Окно"))
+                LiveBuilderWindow.IsSwitchingTabsAutomatically = LiveBuilderWindowControls.Switch(
+                    new GUIContent("Вкладки сами", "Да — выделил постройку в сцене или иерархии — открывается «Выделено», выбрал инструмент — «Инструмент». " +
+                                                   "Пока печатаешь в поле, не переключаются. Нет — вкладки переключаешь только ты"),
+                    LiveBuilderWindow.IsSwitchingTabsAutomatically, "Нет", "Да");
         }
     }
 }

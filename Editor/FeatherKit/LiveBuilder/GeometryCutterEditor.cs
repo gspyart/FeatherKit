@@ -6,7 +6,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Инспектор выреза: форма → размер → сдвиг от точки объекта → скругление (у прямоугольника; «Арка» — полукруг сверху) → этажи →
-    /// что и где режет (с подписью, внутри какой постройки) → вид → место в стене.
+    /// вид → место в стене → что и где режет (с подписью, внутри какой постройки; свёрнуто, пока режет как по умолчанию).
     /// Вырез в здании — копии по этажам задаёт привязка к зданию, здесь число только показано. Тонкая настройка гладкости — свёрнута в «Тонко».
     /// </summary>
     [CustomEditor(typeof(GeometryCutter))]
@@ -49,15 +49,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             LiveBuilderInspectorLayout.StoreyCopies(serializedObject, cutter, isLinked);
 
-            LiveBuilderInspectorLayout.Section("Что режет");
-            LiveBuilderInspectorLayout.Properties(serializedObject, "cutTargets", "scope");
-            DrawScopeResult(cutter);
-
             LiveBuilderInspectorLayout.Section("Вид");
             LiveBuilderInspectorLayout.Properties(serializedObject, "revealMaterial");
 
             LiveBuilderInspectorLayout.Section("Место в стене");
             LiveBuilderInspectorLayout.Properties(serializedObject, "followsWallLine");
+
+            if (LiveBuilderInspectorLayout.Foldout("GeometryCutter.Targets", "Что и где режет", IsAnyTargetCuttingNonDefault()))
+            {
+                LiveBuilderInspectorLayout.Properties(serializedObject, "cutTargets", "scope");
+                DrawScopeResult(cutter);
+            }
 
             if (LiveBuilderInspectorLayout.Foldout("GeometryCutter.Fine", "Тонко"))
             {
@@ -87,6 +89,21 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 EditorGUILayout.LabelField("Режет всё, что пересекает", EditorStyles.wordWrappedMiniLabel);
             else
                 EditorGUILayout.LabelField("Режет только внутри «" + group.name + "», во вложенные группы не заходит", EditorStyles.wordWrappedMiniLabel);
+        }
+
+
+        // Хоть один выделенный режет не всё или не «Авто» — группа «Что и где режет» открыта сама.
+        private bool IsAnyTargetCuttingNonDefault()
+        {
+            foreach (var each in targets)
+            {
+                var eachCutter = (GeometryCutter)each;
+
+                if (eachCutter.CutTargets != LiveBuilderCutTargets.Everything || eachCutter.Scope != GeometryCutterScope.Automatic)
+                    return true;
+            }
+
+            return false;
         }
 
 

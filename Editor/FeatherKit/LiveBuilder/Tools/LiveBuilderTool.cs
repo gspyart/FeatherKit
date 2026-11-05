@@ -9,7 +9,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Инструмент Live Builder — что делает мышь в окне сцены, пока включён Live Builder. Один класс — всё про один инструмент:
     /// - плитка в палитре: имя, подсказка, значок из линий, место (номер места — клавиша)
     /// - что он правит: «Выделение» — всё, остальные — только своё; чужое выделенное видно каркасом, без ручек
-    /// - свои настройки в зоне инструмента окна (<see cref="LiveBuilderToolZone"/>)
+    /// - свои настройки на вкладке «Инструмент» окна (<see cref="LiveBuilderToolTab"/>): частые — сверху, редкие — под свёрнутым «Ещё»
     /// - свои жесты в окне сцены: окно сцены (<see cref="LiveBuilderSceneTool"/>) решает, клик это или протягивание, и зовёт крючки ниже
     /// Новый инструмент — новый наследник: палитра находит его сама (<see cref="LiveBuilderToolPalette"/>).
     /// У инструмента, который ставит точки линии кликами (<see cref="PathGesture"/>), крючки по умолчанию уже ведут эту линию.
@@ -52,7 +52,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Ручка группы повтора.
         public virtual bool CanEditRepeats => false;
 
-        // Наведённый на здание по контуру, ставит своё в него, на его этажи (<see cref="LiveBuilderBuildingContext"/>): в зоне — карточка «В здании».
+        // Наведённый на здание по контуру, ставит своё в него, на его этажи (<see cref="LiveBuilderBuildingContext"/>): на вкладке — карточка «В здании».
         public virtual bool PlacesIntoBuilding => false;
 
         // Виден ли контур выделенной стены или здания.
@@ -64,8 +64,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно сцены ───────────────────────────────────────────────────
 
-        // Что-то начато: цифры — не смена инструмента, Esc — отмена начатого.
-        public virtual bool IsBusy => false;
+        // Что-то начато: цифры — не смена инструмента, Esc — отмена начатого, ручки выделенного спрятаны. У инструмента линии — пока линия рисуется.
+        public virtual bool IsBusy => PathGesture is { IsActive: true };
 
         // Линия, которую ставят кликами: стена, здание, комната по контуру. Иначе — null.
         public virtual LiveBuilderPathGesture PathGesture => null;
@@ -81,6 +81,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // Дописать к подсказке «клик ещё раз — глубже» (<see cref="LiveBuilderDepthClick"/>): мышь знает окно сцены, оно и дописывает.
         public virtual bool ShowsDepthClickHint => false;
+
+
+        // ── Окно: редкие настройки ───────────────────────────────────────
+
+        // Что лежит под свёрнутым «Ещё» — серым в его строке, например «толщины, материалы». null — строки «Ещё» нет.
+        public virtual string MoreSettingsSummary => null;
+
+        // Что-то под «Ещё» не как по умолчанию — «Ещё» раскрыто всегда: спрятанное не удивит.
+        public virtual bool AreMoreSettingsChanged => false;
 
 
         // ── Подсказка ────────────────────────────────────────────────────
@@ -145,8 +154,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно ─────────────────────────────────────────────────────────
 
-        // Свои карточки настроек в зоне инструмента. Карточку «В здании» рисует сама зона.
+        // Свои карточки настроек на вкладке — то, что меняют каждый раз. Карточку «В здании» и строку «Ещё» рисует сама вкладка.
         public virtual void DrawSettings()
+        {
+        }
+
+
+        // Редкие настройки под раскрытым «Ещё» (<see cref="MoreSettingsSummary"/>).
+        public virtual void DrawMoreSettings()
         {
         }
 
@@ -204,6 +219,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public virtual void Cancel()
         {
             PathGesture?.Finish();
+        }
+
+
+        // Ctrl+Z посреди жеста: объект, на котором рисуешь, мог исчезнуть — начатую фигуру бросаем.
+        // Линию точками не трогаем: в ней Ctrl+Z убирает последнюю точку, а рисование идёт дальше.
+        public virtual void CancelAfterUndo()
+        {
+            if (PathGesture == null)
+                Cancel();
         }
 
 

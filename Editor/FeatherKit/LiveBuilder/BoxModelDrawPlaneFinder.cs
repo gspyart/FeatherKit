@@ -6,7 +6,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Находит плоскость рисования под мышью и точку на ней, уже прилипшую к сетке:
     /// грань объекта из коробок → прочая геометрия сцены → пустота. В пустоте — пол текущего этажа (<see cref="LiveBuilderStoreys"/>).
-    /// Здание или стена по линии под мышью — плоскость в осях их объекта из коробок: коробка встаёт в него и может их вырезать.
+    /// Здание или стена по линии под мышью — плоскость в осях их объекта из коробок, ровно на их грани: коробка встаёт в него и может их вырезать.
     /// Спрятанное разрезом над этажом пропускается.
     /// Для нового объекта («Новый объект» в окне Live Builder) грани других объектов — просто опора, коробка в них не встаёт; оси — мира.
     /// </summary>
@@ -44,7 +44,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 // Пол или стена здания, стена по линии — коробка встаёт в их объект: так ей есть что вырезать.
                 var hitModel = targetModel == null && !isForNewModel ? OuterModelOfPathGeometry(hit.collider) : targetModel;
                 var hitFrame = hitModel != null ? hitModel.transform.localToWorldMatrix : frameToWorld;
-                plane = PlaneOnSurface(hitModel, hitFrame, hit.point, hit.normal, keepsExactHeight, out snappedLocalPoint);
+
+                // Грань стены или здания — плоскость ровно на ней: прилипшая к сетке уехала бы с грани, и вырез встал бы рядом со стеной.
+                var isOnPathGeometry = LiveBuilderPathOwners.OwnerOf(hit.collider) != null;
+                plane = PlaneOnSurface(hitModel, hitFrame, hit.point, hit.normal, keepsExactHeight || isOnPathGeometry, out snappedLocalPoint);
                 return true;
             }
 

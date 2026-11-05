@@ -4,8 +4,8 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Поля настроек, общие у нескольких инструментов Live Builder: что выделяет клик, угол или плавно у новой точки, перегородка в здании,
-    /// карточка «В здании». Свои настройки каждый инструмент рисует сам (<see cref="LiveBuilderTool.DrawSettings"/>).
+    /// Поля настроек, общие у нескольких инструментов Live Builder: что выделяет клик, угол или плавно у новой точки, где линия относительно стен, перегородка в здании
+    /// (и изменена ли она — для «Ещё»), карточка «В здании». Свои настройки каждый инструмент рисует сам (<see cref="LiveBuilderTool.DrawSettings"/>).
     /// Числа хранятся у каждого человека свои — настройки инструментов, например <see cref="LiveBuilderRoomSettings"/>.
     /// </summary>
     public static class LiveBuilderToolSettingsFields
@@ -32,6 +32,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Где нарисованная линия относительно стен — одними словами у здания и комнаты: 0 — снаружи стен, 1 — изнутри, 2 — по их оси.
+        public static int DrawLineSideSwitch(int lineSide)
+        {
+            return LiveBuilderWindowControls.Switch(
+                new GUIContent("Линия по стенам", "Где нарисованная линия относительно стен. Снаружи — линия это габарит, стены встают внутрь от неё. " +
+                                                  "Изнутри — линия это комната изнутри, стены встают наружу. По оси — линия идёт по середине стен"),
+                lineSide, "Снаружи", "Изнутри", "По оси");
+        }
+
+
         // Перегородка внутри здания — у стены и комнаты общая: тип или своя толщина.
         public static void DrawPartitionThickness()
         {
@@ -45,6 +55,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
             LiveBuilderWallSettings.PartitionThickness = EditorGUILayout.FloatField(
                 new GUIContent("Толщина перегородки, м", "Толщина стен внутри здания по контуру. Высота у них — до потолка его этажа, сама"),
                 LiveBuilderWallSettings.PartitionThickness);
+        }
+
+        // Перегородка не как по умолчанию: выбран тип или своя толщина другая.
+        public static bool IsPartitionChanged()
+        {
+            return LiveBuilderWallSettings.PartitionWallType != null
+                || !Mathf.Approximately(LiveBuilderWallSettings.PartitionThickness, LiveBuilderWallSettings.FactoryPartitionThickness);
         }
 
 

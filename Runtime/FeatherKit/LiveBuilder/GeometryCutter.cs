@@ -131,6 +131,9 @@ namespace FeatherKit.LiveBuilder
         [SerializeField, HideInInspector] private Vector3 syncedLocalPosition;
         [SerializeField, HideInInspector] private Quaternion syncedLocalRotation = Quaternion.identity;
 
+        // Толщина стены при прошлой сверке, м: поменялась — сквозной вырез подгоняется под новую. 0 — ещё не запомнена.
+        [SerializeField, HideInInspector] private float syncedWallThickness;
+
 
         public GeometryCutterShape Shape
         {
@@ -266,6 +269,12 @@ namespace FeatherKit.LiveBuilder
         {
             get => syncedLocalRotation;
             set => syncedLocalRotation = value;
+        }
+
+        public float SyncedWallThickness
+        {
+            get => syncedWallThickness;
+            set => syncedWallThickness = value;
         }
     }
 }

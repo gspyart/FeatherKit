@@ -5,16 +5,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Общие элементы окна Live Builder, чтобы всё выглядело одинаково: карточка с тихим заголовком, переключатель из кнопок (со значками или словами),
-    /// кнопка-значок «вкл / выкл», плитка инструмента, пояснение, которое раскрывается по клику, плашка посчитанного числа, разделитель, поле материала.
-    /// Цветные зоны окна — в <see cref="LiveBuilderZoneFrame"/>. Цвета — под светлую и тёмную тему редактора.
+    /// кнопка-значок «вкл / выкл», плитка инструмента, свёрнутое «Ещё» с редкими настройками, пояснение (видно, пока на вкладке нажата «?»),
+    /// плашка посчитанного числа, разделитель, поле материала. Вкладки окна — в <see cref="LiveBuilderTabBar"/>. Цвета — под светлую и тёмную тему редактора.
     /// </summary>
     public static class LiveBuilderWindowControls
     {
         // Сторона значка на кнопках и у подписей, пикс.
         public const float IconSize = 14f;
 
-        private const string ExplanationPreferencePrefix = "FeatherKit.LiveBuilder.Explanation.";
-        private const string AllExplanationsPreferenceKey = "FeatherKit.LiveBuilder.ShowAllExplanations";
+        private const string MoreSectionPreferencePrefix = "FeatherKit.LiveBuilder.More.";
+        private const float MoreSectionHeight = 20f;
 
         // Насколько бледная выключенная кнопка-значок: 1 — как включённая.
         private const float OffToggleAlpha = 0.45f;
@@ -25,18 +25,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static GUIStyle selectedTileLabelStyle;
         private static GUIStyle hotkeyStyle;
         private static GUIStyle selectedHotkeyStyle;
-        private static GUIStyle explanationLinkStyle;
+        private static GUIStyle moreTitleStyle;
+        private static GUIStyle moreSummaryStyle;
         private static GUIStyle valueChipStyle;
 
 
         // ── Показ пояснений ──────────────────────────────────────────────
 
-        // Показывать все пояснения сразу — кнопка «i» в шапке окна. Выключено — каждое раскрывается своей строкой.
-        public static bool IsShowingAllExplanations
-        {
-            get => EditorPrefs.GetBool(AllExplanationsPreferenceKey, false);
-            set => EditorPrefs.SetBool(AllExplanationsPreferenceKey, value);
-        }
+        // Видны ли пояснения: окно ставит перед рисованием вкладки — нажата ли на ней «?», и снимает после.
+        public static bool IsShowingExplanations { get; set; }
 
 
         // ── Цвета ────────────────────────────────────────────────────────
@@ -73,11 +70,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static GUIStyle SelectedHotkeyStyle => selectedHotkeyStyle ??= new GUIStyle(HotkeyStyle) { normal = { textColor = new Color(1f, 1f, 1f, 0.75f) } };
 
-        private static GUIStyle ExplanationLinkStyle => explanationLinkStyle ??= new GUIStyle(EditorStyles.miniLabel)
+        private static GUIStyle MoreTitleStyle => moreTitleStyle ??= new GUIStyle(EditorStyles.miniBoldLabel) { alignment = TextAnchor.MiddleLeft };
+
+        private static GUIStyle MoreSummaryStyle => moreSummaryStyle ??= new GUIStyle(EditorStyles.miniLabel)
         {
-            normal = { textColor = MutedTextColor },
-            hover = { textColor = EditorGUIUtility.isProSkin ? Color.white : Color.black },
-            padding = new RectOffset(0, 0, 1, 1)
+            alignment = TextAnchor.MiddleLeft,
+            clipping = TextClipping.Clip,
+            normal = { textColor = MutedTextColor }
         };
 
         private static GUIStyle ValueChipStyle => valueChipStyle ??= new GUIStyle(EditorStyles.miniLabel)
@@ -147,7 +146,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Влезут ли слова на кнопки при нынешней ширине окна.
         private static bool CanFitTexts(GUIContent label, (string Text, LiveBuilderOptionIcon Icon)[] options)
         {
-            // 30 — поля окна и зоны и полоса прокрутки.
+            // 30 — поля окна и вкладки и полоса прокрутки.
             var available = EditorGUIUtility.currentViewWidth - (label != GUIContent.none ? EditorGUIUtility.labelWidth : 0f) - 30f;
             var widest = 0f;
 
@@ -175,6 +174,20 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Кнопка-значок «вкл / выкл»: включённая — нажата и яркая, выключенная — бледная. Ставить в ряд, после своего PrefixLabel (ниже).
         public static bool IconToggle(bool value, LiveBuilderOptionIcon icon, string text, string tooltip)
         {
+            return DrawIconToggle(value, new GUIContent(" " + text, LiveBuilderOptionIcons.Themed(icon), tooltip), GUILayout.MinWidth(30f));
+        }
+
+
+        // То же без слова: слово — во всплывающей подсказке.
+        public static bool IconOnlyToggle(bool value, LiveBuilderOptionIcon icon, string tooltip, params GUILayoutOption[] options)
+        {
+            return DrawIconToggle(value, new GUIContent(LiveBuilderOptionIcons.Themed(icon), tooltip), options);
+        }
+
+
+        // Нажатая — яркая, отжатая — бледная.
+        private static bool DrawIconToggle(bool value, GUIContent content, params GUILayoutOption[] options)
+        {
             using (new EditorGUIUtility.IconSizeScope(new Vector2(IconSize, IconSize)))
             {
                 var previous = GUI.contentColor;
@@ -182,7 +195,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (!value)
                     GUI.contentColor = new Color(1f, 1f, 1f, OffToggleAlpha);
 
-                value = GUILayout.Toggle(value, new GUIContent(" " + text, LiveBuilderOptionIcons.Themed(icon), tooltip), EditorStyles.miniButton, GUILayout.MinWidth(30f));
+                value = GUILayout.Toggle(value, content, EditorStyles.miniButton, options);
                 GUI.contentColor = previous;
             }
 
@@ -261,37 +274,59 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // ── Пояснения ────────────────────────────────────────────────────
+        // ── Свёрнутое «Ещё» ──────────────────────────────────────────────
 
-        // Как пользоваться — длинное пояснение, спрятанное за строкой «Как пользоваться». Раскрыто или нет — помнится по key.
-        public static void Explanation(string key, string text)
+        // Строка «Ещё» перед редкими настройками; возвращает, рисовать ли их. key — под ним помнится, раскрыто ли; summary — что внутри, серым.
+        // Есть изменённые, не как по умолчанию (hasNonDefaultValues), — раскрыто всегда и помечено «изменено»: спрятанное не удивит.
+        public static bool MoreSection(string key, bool hasNonDefaultValues, string summary)
         {
-            if (IsShowingAllExplanations)
-            {
-                Note(text);
-                return;
-            }
-
-            var preferenceKey = ExplanationPreferencePrefix + key;
-            var isOpen = EditorPrefs.GetBool(preferenceKey, false);
-            var content = new GUIContent(isOpen ? "Скрыть пояснение" : "Как пользоваться");
-            var rect = GUILayoutUtility.GetRect(IconSize + 4f + ExplanationLinkStyle.CalcSize(content).x, 16f, GUILayout.ExpandWidth(false));
-            var isHovered = rect.Contains(Event.current.mousePosition);
+            var preferenceKey = MoreSectionPreferencePrefix + key;
+            var isOpen = hasNonDefaultValues || EditorPrefs.GetBool(preferenceKey, false);
+            var rect = GUILayoutUtility.GetRect(0f, MoreSectionHeight, GUILayout.ExpandWidth(true));
 
             if (Event.current.type == EventType.Repaint)
-            {
-                LiveBuilderOptionIcons.Draw(new Rect(rect.x, rect.y + 2f, 12f, 12f), LiveBuilderOptionIcon.Info, isHovered ? LiveBuilderIconCache.ThemedColor : MutedTextColor);
-                ExplanationLinkStyle.Draw(new Rect(rect.x + IconSize + 2f, rect.y, rect.width - IconSize - 2f, rect.height), content, isHovered, false, false, false);
-            }
+                DrawMoreSectionLook(rect, isOpen, hasNonDefaultValues, summary);
 
-            // Пояснение появится или пропадёт — этот проход окна прерываем, иначе IMGUI путается в разметке.
-            if (GUI.Button(rect, GUIContent.none, GUIStyle.none))
-            {
-                EditorPrefs.SetBool(preferenceKey, !isOpen);
-                GUIUtility.ExitGUI();
-            }
+            var tooltip = hasNonDefaultValues ? "Здесь есть изменённые настройки — поэтому раскрыто. Верни их как было — свернётся" : summary;
 
-            if (isOpen)
+            if (!GUI.Button(rect, new GUIContent("", tooltip), GUIStyle.none) || hasNonDefaultValues)
+                return isOpen;
+
+            // Настройки появятся или пропадут — этот проход окна прерываем, иначе IMGUI путается в разметке.
+            EditorPrefs.SetBool(preferenceKey, !isOpen);
+            GUIUtility.ExitGUI();
+            return !isOpen;
+        }
+
+        // Стрелка, «Ещё» и серым — что внутри. Изменено — вместо стрелки точка цвета акцента: свернуть всё равно нельзя.
+        private static void DrawMoreSectionLook(Rect rect, bool isOpen, bool hasNonDefaultValues, string summary)
+        {
+            if (!hasNonDefaultValues && rect.Contains(Event.current.mousePosition))
+                GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, HoverColor, 0f, 3f);
+
+            var arrowRect = new Rect(rect.x + 2f, rect.y + (rect.height - 13f) / 2f, 13f, 13f);
+
+            if (hasNonDefaultValues)
+                GUI.DrawTexture(new Rect(arrowRect.x + 3f, arrowRect.y + 3f, 7f, 7f), Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, AccentColor, 0f, 3.5f);
+            else
+                EditorStyles.foldout.Draw(arrowRect, GUIContent.none, false, false, isOpen, false);
+
+            var title = new GUIContent("Ещё");
+            var titleWidth = MoreTitleStyle.CalcSize(title).x;
+            MoreTitleStyle.Draw(new Rect(arrowRect.xMax + 3f, rect.y, titleWidth, rect.height), title, false, false, false, false);
+
+            var detail = new GUIContent(hasNonDefaultValues ? "изменено · " + summary : summary);
+            var detailX = arrowRect.xMax + 3f + titleWidth + 4f;
+            MoreSummaryStyle.Draw(new Rect(detailX, rect.y, rect.xMax - detailX, rect.height), detail, false, false, false, false);
+        }
+
+
+        // ── Пояснения ────────────────────────────────────────────────────
+
+        // Как пользоваться — длинное пояснение: видно, только пока на вкладке нажата «?» (<see cref="IsShowingExplanations"/>), иначе его нет совсем.
+        public static void Explanation(string text)
+        {
+            if (IsShowingExplanations)
                 Note(text);
         }
 
@@ -305,7 +340,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Плитка инструмента ───────────────────────────────────────────
 
-        // Значок, подпись и клавиша; выбранная залита цветом зоны инструмента, значок и подпись — белые. Возвращает, нажали ли.
+        // Значок, подпись и клавиша; выбранная залита цветом вкладки «Инструмент», значок и подпись — белые. Возвращает, нажали ли.
         public static bool ToolTile(Rect rect, LiveBuilderTool tool, bool isSelected)
         {
             var isHovered = rect.Contains(Event.current.mousePosition);
@@ -319,7 +354,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static void DrawToolTileLook(Rect rect, LiveBuilderTool tool, bool isSelected, bool isHovered)
         {
-            var fill = isSelected ? LiveBuilderZoneFrame.ColorOf(LiveBuilderZoneColor.Tool) : isHovered ? HoverColor : TileColor;
+            var fill = isSelected ? LiveBuilderTabBar.ColorOf(LiveBuilderTabColor.Tool) : isHovered ? HoverColor : TileColor;
             GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, fill, 0f, 4f);
 
             if (!isSelected)

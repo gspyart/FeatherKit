@@ -3,9 +3,14 @@ using UnityEngine;
 
 namespace FeatherKit.EditorTools.LiveBuilder
 {
-    /// <summary>Настройки инструмента «Комната»: форма, куда встают стены, толщина стен и перекрытий, материалы пола, стен и потолка.</summary>
+    /// <summary>Настройки инструмента «Комната»: форма, куда встают стены, толщина стен и перекрытий, есть ли пол и потолок, материалы пола, стен и потолка.</summary>
     public static class LiveBuilderRoomSettings
     {
+        // Заводские значения, пока человек их не поменял: с ними сверяется «Ещё» окна — изменено ли.
+        public const float FactoryWallThickness = 0.3f;
+        public const float FactorySlabThickness = 0.2f;
+
+
         // Сменилась форма — начатое рисование отменяется, как при смене инструмента.
         public static event System.Action ShapeChanged;
 
@@ -41,15 +46,28 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Толщина стен вокруг комнаты в пустоте, м. Внутри дома стены — то, что осталось от его объёма.
         public static float WallThickness
         {
-            get => LiveBuilderPreferences.GetFloat("Room.WallThickness", 0.3f);
+            get => LiveBuilderPreferences.GetFloat("Room.WallThickness", FactoryWallThickness);
             set => LiveBuilderPreferences.SetFloat("Room.WallThickness", Mathf.Max(0.05f, value));
         }
 
         // Толщина пола и потолка, м. Высота комнаты — этаж минус перекрытие: 4 − 0,2 = 3,8.
         public static float SlabThickness
         {
-            get => LiveBuilderPreferences.GetFloat("Room.SlabThickness", 0.2f);
+            get => LiveBuilderPreferences.GetFloat("Room.SlabThickness", FactorySlabThickness);
             set => LiveBuilderPreferences.SetFloat("Room.SlabThickness", Mathf.Clamp(value, 0.05f, 1f));
+        }
+
+        // Есть ли у новой комнаты в пустоте плита пола и плита потолка. В доме и в здании пол и потолок — их, не комнаты.
+        public static bool HasFloor
+        {
+            get => LiveBuilderPreferences.GetBool("Room.HasFloor", true);
+            set => LiveBuilderPreferences.SetBool("Room.HasFloor", value);
+        }
+
+        public static bool HasCeiling
+        {
+            get => LiveBuilderPreferences.GetBool("Room.HasCeiling", true);
+            set => LiveBuilderPreferences.SetBool("Room.HasCeiling", value);
         }
 
         public static Material FloorMaterial

@@ -6,6 +6,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>Настройки инструмента «Здание» для нового здания: этажи, стены, перекрытия, материалы. Высота этажа — общая, из этажей окна.</summary>
     public static class LiveBuilderBuildingSettings
     {
+        // Заводские значения, пока человек их не поменял: с ними сверяется «Ещё» окна — изменено ли.
+        public const float FactoryWallThickness = 0.3f;
+        public const float FactorySlabThickness = 0.2f;
+
+
         public static int StoreyCount
         {
             get => LiveBuilderPreferences.GetInt("Building.StoreyCount", 1);
@@ -14,7 +19,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public static float WallThickness
         {
-            get => LiveBuilderPreferences.GetFloat("Building.WallThickness", 0.3f);
+            get => LiveBuilderPreferences.GetFloat("Building.WallThickness", FactoryWallThickness);
             set => LiveBuilderPreferences.SetFloat("Building.WallThickness", Mathf.Max(0.02f, value));
         }
 
@@ -33,7 +38,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public static float SlabThickness
         {
-            get => LiveBuilderPreferences.GetFloat("Building.SlabThickness", 0.2f);
+            get => LiveBuilderPreferences.GetFloat("Building.SlabThickness", FactorySlabThickness);
             set => LiveBuilderPreferences.SetFloat("Building.SlabThickness", Mathf.Max(0.02f, value));
         }
 

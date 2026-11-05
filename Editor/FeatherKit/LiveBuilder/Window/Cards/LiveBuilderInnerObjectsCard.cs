@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка «Внутри объекта» зоны «Выделено»: выделен объект из коробок, а в нём здания и стены по линии — кнопки, чтобы перейти к ним:
+    /// Карточка «Внутри объекта» вкладки «Выделено»: выделен объект из коробок, а в нём здания и стены по линии — кнопки, чтобы перейти к ним:
     /// их числа — у них самих.
     /// </summary>
     public sealed class LiveBuilderInnerObjectsCard : LiveBuilderSelectionCard

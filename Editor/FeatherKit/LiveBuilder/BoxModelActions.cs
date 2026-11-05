@@ -27,10 +27,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Объекты и коробки ────────────────────────────────────────────
 
-        // Новый объект рисованием, как в ProBuilder: выделение снимается, включается инструмент, следующая нарисованная коробка — новый объект.
+        // Новый объект рисованием, как в ProBuilder: выделение снимается, включается «Коробка», следующая нарисованная коробка — новый объект.
+        // Сначала инструмент: смена инструмента снимает «Новый».
         public static void BeginNewModelDrawing()
         {
             Selection.activeObject = null;
+            LiveBuilderToolPalette.Current = LiveBuilderToolPalette.Get<LiveBuilderBoxTool>();
             LiveBuilderBoxTool.IsNewModelRequested = true;
             LiveBuilderActivation.SetToolActive(true);
         }

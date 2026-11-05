@@ -53,6 +53,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
             _ => string.Empty
         };
 
+        // Объект, стену или здание, на которых начат прямоугольник, удалили посреди жеста: его числа — в осях уже несуществующего объекта.
+        private bool IsTargetLost => (plane.Model is not null && plane.Model == null) || (pathOwner is not null && pathOwner == null);
+
 
         // ── Шаги жеста ───────────────────────────────────────────────────
 
@@ -106,6 +109,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (stage != DrawStage.Depth)
                 return;
 
+            if (IsTargetLost)
+            {
+                Cancel();
+                return;
+            }
+
             var worldCenter = plane.FrameToWorld.MultiplyPoint3x4((rectangleStart + rectangleEnd) / 2f);
             var worldOutward = plane.FrameToWorld.MultiplyVector(plane.OutwardDirection).normalized;
             var translation = HandleUtility.CalcLineTranslation(depthMouseStart, mousePosition, worldCenter, worldOutward);
@@ -126,7 +135,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var model = plane.Model;
             var isCuttingPathWall = mode == BoxModelPartMode.Cut && pathOwner != null;
 
-            if (stage != DrawStage.Depth || Mathf.Approximately(depth, 0f) || (mode == BoxModelPartMode.Cut && model == null && !isCuttingPathWall))
+            if (stage != DrawStage.Depth || IsTargetLost || Mathf.Approximately(depth, 0f) || (mode == BoxModelPartMode.Cut && model == null && !isCuttingPathWall))
             {
                 Cancel();
                 return false;

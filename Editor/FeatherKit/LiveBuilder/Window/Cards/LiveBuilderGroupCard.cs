@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка «Группа» зоны «Выделено» — у любого объекта сцены: «Новая группа внутри» и «В группу» для выделенного.
+    /// Карточка «Группа» вкладки «Выделено» — у любого объекта сцены: «Новая группа внутри» и «В группу» для выделенного.
     /// Выделена сама группа (объект из коробок) — строка о том, что вырезы снаружи её не трогают. Сами команды — <see cref="LiveBuilderGroups"/>.
     /// </summary>
     public sealed class LiveBuilderGroupCard : LiveBuilderSelectionCard

@@ -132,12 +132,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Сохранение сцены и Play ──────────────────────────────────────
 
-        // Рендерер выключен без Undo: сохрани сцену или войди в Play — сохранится выключенным. Перед этим включаем;
+        // Рендерер выключен без Undo: сохрани сцену или префаб или войди в Play — сохранится выключенным. Перед этим включаем;
         // следующий кадр жеста спрячет его снова.
         [InitializeOnLoadMethod]
         private static void RestoreModelsBeforeSaving()
         {
             EditorSceneManager.sceneSaving += (_, _) => ShowAllHiddenModels();
+            PrefabStage.prefabSaving += _ => ShowAllHiddenModels();
             EditorApplication.playModeStateChanged += change =>
             {
                 if (change == PlayModeStateChange.ExitingEditMode)

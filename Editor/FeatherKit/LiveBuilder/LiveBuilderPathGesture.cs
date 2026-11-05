@@ -26,7 +26,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Стена внутри здания (<see cref="LiveBuilderBuildingContext"/>) — перегородка: на полу его этажа, до потолка, толщиной перегородки,
     /// точки прилипают к стенам здания, на этом этаже или на всех выше.
     /// Комната: в здании — замкнутая перегородка, стороны вдоль его стен не строятся; в доме из коробок — стены до его потолка;
-    /// в пустоте — здание в один этаж. Куда встают её стены от линии — наружу, внутрь или по центру — по настройке «Стены» (<see cref="LiveBuilderRoomWalls"/>).
+    /// в пустоте — здание в один этаж. Куда встают её стены от линии — наружу, внутрь или по центру — по настройке «Линия по стенам» (<see cref="LiveBuilderRoomWalls"/>).
     /// Выделен объект из коробок — линия встаёт в него и его вырезающие коробки режут и её. Здание и комната в пустоте — в новом объекте из коробок:
     /// так в них сразу работают лестницы и вырезы (<see cref="LiveBuilderPathOwnerCreator"/>). Двигать точки потом — <see cref="LiveBuilderContourHandles"/>.
     /// </summary>
@@ -37,6 +37,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // То же без окна сцены (вызов из кода), м.
         private const float CloseDistanceWithoutView = 0.3f;
+
+        // Ближе этого к последней точке — та же точка, м.
+        private const float SameKnotDistance = 0.005f;
 
         // Здание и комната — замкнутый контур хотя бы из трёх точек, стена — хотя бы из двух.
         private const int MinClosedPoints = 3;
@@ -154,6 +157,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 Finish(true);
                 return;
             }
+
+            // Второй клик двойного щелчка или клик в ту же клетку — не вторая точка поверх последней.
+            if (IsOnLastKnot(worldPoint))
+                return;
 
             AddKnot(worldPoint, isShiftHeld);
         }
@@ -293,7 +300,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             ApplyRoomWallSide();
         }
 
-        // Комната из стены по линии — сторона стены от линии по настройке «Стены» и по тому, в какую сторону обходишь комнату. Пересчёт на каждой точке:
+        // Комната из стены по линии — сторона стены от линии по настройке «Линия по стенам» и по тому, в какую сторону обходишь комнату. Пересчёт на каждой точке:
         // пока рисуешь, видно, куда встанут стены.
         private void ApplyRoomWallSide()
         {
@@ -323,6 +330,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var screenDistance = (HandleUtility.WorldToGUIPoint(firstKnot) - HandleUtility.WorldToGUIPoint(worldPoint)).magnitude;
             return screenDistance < CloseDistancePixels;
+        }
+
+        // Точка встала бы ровно на последнюю: точки по сетке, так что совпадение — та же клетка.
+        private bool IsOnLastKnot(Vector3 worldPoint)
+        {
+            var spline = Container.Spline;
+
+            if (spline.Count == 0)
+                return false;
+
+            var lastKnot = pathOwner.transform.TransformPoint((Vector3)spline[spline.Count - 1].Position);
+            return Vector3.Distance(lastKnot, worldPoint) < SameKnotDistance;
         }
 
 

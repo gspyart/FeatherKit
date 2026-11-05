@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка «Повтор» зоны «Выделено»: у выделенной группы повтора — сколько копий и шаг, «шаг — этаж», «убрать повтор». Всё с Undo.
+    /// Карточка «Повтор» вкладки «Выделено»: у выделенной группы повтора — сколько копий и шаг, «шаг — этаж», «убрать повтор». Всё с Undo.
     /// </summary>
     public sealed class LiveBuilderRepeatGroupCard : LiveBuilderSelectionCard
     {
@@ -50,7 +50,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     LiveBuilderRepeatActions.Unwrap(repeat);
             }
 
-            LiveBuilderWindowControls.Explanation("Repeat", "Исключение для одной копии — коробка ниже группы в списке объектов: она главнее.");
+            LiveBuilderWindowControls.Explanation("Исключение для одной копии — коробка ниже группы в списке объектов: она главнее.");
         }
     }
 }

@@ -5,8 +5,8 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка «Выделено» про коробки: одна — режим (у вырезающей — что она режет из стен и зданий), угол и размер в осях объекта, скосы рёбер (<see cref="BoxModelChamferPanel"/>),
-    /// материалы сторон; несколько — сколько их. Всё с Undo.
+    /// Карточка «Выделено» про коробки: одна — режим и размер, скосы рёбер (<see cref="BoxModelChamferPanel"/>), а под свёрнутым «Ещё» — угол в осях объекта,
+    /// у вырезающей — что она режет из стен и зданий, материалы сторон; несколько — сколько их. Всё с Undo.
     /// </summary>
     public sealed class LiveBuilderBoxPartCard : LiveBuilderSelectionCard
     {
@@ -25,6 +25,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return parts.Count > 0;
         }
 
+        // Сверху — режим и размер, их меняют каждый раз; угол, что режет и материалы — под «Ещё».
         private static void DrawPart(BoxModelPart part)
         {
             var model = part.GetComponentInParent<BoxModel>();
@@ -36,27 +37,54 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 var mode = (BoxModelPartMode)LiveBuilderWindowControls.Switch(new GUIContent("Режим", "Добавить объём или вырезать дыру"), (int)part.Mode,
                     ("Добавить", LiveBuilderOptionIcon.BoxAdd), ("Вырезать", LiveBuilderOptionIcon.BoxCut));
-                var min = BoxModelShapeCollector.LocalMinOf(model, part.transform);
-                var newMin = EditorGUILayout.Vector3Field(new GUIContent("Угол, м", "Угол с наименьшими координатами, в осях объекта"), min);
                 var newSize = EditorGUILayout.Vector3Field(new GUIContent("Размер, м"), part.Size);
 
-                if (mode != part.Mode || newMin != min || newSize != part.Size)
+                if (mode != part.Mode || newSize != part.Size)
                 {
-                    Undo.RecordObjects(new Object[] { part, part.transform }, "Edit Box");
+                    Undo.RecordObject(part, "Edit Box");
                     part.Mode = mode;
-                    part.transform.position = model.transform.TransformPoint(newMin);
                     part.Size = newSize;
                 }
-
-                if (part.Mode == BoxModelPartMode.Cut)
-                    DrawCutTargets(part);
 
                 if (GUILayout.Button(new GUIContent("Добавить ⇄ Вырезать", "У выделенных коробок: добавляющие вырезают, вырезающие добавляют")))
                     BoxModelActions.ToggleModeOfSelectedParts();
             }
 
             BoxModelChamferPanel.Draw(part);
+
+            if (!LiveBuilderWindowControls.MoreSection("SelectedBox", IsMoreChanged(part), part.Mode == BoxModelPartMode.Cut ? "угол, что режет, материалы" : "угол, материалы"))
+                return;
+
+            DrawPlacement(part, model);
             DrawMaterials(part);
+        }
+
+        // «Ещё» раскрыто само, если вырезающая режет не всё или задан хоть один материал.
+        private static bool IsMoreChanged(BoxModelPart part)
+        {
+            return (part.Mode == BoxModelPartMode.Cut && part.CutTargets != LiveBuilderCutTargets.Everything)
+                || part.Material != null || part.BottomMaterial != null || part.SideMaterial != null || part.TopMaterial != null
+                || part.RightMaterial != null || part.LeftMaterial != null || part.FrontMaterial != null || part.BackMaterial != null;
+        }
+
+
+        // Угол в осях объекта; у вырезающей — что она режет.
+        private static void DrawPlacement(BoxModelPart part, BoxModel model)
+        {
+            using (LiveBuilderWindowControls.Card("Место"))
+            {
+                var min = BoxModelShapeCollector.LocalMinOf(model, part.transform);
+                var newMin = EditorGUILayout.Vector3Field(new GUIContent("Угол, м", "Угол с наименьшими координатами, в осях объекта"), min);
+
+                if (newMin != min)
+                {
+                    Undo.RecordObject(part.transform, "Move Box");
+                    part.transform.position = model.transform.TransformPoint(newMin);
+                }
+
+                if (part.Mode == BoxModelPartMode.Cut)
+                    DrawCutTargets(part);
+            }
         }
 
         // Что вырезающая коробка режет из стен по линии и зданий объекта. Свои коробки объекта режет всегда.
@@ -107,8 +135,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     part.BackMaterial = back;
                 }
 
-                LiveBuilderWindowControls.Explanation("BoxMaterials", "Быстрее — перетащи материал из Project или палитры уровня на грань в окне сцены: он ляжет в эту сторону. " +
-                                               "С Alt — во всю коробку.");
+                LiveBuilderWindowControls.Explanation("Быстрее — перетащи материал из Project или палитры уровня на грань в окне сцены: он ляжет в эту сторону. " +
+                                                      "С Alt — во всю коробку.");
             }
         }
     }

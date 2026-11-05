@@ -10,7 +10,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Сверяет привязанное к зданию (<see cref="SplineBuildingStoreyLink"/>) с самим зданием перед каждой пересборкой. Копий по этажам —
     /// всегда сколько задано в привязке (только свой, «по этаж …», «до верха»):
     /// - копии вверх (<see cref="IStoreyCopies"/>: перегородка, вырез) — по числу этажей в повторе, шаг — этаж; у перегородки ещё и высота — до потолка этажа
-    /// - лестница во весь этаж — высота этажа (своя высота остаётся); новая — без верхнего этажа, «и на последнем этаже» включают в инспекторе привязки
+    /// - лестница и коробка во весь этаж — высота этажа, комната до потолка — до потолка (своя высота остаётся); новая лестница — без верхнего этажа,
+    ///   «и на последнем этаже» включают в инспекторе привязки
     /// - коробку, комнату и лестницу по этажам копирует сам объект из коробок (<see cref="BoxModelShapeCollector"/>),
     ///   вложенный объект из коробок с привязкой на нём самом — сам себя целиком; место на этаже и видимость — как у всех, по объекту
     /// Поменялись у здания высота этажа или пол — объект встаёт на свой этаж на ту же высоту над полом.
@@ -89,7 +90,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return link;
         }
 
-        // Что сверка привязки может поменять у объекта: сама привязка, место, копии вверх, высота стены и лестницы, видимость.
+        // Что сверка привязки может поменять у объекта: сама привязка, место, копии вверх, высота стены, лестницы, коробки и комнаты, видимость.
         private static Object[] ChangedBySync(GameObject target, SplineBuildingStoreyLink link)
         {
             var changed = new List<Object> { link, target.transform, target };
@@ -102,6 +103,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (target.TryGetComponent<BoxModelStairs>(out var stairs))
                 changed.Add(stairs);
+
+            if (target.TryGetComponent<BoxModelPart>(out var part))
+                changed.Add(part);
+
+            if (target.TryGetComponent<BoxModelRoom>(out var room))
+                changed.Add(room);
 
             return changed.ToArray();
         }
@@ -152,6 +159,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
             // Лестница во весь этаж следит за высотой этажа; своя высота (полэтажа, площадка) остаётся.
             if (link.TryGetComponent<BoxModelStairs>(out var stairs) && Mathf.Abs(stairs.Height - previousStoreyHeight) < Tolerance)
                 SetIfDifferent(stairs, stairs.Height, building.StoreyHeight, value => stairs.Height = value);
+
+            // Коробка во весь этаж (шахта, вырез сквозь перекрытие) — так же; своя высота остаётся.
+            if (link.TryGetComponent<BoxModelPart>(out var part) && Mathf.Abs(part.Size.y - previousStoreyHeight) < Tolerance)
+                SetIfDifferent(part, part.Size.y, building.StoreyHeight, value => part.Size = new Vector3(part.Size.x, value, part.Size.z));
+
+            // Комната до потолка — высота этажа минус перекрытие, как у перегородки; своя высота остаётся.
+            if (link.TryGetComponent<BoxModelRoom>(out var room) && Mathf.Abs(room.Size.y - (previousStoreyHeight - building.SlabThickness)) < Tolerance)
+                SetIfDifferent(room, room.Size.y, building.ClearHeight, value => room.Size = new Vector3(room.Size.x, value, room.Size.z));
         }
 
 

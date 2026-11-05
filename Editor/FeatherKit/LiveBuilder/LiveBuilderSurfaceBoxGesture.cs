@@ -158,9 +158,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Рамка ────────────────────────────────────────────────────────
 
-        // Прямоугольник на поверхности; при выборе глубины — коробка до неё: зелёная наружу, оранжевая — вырез.
+        // Прямоугольник на поверхности и углы, прилипшие к краю грани; при выборе глубины — коробка до неё: зелёная наружу, оранжевая — вырез.
         public void DrawPreview()
         {
+            if (!isChoosingDepth)
+                rectangle.DrawEdgeMarkers();
+
             if (!rectangle.IsActive || !rectangle.HasArea)
                 return;
 

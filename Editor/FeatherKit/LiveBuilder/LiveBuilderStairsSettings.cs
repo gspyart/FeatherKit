@@ -6,6 +6,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>Настройки инструмента «Лестница»: вид, высота, ширина по умолчанию, пробивать ли перекрытие.</summary>
     public static class LiveBuilderStairsSettings
     {
+        // Заводские значения, пока человек их не поменял: с ними сверяется «Ещё» окна — изменено ли.
+        public const float FactoryStepThickness = 0.2f;
+        public const float FactoryDefaultWidth = 2f;
+
+
         public static BoxModelStairsStyle Style
         {
             get => LiveBuilderPreferences.GetEnum("Stairs.Style", BoxModelStairsStyle.SeparateSteps);
@@ -15,7 +20,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Толщина плиты ступени у вида «Ступени», м.
         public static float StepThickness
         {
-            get => LiveBuilderPreferences.GetFloat("Stairs.StepThickness", 0.2f);
+            get => LiveBuilderPreferences.GetFloat("Stairs.StepThickness", FactoryStepThickness);
             set => LiveBuilderPreferences.SetFloat("Stairs.StepThickness", Mathf.Max(0.02f, value));
         }
 
@@ -35,7 +40,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Ширина, если протянул почти без ширины — просто линию, м.
         public static float DefaultWidth
         {
-            get => LiveBuilderPreferences.GetFloat("Stairs.DefaultWidth", 2f);
+            get => LiveBuilderPreferences.GetFloat("Stairs.DefaultWidth", FactoryDefaultWidth);
             set => LiveBuilderPreferences.SetFloat("Stairs.DefaultWidth", Mathf.Max(0.5f, value));
         }
 

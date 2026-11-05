@@ -7,9 +7,9 @@ namespace FeatherKit.LiveBuilder
     /// <summary>Где стены здания относительно контура: контур — их наружная сторона, внутренняя или середина.</summary>
     public enum SplineBuildingContourSide
     {
-        [InspectorName("Контур снаружи")] Outside,
-        [InspectorName("Контур внутри")] Inside,
-        [InspectorName("Контур посередине")] Center
+        [InspectorName("Линия снаружи стен")] Outside,
+        [InspectorName("Линия изнутри стен")] Inside,
+        [InspectorName("Линия по оси стен")] Center
     }
 
 
@@ -51,7 +51,8 @@ namespace FeatherKit.LiveBuilder
         [Min(0.02f)]
         [SerializeField] private float wallThickness = 0.3f;
 
-        [Tooltip("Где стены относительно контура. Снаружи — контур это габарит здания. Внутри — контур это стены комнаты изнутри.")]
+        [Tooltip("Где линия контура относительно стен. Снаружи — линия это габарит здания, стены внутрь. Изнутри — линия это комнаты изнутри, стены наружу. " +
+                 "По оси — линия по середине стен.")]
         [SerializeField] private SplineBuildingContourSide contourSide = SplineBuildingContourSide.Outside;
 
         [Space]

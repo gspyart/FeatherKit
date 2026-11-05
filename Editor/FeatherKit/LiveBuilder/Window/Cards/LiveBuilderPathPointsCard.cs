@@ -7,7 +7,7 @@ using UnityEngine.Splines;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка «Точки» зоны «Выделено» у стены по линии и здания: сколько точек, вид точек — выбранных в сцене, а если не выбрано ни одной, всех;
+    /// Карточка «Точки» вкладки «Выделено» у стены по линии и здания: сколько точек, вид точек — выбранных в сцене, а если не выбрано ни одной, всех;
     /// скругление выбранных углов, убрать выбранные, замкнуть или разомкнуть стену (здание всегда замкнуто). Как править в сцене — пояснение.
     /// </summary>
     public sealed class LiveBuilderPathPointsCard : LiveBuilderSelectionCard
@@ -64,9 +64,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 }
 
                 var selectHotkey = LiveBuilderToolPalette.HotkeyOf(LiveBuilderToolPalette.Get<LiveBuilderSelectTool>());
-                LiveBuilderWindowControls.Explanation("Points", "В сцене, в «Выделении» (" + selectHotkey + ") или в инструменте этой постройки: тяни точку, «+» на отрезке — новая точка, " +
-                                               "«+» за концом — продлить, Shift+клик или Shift+рамка — выбрать несколько, двойной клик — угол → плавно → Безье, " +
-                                               "у Безье тяни усы, у угла — голубая ручка скругления, стрелки — на шаг сетки, Delete — убрать.");
+                LiveBuilderWindowControls.Explanation("В сцене, в «Выделении» (" + selectHotkey + ") или в инструменте этой постройки: тяни точку, «+» на отрезке — новая точка, " +
+                                                      "«+» за концом — продлить, Shift+клик или Shift+рамка — выбрать несколько, двойной клик — угол → плавно → Безье, " +
+                                                      "у Безье тяни усы, у угла — голубая ручка скругления, стрелки — на шаг сетки, Delete — убрать.");
             }
         }
 

@@ -47,6 +47,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public override string Hint => PathHint(wallGesture);
 
 
+        // ── Окно: редкие настройки ───────────────────────────────────────
+
+        public override string MoreSettingsSummary => "линия, толщина, перегородка, материал";
+
+        public override bool AreMoreSettingsChanged =>
+            LiveBuilderWallSettings.IsSmooth || LiveBuilderWallSettings.Alignment != SplineWallAlignment.Center
+            || (LiveBuilderWallSettings.WallType == null && !Mathf.Approximately(LiveBuilderWallSettings.Thickness, LiveBuilderWallSettings.FactoryThickness))
+            || (LiveBuilderWallSettings.WallType == null && LiveBuilderWallSettings.Material != null)
+            || LiveBuilderToolSettingsFields.IsPartitionChanged();
+
+
         // ── Что правит: проверка ─────────────────────────────────────────
 
         // Только стены по линии.
@@ -58,8 +69,29 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно ─────────────────────────────────────────────────────────
 
-        // Линия, размер и материал новой стены.
+        // Тип и высота новой стены — меняют каждый раз.
         public override void DrawSettings()
+        {
+            using (LiveBuilderWindowControls.Card("Стена"))
+            {
+                LiveBuilderWallSettings.WallType = LiveBuilderWallTypes.Popup(
+                    new GUIContent("Тип", "Толщина и материал — из типа, общие для всех стен этого типа: поменял тип — перестроились все. Без типа — свои числа в «Ещё»"),
+                    LiveBuilderWallSettings.WallType);
+
+                LiveBuilderWallSettings.IsStoreyHigh = !LiveBuilderWindowControls.Switch(new GUIContent("Высота", "До потолка — этаж минус перекрытие. Своя — число ниже"),
+                    !LiveBuilderWallSettings.IsStoreyHigh, "До потолка", "Своя");
+
+                if (LiveBuilderWallSettings.IsStoreyHigh)
+                    LiveBuilderWindowControls.Computed(" ", LiveBuilderSceneText.FormatMeters(LiveBuilderWallSettings.Height) + " м", "Этаж минус перекрытие");
+                else
+                    LiveBuilderWallSettings.CustomHeight = EditorGUILayout.FloatField(new GUIContent("Своя высота, м", "Высота стены над линией"),
+                        LiveBuilderWallSettings.CustomHeight);
+            }
+        }
+
+
+        // Где стена от линии, угол или плавно, своя толщина без типа, перегородка в здании, материал без типа.
+        public override void DrawMoreSettings()
         {
             using (LiveBuilderWindowControls.Card("Линия"))
             {
@@ -72,22 +104,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             using (LiveBuilderWindowControls.Card("Размер"))
             {
-                LiveBuilderWallSettings.WallType = LiveBuilderWallTypes.Popup(
-                    new GUIContent("Тип", "Толщина и материал — из типа, общие для всех стен этого типа: поменял тип — перестроились все. Без типа — свои числа ниже"),
-                    LiveBuilderWallSettings.WallType);
-
                 if (LiveBuilderWallSettings.WallType == null)
-                    LiveBuilderWallSettings.Thickness = EditorGUILayout.FloatField(new GUIContent("Толщина, м", "Наружная — 0,3, перегородка — 0,15"),
+                    LiveBuilderWallSettings.Thickness = EditorGUILayout.FloatField(new GUIContent("Толщина, м", "Своя толщина стены без типа. Наружная — 0,3, перегородка — 0,15"),
                         LiveBuilderWallSettings.Thickness);
-
-                LiveBuilderWallSettings.IsStoreyHigh = !LiveBuilderWindowControls.Switch(new GUIContent("Высота", "До потолка — этаж минус перекрытие. Своя — число ниже"),
-                    !LiveBuilderWallSettings.IsStoreyHigh, "До потолка", "Своя");
-
-                if (LiveBuilderWallSettings.IsStoreyHigh)
-                    LiveBuilderWindowControls.Computed(" ", LiveBuilderSceneText.FormatMeters(LiveBuilderWallSettings.Height) + " м", "Этаж минус перекрытие");
-                else
-                    LiveBuilderWallSettings.CustomHeight = EditorGUILayout.FloatField(new GUIContent("Своя высота, м", "Высота стены над линией"),
-                        LiveBuilderWallSettings.CustomHeight);
 
                 LiveBuilderToolSettingsFields.DrawPartitionThickness();
             }

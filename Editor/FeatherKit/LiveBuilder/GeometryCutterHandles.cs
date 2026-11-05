@@ -8,6 +8,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Ручки выделенного выреза (<see cref="GeometryCutter"/>) в Live Builder: рамка всех копий поверх стен, крупные квадраты на гранях — размер
     /// (<see cref="LiveBuilderFaceHandles"/>: противоположная грань стоит, размер — целыми клетками сетки), стрелки в середине — перенос дыры в осях выреза.
     /// Ручки правят только дыру — размер и сдвиг формы, сам объект стоит: визуал внутри выреза не едет. Объект целиком — штатным переносом (W) и поворотом (E) Unity.
+    /// Shift + тянуть стрелки — копия выреза целиком, с визуалом: второе окно рядом.
     /// Ручки — на той копии вверх, что ближе к середине окна сцены: окно на пятом этаже правится там, где его видно.
     /// </summary>
     public static class GeometryCutterHandles
@@ -116,19 +117,37 @@ namespace FeatherKit.EditorTools.LiveBuilder
             cutter.Depth = size.z;
         }
 
-        // Стрелки — в середине копии, не в опоре: там внизу ручка размера.
+        // Стрелки — в середине копии, не в опоре: там внизу ручка размера. Тянешь — едет дыра.
+        // С Shift в начале — копия выреза целиком, с визуалом внутри, по сетке в осях выреза: ряд окон вдоль стены (<see cref="LiveBuilderMoveHandle"/>).
         private static void DrawMoveHandle(GeometryCutter cutter, Vector3 copyLift)
         {
-            var center = GeometryCutterOutline.ShapeToWorld(cutter).MultiplyPoint3x4(new Vector3(0f, cutter.Height / 2f, 0f)) + copyLift;
+            var isCopyDrag = LiveBuilderMoveHandle.IsDragging(cutter.transform);
+            var center = isCopyDrag
+                ? LiveBuilderMoveHandle.HandlePosition
+                : GeometryCutterOutline.ShapeToWorld(cutter).MultiplyPoint3x4(new Vector3(0f, cutter.Height / 2f, 0f)) + copyLift;
 
             EditorGUI.BeginChangeCheck();
             var moved = Handles.PositionHandle(center, cutter.transform.rotation);
 
-            if (!EditorGUI.EndChangeCheck())
-                return;
+            if (EditorGUI.EndChangeCheck())
+            {
+                if (!isCopyDrag && Event.current.shift)
+                {
+                    LiveBuilderMoveHandle.BeginDrag(new[] { cutter.transform }, center, cutter.transform.rotation, true);
+                    isCopyDrag = true;
+                }
 
-            Undo.RecordObject(cutter, "Move Cutter Hole");
-            MoveShapeBottom(cutter, GeometryCutterOutline.ShapeBottomOf(cutter) + moved - center);
+                if (isCopyDrag)
+                    LiveBuilderMoveHandle.DragTo(moved);
+                else
+                {
+                    Undo.RecordObject(cutter, "Move Cutter Hole");
+                    MoveShapeBottom(cutter, GeometryCutterOutline.ShapeBottomOf(cutter) + moved - center);
+                }
+            }
+
+            if (isCopyDrag)
+                LiveBuilderMoveHandle.DrawDragLabel();
         }
 
 

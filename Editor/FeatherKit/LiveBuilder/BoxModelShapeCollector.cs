@@ -186,16 +186,28 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Комната ──────────────────────────────────────────────────────
 
         // Стены вокруг (если нужны) и сама комната — вырезающая коробка с материалами пола, стен и потолка.
+        // Без пола или потолка у стен вокруг нет плиты с той стороны: вырез комнаты выходит наружу — там открыто.
         private static void AddRoom(BoxModelRoom room, Vector3 min, List<BoxModelSolverBox> boxes)
         {
             if (room.HasWalls)
             {
-                var shell = new Vector3(room.WallThickness, room.SlabThickness, room.WallThickness);
-                boxes.Add(new BoxModelSolverBox(MillimeterBox.FromMeters(min - shell, room.Size + shell * 2f), BoxModelPartMode.Add, room, default));
+                var shell = RoomShellOf(min, room.Size, room.WallThickness, room.SlabThickness, room.HasFloor, room.HasCeiling);
+                boxes.Add(new BoxModelSolverBox(shell, BoxModelPartMode.Add, room, default));
             }
 
             var materials = new BoxModelSideMaterials(null, room.FloorMaterial, room.CeilingMaterial, room.WallMaterial);
             boxes.Add(new BoxModelSolverBox(MillimeterBox.FromMeters(min, room.Size), BoxModelPartMode.Cut, room, materials));
+        }
+
+        // Стены вокруг комнаты: на толщину стен по бокам, на толщину перекрытия снизу и сверху — если там есть пол и потолок.
+        // Общее у комнаты и её предпросмотра при рисовании.
+        public static MillimeterBox RoomShellOf(Vector3 roomMin, Vector3 roomSize, float wallThickness, float slabThickness, bool hasFloor, bool hasCeiling)
+        {
+            var below = hasFloor ? slabThickness : 0f;
+            var above = hasCeiling ? slabThickness : 0f;
+            var shellMin = roomMin - new Vector3(wallThickness, below, wallThickness);
+            var shellSize = roomSize + new Vector3(wallThickness * 2f, below + above, wallThickness * 2f);
+            return MillimeterBox.FromMeters(shellMin, shellSize);
         }
 
 

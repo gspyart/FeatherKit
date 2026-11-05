@@ -17,6 +17,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
     {
         private const string AllStoreysSessionKey = "FeatherKit.LiveBuilder.IsOnAllStoreys";
 
+        // Что-то перед полом этажа выше него хотя бы на столько — закрывает его от мыши, м: земля вровень с полом не закрывает.
+        private const float FloorBlockTolerance = 0.05f;
+
+        // Больше зданий в памяти — забыть всех: удалённые здания иначе копились бы.
+        private const int MaxCachedBuildings = 256;
+
+        // Внутренние стороны стен зданий в плане и подпись того, из чего они посчитаны (<see cref="InnerContoursOf"/>).
+        private static readonly Dictionary<SplineBuilding, (Hash128 Hash, List<List<Vector2>> Contours)> InnerContoursCache = new();
+
 
         private LiveBuilderBuildingContext(SplineBuilding building, int storey)
         {
@@ -84,19 +93,32 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return true;
         }
 
+        // Ближайшее под мышью — часть здания или его интерьера: это здание. Иначе — здание, внутри стен которого пол этажа под мышью,
+        // но только если до пола луч ничего не задел: платформа или коробка перед зданием — мышь на ней, а не на полу здания за ней.
+        // Коробки без коллайдера тоже закрывают пол — их ищет BoxModelPicker.
         private static SplineBuilding BuildingUnder(Ray worldRay)
         {
+            var nearestDistance = float.MaxValue;
+            SplineBuilding nearestBuilding = null;
+
             if (BoxModelPicker.TryRaycastVisible(worldRay, float.MaxValue, out var hit))
             {
-                var hitBuilding = hit.collider.GetComponentInParent<SplineBuilding>();
-
-                if (hitBuilding != null)
-                    return hitBuilding;
+                nearestDistance = hit.distance;
+                nearestBuilding = hit.collider.GetComponentInParent<SplineBuilding>();
             }
+
+            if (BoxModelPicker.TryPickSurface(worldRay, out var surfaceHit) && surfaceHit.Distance < nearestDistance)
+            {
+                nearestDistance = surfaceHit.Distance;
+                nearestBuilding = surfaceHit.Model.GetComponentInParent<SplineBuilding>();
+            }
+
+            if (nearestBuilding != null)
+                return nearestBuilding;
 
             var floor = BoxModelDrawPlaneFinder.StoreyFloorPlane(null);
 
-            if (!floor.TryIntersect(worldRay, out var floorPoint))
+            if (!floor.TryIntersect(worldRay, out var floorPoint) || IsAboveFloorInFront(worldRay, nearestDistance, floorPoint))
                 return null;
 
             foreach (var building in UnityEditor.SceneManagement.StageUtility.GetCurrentStageHandle().FindComponentsOfType<SplineBuilding>())
@@ -106,12 +128,20 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 var local = building.transform.InverseTransformPoint(floorPoint);
 
-                foreach (var path in SplineWallPath.FromContainer(building.GetComponent<SplineContainer>(), building.CurveStep))
-                    if (PlanPolygons.IsInside(new Vector2(local.x, local.z), SplineBuildingMeshBuilder.InnerContourOf(building, path)))
-                        return building;
+                if (IsInsideInnerContours(building, new Vector2(local.x, local.z)))
+                    return building;
             }
 
             return null;
+        }
+
+        // Луч задел что-то раньше пола этажа, и оно выше пола: стоит на нём или над ним — закрывает пол. Земля вровень с полом — нет.
+        private static bool IsAboveFloorInFront(Ray worldRay, float hitDistance, Vector3 floorPoint)
+        {
+            if (hitDistance >= Vector3.Distance(worldRay.origin, floorPoint))
+                return false;
+
+            return worldRay.GetPoint(hitDistance).y > floorPoint.y + FloorBlockTolerance;
         }
 
 
@@ -145,11 +175,45 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (localPoint.y < baseHeight - 0.01f || localPoint.y > baseHeight + building.TotalHeight + 0.01f)
                 return false;
 
-            foreach (var path in SplineWallPath.FromContainer(building.GetComponent<SplineContainer>(), building.CurveStep))
-                if (PlanPolygons.IsInside(new Vector2(localPoint.x, localPoint.z), SplineBuildingMeshBuilder.InnerContourOf(building, path)))
+            return IsInsideInnerContours(building, new Vector2(localPoint.x, localPoint.z));
+        }
+
+
+        // Точка плана здания, в его осях, — внутри его стен.
+        private static bool IsInsideInnerContours(SplineBuilding building, Vector2 localPlanPoint)
+        {
+            foreach (var contour in InnerContoursOf(building))
+                if (PlanPolygons.IsInside(localPlanPoint, contour))
                     return true;
 
             return false;
+        }
+
+        // Внутренние стороны стен здания в плане. Здание под мышью ищется на каждое её движение — контуры помнятся,
+        // пока не поменялись линия, толщина стен, где линия относительно них и шаг изгибов.
+        private static List<List<Vector2>> InnerContoursOf(SplineBuilding building)
+        {
+            var container = building.GetComponent<SplineContainer>();
+            var hash = new Hash128();
+            hash.Append(LiveBuilderSyncEdits.LineHashOf(container));
+            hash.Append(building.WallThickness);
+            hash.Append((int)building.ContourSide);
+            hash.Append(building.CurveStep);
+            hash.Append(building.CornerSegments);
+
+            if (InnerContoursCache.TryGetValue(building, out var cached) && cached.Hash == hash)
+                return cached.Contours;
+
+            var contours = new List<List<Vector2>>();
+
+            foreach (var path in SplineWallPath.FromContainer(container, building.CurveStep))
+                contours.Add(SplineBuildingMeshBuilder.InnerContourOf(building, path));
+
+            if (InnerContoursCache.Count >= MaxCachedBuildings)
+                InnerContoursCache.Clear();
+
+            InnerContoursCache[building] = (hash, contours);
+            return contours;
         }
 
 

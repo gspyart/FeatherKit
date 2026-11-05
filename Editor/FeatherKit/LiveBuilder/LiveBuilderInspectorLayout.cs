@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Общий вид инспекторов Live Builder: группы с заголовком, свёрнутые группы для редкого («Материалы», «Тонко»),
+    /// Общий вид инспекторов Live Builder: группы с заголовком, свёрнутые группы для редкого («Что и где режет», «Тонко»; изменённое внутри — открыты сами),
     /// поля по именам. Порядок групп везде один: размер → этажи → вид → тонко.
     /// </summary>
     public static class LiveBuilderInspectorLayout
@@ -22,9 +22,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Свёрнутая группа: открыта ли. Помнится до перезапуска Unity, одна на все объекты этого вида.
-        public static bool Foldout(string key, string title)
+        // hasNonDefaultValues — внутри что-то не как по умолчанию: открыта всегда и помечена «изменено», спрятанное не удивит.
+        public static bool Foldout(string key, string title, bool hasNonDefaultValues = false)
         {
             EditorGUILayout.Space(6f);
+
+            if (hasNonDefaultValues)
+            {
+                EditorGUILayout.Foldout(true, new GUIContent(title + " · изменено", "Здесь есть изменённые настройки — поэтому раскрыто"), true, EditorStyles.foldoutHeader);
+                return true;
+            }
+
             var isOpen = SessionState.GetBool(FoldoutKeyPrefix + key, false);
             isOpen = EditorGUILayout.Foldout(isOpen, title, true, EditorStyles.foldoutHeader);
             SessionState.SetBool(FoldoutKeyPrefix + key, isOpen);

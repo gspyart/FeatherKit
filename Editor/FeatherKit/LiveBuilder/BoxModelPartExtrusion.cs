@@ -17,7 +17,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     public static class BoxModelPartExtrusion
     {
         public const string Hint = "Тяни квадрат — размер, Ctrl — выдавить новую коробку от грани, Alt — обе грани, Alt+Shift — все стороны. " +
-                                   "Shift+клик по квадратам — набрать грани: потянешь одну — едут все. Delete — удалить коробку";
+                                   "Стрелки в середине — перенести, с Shift — копия. Shift+клик по квадратам — набрать грани. Delete — удалить коробку";
 
         // Что выдавливаем сейчас: по одной записи на грань. Не выдавливаем — пусто.
         private static readonly List<FaceExtrusion> Extrusions = new();

@@ -6,13 +6,13 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка зоны «Выделено» окна Live Builder: числа и действия одного вида выделенного — коробки, повтора, стены, здания…
-    /// Сама решает, есть ли ей что показать. Зона (<see cref="LiveBuilderSelectionZone"/>) находит все карточки сама и рисует их по <see cref="Order"/>.
-    /// Новая карточка — новый наследник. Окно закрывается — зона отпускает карточку (<see cref="Dispose"/>).
+    /// Карточка вкладки «Выделено» окна Live Builder: числа и действия одного вида выделенного — коробки, повтора, стены, здания…
+    /// Сама решает, есть ли ей что показать. Вкладка (<see cref="LiveBuilderSelectionTab"/>) находит все карточки сама и рисует их по <see cref="Order"/>.
+    /// Новая карточка — новый наследник. Окно закрывается — вкладка отпускает карточку (<see cref="Dispose"/>).
     /// </summary>
     public abstract class LiveBuilderSelectionCard : System.IDisposable
     {
-        // Меньше — выше в зоне.
+        // Меньше — выше на вкладке.
         public abstract int Order { get; }
 
 

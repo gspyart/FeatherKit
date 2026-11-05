@@ -245,11 +245,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
             LiveBuilderStableHash.AppendSplines(ref hash, building.GetComponent<SplineContainer>());
             var model = SplineWallRebuilder.OuterModelOf(building);
 
+            // Коробки — уже в осях здания: где стоит само здание в объекте, подписи не важно — здание едет со своей лестницей без пересборки.
             if (model != null)
             {
                 var cutBoxes = SplineWallRebuilder.CutBoxesHashOf(model, building, true);
                 hash.Append(ref cutBoxes);
-                LiveBuilderStableHash.AppendQuantizedPlacement(ref hash, model.transform, building.transform);
             }
 
             return hash.ToString();

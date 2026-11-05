@@ -6,9 +6,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>Настройки инструмента «Стена»: размеры новой стены, толщина перегородки в здании и какой будет новая точка — угол или плавно.</summary>
     public static class LiveBuilderWallSettings
     {
+        // Заводские значения, пока человек их не поменял: с ними сверяется «Ещё» окна — изменено ли.
+        public const float FactoryThickness = 0.3f;
+        public const float FactoryPartitionThickness = 0.15f;
+
+
         public static float Thickness
         {
-            get => LiveBuilderPreferences.GetFloat("Wall.Thickness", 0.3f);
+            get => LiveBuilderPreferences.GetFloat("Wall.Thickness", FactoryThickness);
             set => LiveBuilderPreferences.SetFloat("Wall.Thickness", Mathf.Max(0.02f, value));
         }
 
@@ -28,7 +33,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Толщина перегородки внутри здания по контуру, м.
         public static float PartitionThickness
         {
-            get => LiveBuilderPreferences.GetFloat("Wall.PartitionThickness", 0.15f);
+            get => LiveBuilderPreferences.GetFloat("Wall.PartitionThickness", FactoryPartitionThickness);
             set => LiveBuilderPreferences.SetFloat("Wall.PartitionThickness", Mathf.Max(0.02f, value));
         }
 

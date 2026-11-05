@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка зоны «Выделено» со своими полями выделенной постройки: проём, комната, лестница, стена по линии, здание или объект из коробок —
+    /// Карточка вкладки «Выделено» со своими полями выделенной постройки: проём, комната, лестница, стена по линии, здание или объект из коробок —
     /// их инспектор прямо в окне. У объекта из коробок — ещё «В ProBuilder». Точки стены и здания — в <see cref="LiveBuilderPathPointsCard"/>.
     /// </summary>
     public sealed class LiveBuilderOwnComponentCard : LiveBuilderSelectionCard

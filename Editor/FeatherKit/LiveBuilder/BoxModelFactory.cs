@@ -136,6 +136,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             room.HasWalls = hasWalls;
             room.WallThickness = LiveBuilderRoomSettings.WallThickness;
             room.SlabThickness = LiveBuilderRoomSettings.SlabThickness;
+            room.HasFloor = LiveBuilderRoomSettings.HasFloor;
+            room.HasCeiling = LiveBuilderRoomSettings.HasCeiling;
             room.FloorMaterial = LiveBuilderRoomSettings.FloorMaterial;
             room.WallMaterial = LiveBuilderRoomSettings.WallMaterial;
             room.CeilingMaterial = LiveBuilderRoomSettings.CeilingMaterial;
@@ -235,7 +237,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Комната по контуру в пустоте — здание в один этаж: чем считается контур — по настройке «Стены», пол и потолок по форме.
+        // Комната по контуру в пустоте — здание в один этаж: чем считается контур — по настройке «Линия по стенам», пол и потолок по форме.
         // Толщины и материалы — из настроек «Комнаты», как у прямоугольной: снаружи — серый набора, изнутри — стены, пол, потолок комнаты.
         public static SplineBuilding CreateContourRoom(BoxModel parentModel, Vector3 worldPosition, Quaternion worldRotation)
         {
@@ -245,8 +247,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             room.WallThickness = LiveBuilderRoomSettings.WallThickness;
             room.ContourSide = LiveBuilderRoomWalls.ContourSideFor(LiveBuilderRoomSettings.WallSide);
             room.SlabThickness = LiveBuilderRoomSettings.SlabThickness;
-            room.HasFloor = true;
-            room.HasRoof = true;
+            room.HasFloor = LiveBuilderRoomSettings.HasFloor;
+            room.HasRoof = LiveBuilderRoomSettings.HasCeiling;
             room.InnerWallMaterial = LiveBuilderRoomSettings.WallMaterial;
             room.FloorMaterial = LiveBuilderRoomSettings.FloorMaterial;
             room.CeilingMaterial = LiveBuilderRoomSettings.CeilingMaterial;

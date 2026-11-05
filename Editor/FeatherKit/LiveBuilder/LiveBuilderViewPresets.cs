@@ -4,12 +4,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Готовые виды окна сцены — «Всё», «Комнаты» (срез на 3 м над полом этажа), «Стены вниз» (на 1 м): какой сейчас и включить.
-    /// Общие у панели над сценой (<see cref="LiveBuilderSceneOverlay"/>) и зоны «Общее» окна (<see cref="LiveBuilderGlobalZone"/>).
+    /// Общие у панели над сценой (<see cref="LiveBuilderSceneOverlay"/>) и строки общего в окне (<see cref="LiveBuilderCommonSettingsBar"/>).
     /// Сам срез — <see cref="LiveBuilderStoreys"/>. Игру не меняет.
     /// </summary>
     public static class LiveBuilderViewPresets
     {
-        // Своя высота среза (панель «Уровень») — ViewCustom: не горит ни одна кнопка, даже «Всё», ведь срез включён.
+        // Своя высота среза (вкладка «Уровень») — ViewCustom: не горит ни одна кнопка, даже «Всё», ведь срез включён.
         public const int ViewCustom = -1;
         public const int ViewAll = 0;
         public const int ViewRooms = 1;

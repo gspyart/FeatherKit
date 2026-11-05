@@ -9,6 +9,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// </summary>
     public static class LiveBuilderCutterSettings
     {
+        // Заводские значения, пока человек их не поменял: с ними сверяется «Ещё» окна — изменено ли.
+        public const float FactoryNicheDepth = 0.15f;
+
+
         public static LiveBuilderCutterShape Shape
         {
             get => LiveBuilderPreferences.GetEnum("Cutter.Shape", LiveBuilderCutterShape.Rectangle);
@@ -25,7 +29,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Глубина ниши от поверхности, м.
         public static float NicheDepth
         {
-            get => LiveBuilderPreferences.GetFloat("Cutter.NicheDepth", 0.15f);
+            get => LiveBuilderPreferences.GetFloat("Cutter.NicheDepth", FactoryNicheDepth);
             set => LiveBuilderPreferences.SetFloat("Cutter.NicheDepth", Mathf.Max(0.01f, value));
         }
 

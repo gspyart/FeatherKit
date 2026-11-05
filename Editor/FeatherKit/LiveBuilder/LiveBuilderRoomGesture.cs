@@ -9,7 +9,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Инструмент «Комната»: протянул прямоугольник на полу — комната (<see cref="BoxModelRoom"/>) на высоту этажа (этаж минус перекрытие).
     /// Внутри дома (пол под потолком того же объекта или сплошной объём) — без стен вокруг: комната вырезается в его объёме.
-    /// В пустоте — со стенами, полом и потолком вокруг: куда встают стены от нарисованного — наружу, внутрь или по центру — по настройке «Стены».
+    /// В пустоте — со стенами, полом и потолком вокруг: куда встают стены от нарисованного — наружу, внутрь или по центру — по настройке «Линия по стенам».
     /// Толщины и материалы — из <see cref="LiveBuilderRoomSettings"/>; потом всё это — числа самой комнаты. Пока тянешь, объект уже показан с комнатой.
     /// В здании по контуру — не коробки, а одна замкнутая перегородка-комната (стена по линии): стороны, что легли на его стены, не строятся,
     /// но остаются в контуре — поменяешь потом форму комнаты или здания, они пересчитаются. Высота — до потолка его этажа, на этом этаже или на всех выше.
@@ -119,8 +119,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (!rectangle.IsInsideModel)
             {
-                var shell = ShellThickness();
-                boxes.Add(new BoxModelSolverBox(MillimeterBox.FromMeters(min - shell, size + shell * 2f), BoxModelPartMode.Add, null, default));
+                var shell = BoxModelShapeCollector.RoomShellOf(min, size, LiveBuilderRoomSettings.WallThickness, LiveBuilderRoomSettings.SlabThickness,
+                    LiveBuilderRoomSettings.HasFloor, LiveBuilderRoomSettings.HasCeiling);
+                boxes.Add(new BoxModelSolverBox(shell, BoxModelPartMode.Add, null, default));
             }
 
             boxes.Add(new BoxModelSolverBox(MillimeterBox.FromMeters(min, size), BoxModelPartMode.Cut, null, materials));

@@ -49,6 +49,24 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public override string Hint => PathHint(buildingGesture);
 
 
+        // ── Окно: редкие настройки ───────────────────────────────────────
+
+        public override string MoreSettingsSummary => "контур, толщины, пол и крыша, материалы";
+
+        public override bool AreMoreSettingsChanged =>
+            LiveBuilderWallSettings.IsSmooth || LiveBuilderBuildingSettings.ContourSide != SplineBuildingContourSide.Outside
+            || (LiveBuilderBuildingSettings.WallType == null && !Mathf.Approximately(LiveBuilderBuildingSettings.WallThickness, LiveBuilderBuildingSettings.FactoryWallThickness))
+            || !Mathf.Approximately(LiveBuilderBuildingSettings.SlabThickness, LiveBuilderBuildingSettings.FactorySlabThickness)
+            || !LiveBuilderBuildingSettings.HasFloor || !LiveBuilderBuildingSettings.HasRoof
+            || AreMaterialsChanged;
+
+        // Материалы стен снаружи считаются, только пока нет типа: с типом поле спрятано.
+        private static bool AreMaterialsChanged =>
+            (LiveBuilderBuildingSettings.WallType == null && LiveBuilderBuildingSettings.OuterWallMaterial != null)
+            || LiveBuilderBuildingSettings.InnerWallMaterial != null || LiveBuilderBuildingSettings.FloorMaterial != null
+            || LiveBuilderBuildingSettings.CeilingMaterial != null || LiveBuilderBuildingSettings.RoofMaterial != null;
+
+
         // ── Что правит: проверка ─────────────────────────────────────────
 
         // Только здания по контуру.
@@ -60,43 +78,46 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно ─────────────────────────────────────────────────────────
 
-        // Контур, этажи, стены и перекрытия, материалы нового здания.
+        // Сколько этажей и тип стен нового здания — меняют каждый раз.
         public override void DrawSettings()
+        {
+            using (LiveBuilderWindowControls.Card("Здание"))
+            {
+                LiveBuilderBuildingSettings.StoreyCount = EditorGUILayout.IntSlider(new GUIContent("Этажей", "Перекрытия между этажами ставятся сами"),
+                    LiveBuilderBuildingSettings.StoreyCount, 1, SplineBuilding.MaxStoreys);
+                LiveBuilderWindowControls.Computed("Высота этажа", LiveBuilderSceneText.FormatMeters(LiveBuilderStoreys.StoreyHeight) + " м",
+                    "Как у этажей уровня — на вкладке «Уровень»");
+
+                LiveBuilderBuildingSettings.WallType = LiveBuilderWallTypes.Popup(
+                    new GUIContent("Тип стен", "Толщина и материал снаружи — из типа, общие со всеми стенами этого типа. Без типа — свои числа в «Ещё»"),
+                    LiveBuilderBuildingSettings.WallType);
+            }
+
+            LiveBuilderWindowControls.Explanation("Здание встанет на выбранный этаж: его пол — на полу этажа, этажи — те же, что в окне.");
+        }
+
+
+        // Что такое контур, угол или плавно, толщины, пол и крыша, материалы.
+        public override void DrawMoreSettings()
         {
             using (LiveBuilderWindowControls.Card("Контур"))
             {
                 LiveBuilderToolSettingsFields.DrawKnotModeSwitch();
 
-                LiveBuilderBuildingSettings.ContourSide = (SplineBuildingContourSide)LiveBuilderWindowControls.Switch(
-                    new GUIContent("Контур — это", "Снаружи — контур это габарит здания. Внутри — стены комнаты изнутри. Середина — ось стен"),
-                    (int)LiveBuilderBuildingSettings.ContourSide, "Снаружи", "Внутри", "Середина");
-            }
-
-            using (LiveBuilderWindowControls.Card("Этажи"))
-            {
-                LiveBuilderBuildingSettings.StoreyCount = EditorGUILayout.IntSlider(new GUIContent("Этажей", "Перекрытия между этажами ставятся сами"),
-                    LiveBuilderBuildingSettings.StoreyCount, 1, SplineBuilding.MaxStoreys);
-                LiveBuilderWindowControls.Computed("Высота этажа", LiveBuilderSceneText.FormatMeters(LiveBuilderStoreys.StoreyHeight) + " м",
-                    "Как у этажей уровня — в зоне «Уровень»");
+                LiveBuilderBuildingSettings.ContourSide = (SplineBuildingContourSide)LiveBuilderToolSettingsFields.DrawLineSideSwitch((int)LiveBuilderBuildingSettings.ContourSide);
             }
 
             DrawWallsAndSlabs();
             DrawMaterials();
-
-            LiveBuilderWindowControls.Explanation("Building", "Здание встанет на выбранный этаж: его пол — на полу этажа, этажи — те же, что в окне.");
         }
 
-        // Тип и толщина стен, толщина перекрытий, есть ли пол и крыша.
+        // Своя толщина стен без типа, толщина перекрытий, есть ли пол и крыша.
         private static void DrawWallsAndSlabs()
         {
             using (LiveBuilderWindowControls.Card("Стены и перекрытия"))
             {
-                LiveBuilderBuildingSettings.WallType = LiveBuilderWallTypes.Popup(
-                    new GUIContent("Тип стен", "Толщина и материал снаружи — из типа, общие со всеми стенами этого типа. Без типа — свои числа"),
-                    LiveBuilderBuildingSettings.WallType);
-
                 if (LiveBuilderBuildingSettings.WallType == null)
-                    LiveBuilderBuildingSettings.WallThickness = EditorGUILayout.FloatField(new GUIContent("Толщина стен, м", "Наружная — 0,3"),
+                    LiveBuilderBuildingSettings.WallThickness = EditorGUILayout.FloatField(new GUIContent("Толщина стен, м", "Своя толщина стен без типа. Наружная — 0,3"),
                         LiveBuilderBuildingSettings.WallThickness);
 
                 LiveBuilderBuildingSettings.SlabThickness = EditorGUILayout.FloatField(new GUIContent("Толщина перекрытий, м", "Пол, перекрытия и крыша"),

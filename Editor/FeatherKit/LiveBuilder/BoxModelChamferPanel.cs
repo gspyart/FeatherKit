@@ -13,22 +13,26 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static readonly string[] FaceNames = { "+X", "−X", "верх", "низ", "+Z", "−Z" };
 
 
+        // У вырезающей карточки нет — скосы только у добавляющих; почему — в пояснениях вкладки.
         public static void Draw(BoxModelPart part)
         {
+            if (part.Mode != BoxModelPartMode.Add)
+            {
+                LiveBuilderWindowControls.Explanation("Скосы — только у добавляющих коробок: скос срезает объём.");
+                return;
+            }
+
             using (LiveBuilderWindowControls.Card("Скосы"))
             {
-                if (part.Mode != BoxModelPartMode.Add)
-                {
-                    LiveBuilderWindowControls.Note("Скосы — только у добавляющих коробок: скос срезает объём.");
-                    return;
-                }
+                if (part.Chamfers.Count == 0)
+                    LiveBuilderWindowControls.Note("Скосов нет — потяни точку посередине ребра в окне сцены.");
 
                 // Копия: строку можно убрать посреди списка.
                 foreach (var chamfer in new System.Collections.Generic.List<BoxModelEdgeChamfer>(part.Chamfers))
                     DrawChamfer(part, chamfer);
 
-                LiveBuilderWindowControls.Explanation("Chamfers", "Новый скос — потяни точку посередине ребра в окне сцены внутрь коробки. " +
-                                               "Пандус — верхнее ребро до противоположного нижнего, двускатная крыша — два верхних ребра.");
+                LiveBuilderWindowControls.Explanation("Новый скос — потяни точку посередине ребра в окне сцены внутрь коробки. " +
+                                                      "Пандус — верхнее ребро до противоположного нижнего, двускатная крыша — два верхних ребра.");
             }
         }
 

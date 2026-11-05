@@ -11,7 +11,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     public sealed class LiveBuilderSelectTool : LiveBuilderTool
     {
         private const string SelectHint = "Клик — выделить что угодно: коробку, комнату, лестницу, стену, здание, проём. Shift — добавить или убрать. " +
-                                          "Тяни ручки выделенного. Esc — снять выделение";
+                                          "Стрелки выделенного — перенести, Shift + стрелки — копия. Esc — снять выделение";
 
 
         // ── Описание ─────────────────────────────────────────────────────
@@ -71,9 +71,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             using (LiveBuilderWindowControls.Card("Клик"))
                 LiveBuilderToolSettingsFields.DrawSelectionModeSwitch();
 
-            LiveBuilderWindowControls.Explanation("Select", "Клик выделяет что угодно: коробку, комнату, лестницу, стену, здание, проём; Shift — добавить или убрать. " +
-                                           "У выделенного — все его ручки: грани коробок (с Ctrl — выдавить новую), точки стен и контуров, ручки проёмов, повтор. " +
-                                           "Остальные инструменты создают своё и правят только своё. Esc в них — сюда.");
+            LiveBuilderWindowControls.Explanation("Клик выделяет что угодно: коробку, комнату, лестницу, стену, здание, проём; Shift — добавить или убрать. " +
+                                                  "У выделенного — все его ручки: стрелки переноса (с Shift — копия), грани коробок (с Ctrl — выдавить новую), " +
+                                                  "точки стен и контуров, ручки проёмов, повтор. " +
+                                                  "Остальные инструменты создают своё и правят только своё. Esc в них — сюда.");
         }
     }
 }

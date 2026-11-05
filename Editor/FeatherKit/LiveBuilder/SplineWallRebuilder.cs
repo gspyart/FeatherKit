@@ -23,6 +23,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // 4 — коробка во всю высоту стены её не режет; 5 — развёртка верха и низа по плану.
         private const int GeometryVersion = 5;
 
+        // Запас габарита стены или здания для поиска вырезающих коробок, м: коробка, вплотную касающаяся стены, тоже в подписи.
+        private const float OwnerBoundsMargin = 0.05f;
+
         // Габарит стены до вырезов, в её осях: по нему ищут вырезы. По прорезанному мешу нельзя — стена целиком в вырезе пустая,
         // её вырез «пропадает», подпись не сходится, и стена пересобиралась бы на каждой правке. Помнится до перезагрузки скриптов.
         private static readonly Dictionary<EntityId, Bounds> UncutBoundsByWall = new();
@@ -263,11 +266,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var model = OuterModelOf(wall);
 
+            // Коробки — уже в осях стены: где стоит сама стена в объекте, подписи не важно.
             if (model != null)
             {
                 var cutBoxes = CutBoxesHashOf(model, wall, false);
                 hash.Append(ref cutBoxes);
-                LiveBuilderStableHash.AppendQuantizedPlacement(ref hash, model.transform, wall.transform);
             }
 
             return hash + GeometryCutterLookup.KeyOf(wall, cutters);
@@ -275,10 +278,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // Вырезающие коробки объекта, которые режут эту стену или здание, — для их подписи: правка добавляющих коробок, материалов и ступеней
         // их не пересобирает, а переставил коробку выше или ниже в иерархии — пересоберёт. Перекрытия есть только у здания.
-        // Что режет коробка — только если не «всё»: старые подписи остаются прежними.
+        // Только коробки, что задевают габарит стены или здания, и их углы — в осях самой стены или здания, с округлением до 0,1 мм:
+        // коробка в другом конце объекта (копия здания с лестницей рядом) подпись не меняет, а здание, которое едет вместе со своей лестницей, не пересобирается.
+        // Что режет коробка — только если не «всё».
         public static Hash128 CutBoxesHashOf(BoxModel model, Component owner, bool includesSlabCuts)
         {
             var hash = new Hash128();
+            var modelToOwner = LiveBuilderStableHash.RelativeMatrix(owner.transform, model.transform);
+            var ownerBounds = UncutLocalBoundsOf(owner);
 
             foreach (var box in BoxModelRebuilder.GetSolverBoxes(model))
             {
@@ -287,16 +294,80 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (!isApplied || !box.IsBelow(owner))
                     continue;
 
-                var min = box.Box.Min;
-                var max = box.Box.Max;
-                hash.Append(ref min);
-                hash.Append(ref max);
+                var min = modelToOwner.MultiplyPoint3x4(box.Box.MinInMeters);
+                var max = modelToOwner.MultiplyPoint3x4(box.Box.MaxInMeters);
+                var boxBounds = new Bounds(min, Vector3.zero);
+                boxBounds.Encapsulate(max);
+
+                // Коробка по осям объекта, а стена может стоять в нём повёрнутой: габарит — по всем восьми углам.
+                foreach (var corner in CornersOf(box.Box.MinInMeters, box.Box.MaxInMeters))
+                    boxBounds.Encapsulate(modelToOwner.MultiplyPoint3x4(corner));
+
+                if (!boxBounds.Intersects(ownerBounds))
+                    continue;
+
+                AppendQuantized(ref hash, min);
+                AppendQuantized(ref hash, max);
 
                 if (box.OwnerPart != null && box.CutTargets != LiveBuilderCutTargets.Everything)
                     hash.Append((int)box.CutTargets);
             }
 
             return hash;
+        }
+
+        private static void AppendQuantized(ref Hash128 hash, Vector3 point)
+        {
+            LiveBuilderStableHash.AppendQuantized(ref hash, point.x);
+            LiveBuilderStableHash.AppendQuantized(ref hash, point.y);
+            LiveBuilderStableHash.AppendQuantized(ref hash, point.z);
+        }
+
+        private static Vector3[] CornersOf(Vector3 min, Vector3 max)
+        {
+            var corners = new Vector3[8];
+
+            for (var index = 0; index < 8; index++)
+                corners[index] = new Vector3((index & 1) == 0 ? min.x : max.x, (index & 2) == 0 ? min.y : max.y, (index & 4) == 0 ? min.z : max.z);
+
+            return corners;
+        }
+
+        // Где может быть стена или здание до вырезов, в их осях, — по точкам линии с усами, с запасом на толщину стен; по высоте — от низа линии
+        // до верха стены со всеми копиями вверх или до крыши здания. Считается из чисел, а не из меша: подпись не зависит от того, собран ли он.
+        private static Bounds UncutLocalBoundsOf(Component owner)
+        {
+            var container = owner.GetComponent<SplineContainer>();
+            var bounds = new Bounds();
+            var hasPoints = false;
+
+            foreach (var spline in container.Splines)
+            {
+                foreach (var knot in spline.Knots)
+                {
+                    Vector3 position = knot.Position;
+                    Quaternion rotation = knot.Rotation;
+
+                    foreach (var point in new[] { position, position + rotation * (Vector3)knot.TangentIn, position + rotation * (Vector3)knot.TangentOut })
+                    {
+                        if (hasPoints)
+                            bounds.Encapsulate(point);
+                        else
+                            bounds = new Bounds(point, Vector3.zero);
+
+                        hasPoints = true;
+                    }
+                }
+            }
+
+            var isBuilding = owner is SplineBuilding;
+            var thickness = isBuilding ? ((SplineBuilding)owner).WallThickness : ((SplineWall)owner).Thickness;
+            var top = isBuilding ? ((SplineBuilding)owner).TotalHeight : ((SplineWall)owner).Height + (((SplineWall)owner).CopiesUp - 1) * ((SplineWall)owner).CopyStep;
+            var margin = thickness + OwnerBoundsMargin;
+            var min = bounds.min - new Vector3(margin, OwnerBoundsMargin, margin);
+            var max = bounds.max + new Vector3(margin, top + OwnerBoundsMargin, margin);
+            bounds.SetMinMax(min, max);
+            return bounds;
         }
     }
 }

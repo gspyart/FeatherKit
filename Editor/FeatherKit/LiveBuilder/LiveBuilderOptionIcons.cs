@@ -5,7 +5,7 @@ using static FeatherKit.EditorTools.LiveBuilder.LiveBuilderIconRasterizer;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Значки настроек окна Live Builder (<see cref="LiveBuilderOptionIcon"/>): на кнопках переключателей, у подписей строк, в заголовках зон.
+    /// Значки настроек окна Live Builder (<see cref="LiveBuilderOptionIcon"/>): на кнопках переключателей, у подписей строк, на корешках вкладок.
     /// Рисуются кодом из линий, как значки инструментов, и запоминаются (<see cref="LiveBuilderIconCache"/>). «Добавить» и «Вырезать» — цветами каркасов в окне сцены.
     /// </summary>
     public static class LiveBuilderOptionIcons
@@ -56,13 +56,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return icon switch
             {
                 LiveBuilderOptionIcon.Power => PowerLines(),
-                LiveBuilderOptionIcon.Info => InfoLines(),
                 LiveBuilderOptionIcon.Keyboard => KeyboardLines(),
-                LiveBuilderOptionIcon.Global => GlobalLines(),
                 LiveBuilderOptionIcon.Level => LevelLines(),
                 LiveBuilderOptionIcon.Storey => StoreyLines(),
                 LiveBuilderOptionIcon.Grid => GridLines(),
-                LiveBuilderOptionIcon.Eye => EyeLines(),
                 LiveBuilderOptionIcon.Wireframe => WireframeLines(),
                 LiveBuilderOptionIcon.ViewAll => ViewAllLines(),
                 LiveBuilderOptionIcon.ViewRooms => SectionLines(10f),
@@ -101,12 +98,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return new List<Vector2[]> { Arc(new Vector2(12, 13), 7.5f, -55f, 235f), Points(12, 3, 12, 11) };
         }
 
-        // «i» в круге.
-        private static List<Vector2[]> InfoLines()
-        {
-            return new List<Vector2[]> { Arc(new Vector2(12, 12), 8.5f, 0f, 360f), Points(12, 11, 12, 16.5f), Dot(12, 7.5f) };
-        }
-
         // Клавиатура: рамка, ряд клавиш и пробел.
         private static List<Vector2[]> KeyboardLines()
         {
@@ -116,17 +107,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 lines.Add(Dot(x, 10));
 
             return lines;
-        }
-
-        // Глобус: круг, меридиан и экватор — то, что действует везде.
-        private static List<Vector2[]> GlobalLines()
-        {
-            var meridian = Arc(Vector2.zero, 1f, 0f, 360f);
-
-            for (var index = 0; index < meridian.Length; index++)
-                meridian[index] = new Vector2(12 + meridian[index].x * 3.5f, 12 + meridian[index].y * 8.5f);
-
-            return new List<Vector2[]> { Arc(new Vector2(12, 12), 8.5f, 0f, 360f), meridian, Points(3.5f, 12, 20.5f, 12) };
         }
 
         // Сложенная карта — весь уровень.
@@ -160,16 +140,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 Rectangle(4, 4, 20, 20),
                 Points(9.33f, 4, 9.33f, 20), Points(14.67f, 4, 14.67f, 20),
                 Points(4, 9.33f, 20, 9.33f), Points(4, 14.67f, 20, 14.67f)
-            };
-        }
-
-        private static List<Vector2[]> EyeLines()
-        {
-            return new List<Vector2[]>
-            {
-                Arc(new Vector2(12, 21), 12f, 222f, 318f),
-                Arc(new Vector2(12, 3), 12f, 42f, 138f),
-                Arc(new Vector2(12, 12), 3f, 0f, 360f)
             };
         }
 

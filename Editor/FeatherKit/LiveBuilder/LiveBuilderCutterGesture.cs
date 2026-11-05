@@ -107,11 +107,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Рамка ────────────────────────────────────────────────────────
 
-        // Пока тянешь — форма выреза на поверхности и размеры.
+        // Пока тянешь — форма выреза на поверхности, размеры и углы, прилипшие к краю стены.
         public void DrawPreview()
         {
             var size = rectangle.Size;
             var min = rectangle.Min;
+            rectangle.DrawEdgeMarkers();
 
             if (!IsActive || !rectangle.HasArea)
                 return;

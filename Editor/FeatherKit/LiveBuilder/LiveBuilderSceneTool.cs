@@ -1,6 +1,7 @@
 using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEditor.EditorTools;
+using UnityEditor.SceneManagement;
 using UnityEditor.ShortcutManagement;
 using UnityEngine;
 
@@ -63,6 +64,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             LiveBuilderToolPalette.Changed += CancelAll;
             LiveBuilderRoomSettings.ShapeChanged += CancelAll;
+            Undo.undoRedoPerformed += CancelAfterUndo;
+            EditorSceneManager.activeSceneChangedInEditMode += CancelOnSceneChange;
+            AssemblyReloadEvents.beforeAssemblyReload += CancelAll;
         }
 
 
@@ -70,8 +74,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             LiveBuilderToolPalette.Changed -= CancelAll;
             LiveBuilderRoomSettings.ShapeChanged -= CancelAll;
+            Undo.undoRedoPerformed -= CancelAfterUndo;
+            EditorSceneManager.activeSceneChangedInEditMode -= CancelOnSceneChange;
+            AssemblyReloadEvents.beforeAssemblyReload -= CancelAll;
             CancelAll();
-            LiveBuilderBoxTool.IsNewModelRequested = false;
         }
 
         // Всё начатое отменяется у всех инструментов; начатая линия остаётся такой, как нарисована.
@@ -86,6 +92,22 @@ namespace FeatherKit.EditorTools.LiveBuilder
             isMouseDown = false;
         }
 
+        // Ctrl+Z мог убрать объект, на котором начата фигура: она встала бы не туда. Линии точками рисуются дальше.
+        private void CancelAfterUndo()
+        {
+            foreach (var tool in LiveBuilderToolPalette.Tools)
+                tool.CancelAfterUndo();
+
+            hoveredSurface = null;
+            hoveredSnapPoint = null;
+        }
+
+        // Другая сцена — начатое на прежней бросаем.
+        private void CancelOnSceneChange(UnityEngine.SceneManagement.Scene previous, UnityEngine.SceneManagement.Scene next)
+        {
+            CancelAll();
+        }
+
 
         // ── Окно сцены ───────────────────────────────────────────────────
 
@@ -95,7 +117,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return;
 
             var tool = CurrentTool;
-            LiveBuilderSelectionHandles.Draw(tool);
+
+            // Пока рисуешь, ручки выделенного спрятаны: клик «готово» не должен достаться ручке грани под мышью.
+            LiveBuilderSelectionHandles.Draw(tool, !tool.IsBusy);
 
             if (CanShowContour)
                 contourHandles.OnSceneGUI(owner => tool.CanEdit(owner), tool.PathGesture == null);
@@ -106,7 +130,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             // Клавиши — напрямую, не через фильтр элемента: тот отбрасывает их, пока мышь держит другой элемент, и Tab терялся.
             if (current.type == EventType.KeyDown)
             {
-                OnKeyDown(current);
+                OnKeyDown(current, controlId);
                 return;
             }
 
@@ -133,6 +157,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     break;
 
                 case EventType.Repaint:
+                    if (!tool.IsBusy)
+                        LiveBuilderSelectionBounds.Draw();
+
                     DrawHover(controlId);
                     tool.DrawPreview();
                     PublishHint(CurrentHint());
@@ -165,16 +192,23 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Мышь ─────────────────────────────────────────────────────────
 
         // Инструмент не занят мышью сам — ищем грань под ней и точку на сетке для подсветки и прицела.
+        // Каждый поиск обходит сцену, поэтому — только то, что инструмент покажет: здание под мышью — тем, кто ставит в него,
+        // грань и прицел — тем, кто их рисует.
         private void OnMouseMove(Event current, SceneView sceneView)
         {
             TakeKeyboardFromWindow(sceneView);
+            var tool = CurrentTool;
             var ray = HandleUtility.GUIPointToWorldRay(current.mousePosition);
-            hoveredBuildingContext = LiveBuilderBuildingContext.TryFind(ray, out var context) ? context : null;
+            hoveredBuildingContext = tool.PlacesIntoBuilding && LiveBuilderBuildingContext.TryFind(ray, out var context) ? context : null;
+            hoveredSurface = null;
+            hoveredSnapPoint = null;
 
-            if (!CurrentTool.OnMouseMove(ray, current))
+            if (!tool.OnMouseMove(ray, current) && tool.DrawsSurfaceHover)
             {
                 hoveredSurface = BoxModelPicker.TryPickSurface(ray, out var hit) ? hit : null;
-                hoveredSnapPoint = BoxModelDrawPlaneFinder.TryFind(ray, LiveBuilderBoxTool.IsNewModelRequested, out var plane, out var point) ? (plane, point) : null;
+
+                if (tool.DrawsSnapCursor)
+                    hoveredSnapPoint = BoxModelDrawPlaneFinder.TryFind(ray, LiveBuilderBoxTool.IsNewModelRequested, out var plane, out var point) ? (plane, point) : null;
             }
 
             sceneView.Repaint();
@@ -240,8 +274,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Клавиши ──────────────────────────────────────────────────────
 
         // Сначала клавиши инструмента, потом общие: инструмент по цифре, шаг сетки, этаж, отмена.
-        private void OnKeyDown(Event current)
+        // Мышь держит чужая ручка (тянешь грань, выдавливаешь) — клавиши её: смена инструмента или выделения посреди тяги ломает её отмену.
+        // Точку контура тянут свои ручки — там Esc по-прежнему бросает перетаскивание.
+        private void OnKeyDown(Event current, int controlId)
         {
+            if (GUIUtility.hotControl != 0 && GUIUtility.hotControl != controlId && !contourHandles.IsGestureActive)
+                return;
+
             if (CurrentTool.OnKeyDown(current))
             {
                 current.Use();
@@ -274,14 +313,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     LiveBuilderStoreys.CurrentStorey--;
                     break;
 
-                // Выделенная лестница — Tab поворачивает её на месте.
-                case KeyCode.Tab when Selection.activeGameObject != null && Selection.activeGameObject.TryGetComponent<BoxModelStairs>(out var selectedStairs):
+                // Выделенная лестница — Tab поворачивает её на месте, если её правит инструмент.
+                case KeyCode.Tab when Selection.activeGameObject != null && Selection.activeGameObject.TryGetComponent<BoxModelStairs>(out var selectedStairs)
+                                      && CurrentTool.CanEdit(selectedStairs):
                     BoxModelStairsTurns.Turn(selectedStairs, BoxModelStairsTurns.Clockwise(selectedStairs.Direction));
                     break;
 
                 case KeyCode.Escape when IsAnythingStarted():
                     CancelAll();
-                    LiveBuilderBoxTool.IsNewModelRequested = false;
                     break;
 
                 // Ничего не начато — Esc уводит на «Выделение»; в нём — снимает выделение: окно показывает настройки нового.
@@ -301,14 +340,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             current.Use();
         }
 
-        // У любого инструмента что-то начато или тянут точку контура.
+        // У выбранного инструмента что-то начато или тянут точку контура. Начатое у прочих снимает смена инструмента.
         private bool IsAnythingStarted()
         {
-            foreach (var tool in LiveBuilderToolPalette.Tools)
-                if (tool.IsBusy)
-                    return true;
-
-            return contourHandles.IsGestureActive;
+            return CurrentTool.IsBusy || contourHandles.IsGestureActive;
         }
 
 

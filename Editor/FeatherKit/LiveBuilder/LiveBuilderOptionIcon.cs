@@ -1,21 +1,18 @@
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Значки настроек окна Live Builder — переключателей, строк и заголовков зон. Рисунки — в <see cref="LiveBuilderOptionIcons"/>.
+    /// Значки настроек окна Live Builder — переключателей, строк и корешков вкладок. Рисунки — в <see cref="LiveBuilderOptionIcons"/>.
     /// </summary>
     public enum LiveBuilderOptionIcon
     {
         // Окно
         Power,
-        Info,
         Keyboard,
-        Global,
         Level,
 
         // Общее
         Storey,
         Grid,
-        Eye,
         Wireframe,
         ViewAll,
         ViewRooms,

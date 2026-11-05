@@ -14,6 +14,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Место — у самой дыры (низ формы со сдвигом), а не у точки объекта: дыру, сдвинутую на другой отрезок, держит её отрезок.
     /// Сдвинули точки — едет на то же место своего отрезка; вырез ещё и держит свой сдвиг от линии и поворачивается вместе с отрезком.
     /// Точек стало больше или меньше — остаётся где стоял и запоминает новое место; сдвинули или повернули его самого — запоминается, куда.
+    /// Поменяли толщину стены — сквозной вырез снова насквозь: глубина и место поперёк — по новой стене.
     /// Высоту не трогает. Правки — без Undo, как у привязки к этажам: после любого Ctrl+Z сверка повторяет их сама.
     /// </summary>
     public static class GeometryCutterLineSync
@@ -34,8 +35,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 try
                 {
-                    if (cutter.FollowsWallLine && TryGetLine(cutter, lineHashes, out var owner, out var container, out var lineHash))
-                        SyncCutter(cutter, owner, container, lineHash);
+                    if (cutter.FollowsWallLine && TryGetLine(cutter, lineHashes, out var pathOwner, out var container, out var lineHash))
+                        SyncCutter(cutter, pathOwner, container, lineHash);
                 }
                 catch (System.Exception exception)
                 {
@@ -44,11 +45,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
         }
 
-        // Линия стены или здания, в котором лежит вырез.
-        private static bool TryGetLine(Component hole, Dictionary<SplineContainer, int> lineHashes, out Transform owner, out SplineContainer container, out int lineHash)
+        // Стена или здание, в котором лежит вырез, и его линия.
+        private static bool TryGetLine(Component hole, Dictionary<SplineContainer, int> lineHashes, out Component pathOwner, out SplineContainer container, out int lineHash)
         {
-            var pathOwner = LiveBuilderPathOwners.OwnerAbove(hole);
-            owner = pathOwner != null ? pathOwner.transform : null;
+            pathOwner = LiveBuilderPathOwners.OwnerAbove(hole);
             container = null;
             lineHash = 0;
 
@@ -65,8 +65,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Вырез ────────────────────────────────────────────────────────
 
         // Линию двигали, а число точек то же, — вырез едет за своим отрезком. Иначе, если что-то поменялось (и поворот руками), — запомнить, где он сейчас.
-        private static void SyncCutter(GeometryCutter cutter, Transform owner, SplineContainer container, int lineHash)
+        // Потом — толщина стены: поменялась — сквозной вырез снова насквозь.
+        private static void SyncCutter(GeometryCutter cutter, Component pathOwner, SplineContainer container, int lineHash)
         {
+            var owner = pathOwner.transform;
+            var thickness = ThicknessOf(pathOwner);
+            var previousThickness = cutter.SyncedWallThickness;
             var localPosition = owner.InverseTransformPoint(GeometryCutterOutline.ShapeBottomOf(cutter));
             var localRotation = Quaternion.Inverse(owner.rotation) * cutter.transform.rotation;
             var isLineChanged = cutter.SyncedLineHash != lineHash;
@@ -74,14 +78,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 || Quaternion.Angle(localRotation, cutter.SyncedLocalRotation) > RotationTolerance;
 
             if (isLineChanged && cutter.SyncedLineHash != 0 && HasSameKnots(container, cutter.LineSplineIndex, cutter.SyncedKnotCount))
-                MoveCutterToPlace(cutter, owner, container, localPosition, localRotation, lineHash);
+                MoveCutterToPlace(cutter, owner, container, localPosition, localRotation, lineHash, thickness);
             else if (isLineChanged || isCutterMoved)
-                RememberCutterPlace(cutter, container, localPosition, localRotation, lineHash);
+                RememberCutterPlace(cutter, container, localPosition, localRotation, lineHash, thickness);
+
+            FitToNewThickness(cutter, pathOwner, container, lineHash, previousThickness, thickness);
         }
 
         // На запомненное место линии — с тем же сдвигом от неё и поворотом относительно неё; высота — своя.
         private static void MoveCutterToPlace(GeometryCutter cutter, Transform owner, SplineContainer container, Vector3 localPosition, Quaternion localRotation,
-            int lineHash)
+            int lineHash, float thickness)
         {
             LiveBuilderSyncEdits.FrameAt(container, cutter.LineSplineIndex, cutter.PlaceOnLine, out var linePoint, out var lineRotation);
             var offset = lineRotation * cutter.OffsetFromLine;
@@ -96,6 +102,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 cutter.SyncedLineHash = lineHash;
                 cutter.SyncedLocalPosition = targetPosition;
                 cutter.SyncedLocalRotation = targetRotation;
+                cutter.SyncedWallThickness = thickness;
             });
         }
 
@@ -107,7 +114,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
         // Ближайшее место на линии; сдвиг выреза от неё в плане и поворот — в осях линии в этом месте.
-        private static void RememberCutterPlace(GeometryCutter cutter, SplineContainer container, Vector3 localPosition, Quaternion localRotation, int lineHash)
+        private static void RememberCutterPlace(GeometryCutter cutter, SplineContainer container, Vector3 localPosition, Quaternion localRotation, int lineHash,
+            float thickness)
         {
             LiveBuilderSyncEdits.NearestPlace(container, localPosition, out var splineIndex, out var place);
             LiveBuilderSyncEdits.FrameAt(container, splineIndex, place, out var linePoint, out var lineRotation);
@@ -126,7 +134,70 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 cutter.SyncedLineHash = lineHash;
                 cutter.SyncedLocalPosition = localPosition;
                 cutter.SyncedLocalRotation = localRotation;
+                cutter.SyncedWallThickness = thickness;
             });
+        }
+
+
+        // ── Толщина стены ────────────────────────────────────────────────
+
+        // Стене или зданию поменяли толщину (числом или типом): вырез, который был глубже прежней стены, — сквозной;
+        // он снова насквозь новой — глубина и место поперёк, как ставит «Проём», поворот свой. Ниша (мельче стены) остаётся как была.
+        // Прежняя толщина не запомнена (вырез со старых сцен) — не трогаем: запомнится при следующем сдвиге линии или выреза.
+        private static void FitToNewThickness(GeometryCutter cutter, Component pathOwner, SplineContainer container, int lineHash, float previousThickness,
+            float thickness)
+        {
+            if (previousThickness <= 0f || Mathf.Abs(thickness - previousThickness) <= Tolerance)
+                return;
+
+            if (cutter.Depth >= previousThickness - Tolerance && TryFitThroughWall(cutter, pathOwner))
+            {
+                var owner = pathOwner.transform;
+                var localPosition = owner.InverseTransformPoint(GeometryCutterOutline.ShapeBottomOf(cutter));
+                var localRotation = Quaternion.Inverse(owner.rotation) * cutter.transform.rotation;
+                RememberCutterPlace(cutter, container, localPosition, localRotation, lineHash, thickness);
+                return;
+            }
+
+            LiveBuilderSyncEdits.Apply(cutter, () => cutter.SyncedWallThickness = thickness);
+        }
+
+        // Глубина — толщина стены с запасом, низ дыры — посередине стены напротив того места, где дыра сейчас.
+        private static bool TryFitThroughWall(GeometryCutter cutter, Component pathOwner)
+        {
+            var owner = pathOwner.transform;
+            var localBottom = owner.InverseTransformPoint(GeometryCutterOutline.ShapeBottomOf(cutter));
+            SplineWallPath nearestPath = null;
+            var nearestGap = float.MaxValue;
+            var along = 0f;
+
+            foreach (var path in LiveBuilderPathOwners.PathsOf(pathOwner))
+            {
+                var pathAlong = path.ClosestDistanceTo(localBottom, out var gap);
+
+                if (gap >= nearestGap)
+                    continue;
+
+                nearestGap = gap;
+                nearestPath = path;
+                along = pathAlong;
+            }
+
+            if (nearestPath == null)
+                return false;
+
+            LiveBuilderOpeningPlacer.FitCutterToWall(pathOwner, nearestPath, along - cutter.Width / 2f, cutter.Width, localBottom.y,
+                out var fittedBottom, out _, out var depth);
+
+            LiveBuilderSyncEdits.Apply(cutter.transform, () => PlaceShapeBottom(cutter, owner.TransformPoint(fittedBottom), cutter.transform.rotation));
+            LiveBuilderSyncEdits.Apply(cutter, () => cutter.Depth = depth);
+            return true;
+        }
+
+        // Толщина стены по линии или стен здания, с типом — из типа.
+        private static float ThicknessOf(Component pathOwner)
+        {
+            return pathOwner is SplineBuilding building ? building.WallThickness : ((SplineWall)pathOwner).Thickness;
         }
 
 

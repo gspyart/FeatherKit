@@ -10,7 +10,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Держит точки перегородок (<see cref="SplineWall"/> в привязке к зданию) на стенах здания — перед каждой пересборкой, как стены в Revit.
     /// Точка, что лежит на внутренней стороне стены здания, помнит, за что держится (<see cref="SplineWallBuildingAnchor"/>):
     /// - за внутренний угол — двигаешь стены здания, точка встаёт в новый угол
-    /// - за стену (отрезок контура) — точка встаёт на ту же стену напротив себя: вдоль стены не едет, только за ней поперёк
+    /// - за стену (отрезок контура) — точка встаёт на ту же стену там, где в неё упирается сама перегородка: стена повернулась — перегородка
+    ///   не меняет направления и не ползёт вдоль неё, повернули обратно — точка на прежнем месте
     /// Высота точки — своя. Поменялось число точек контура или двигали саму перегородку — запоминается, где её точки сейчас.
     /// Правки — без Undo, как у других сверок (<see cref="LiveBuilderSyncEdits"/>).
     /// </summary>
@@ -60,11 +61,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── За зданием ───────────────────────────────────────────────────
 
-        // Точки на стенах здания — в свой угол или на свою стену напротив себя. Возвращает, сдвинулась ли хоть одна.
+        // Точки на стенах здания — в свой угол или на свою стену там, где в неё упирается сама перегородка. Возвращает, сдвинулась ли хоть одна.
+        // Соседние точки берутся такими, какими были до сверки: результат не зависит от того, какая точка сдвинулась первой.
         private static bool FollowBuilding(SplineWall wall, SplineContainer container, SplineBuilding building, SplineContainer buildingContainer)
         {
             var wallToBuilding = building.transform.worldToLocalMatrix * wall.transform.localToWorldMatrix;
             var buildingToWall = wallToBuilding.inverse;
+            var positionsBefore = KnotPositionsOf(container);
             var isMoved = false;
 
             foreach (var anchor in wall.BuildingAnchors)
@@ -82,9 +85,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 var innerOffset = SplineBuildingMeshBuilder.InnerOffsetOf(building, path);
                 var buildingSpline = buildingContainer.Splines[anchor.BuildingSpline];
+                var neighbour = TryGetNeighbourKnot(positionsBefore[anchor.Spline], anchor.Knot, spline.Closed, out var neighbourPosition)
+                    ? wallToBuilding.MultiplyPoint3x4(neighbourPosition)
+                    : (Vector3?)null;
+
                 var target = anchor.IsAtCorner
                     ? InnerCornerOf(path, buildingSpline, anchor.BuildingKnot, innerOffset)
-                    : InnerPointOnSegment(path, buildingSpline, anchor.BuildingKnot, innerOffset, buildingPoint);
+                    : InnerPointAlongPartition(path, buildingSpline, anchor.BuildingKnot, innerOffset, buildingPoint, neighbour);
 
                 target = buildingToWall.MultiplyPoint3x4(target);
                 target.y = knot.Position.y;
@@ -104,6 +111,33 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             return anchor.Spline < container.Splines.Count && anchor.Knot < container.Splines[anchor.Spline].Count
                    && anchor.BuildingSpline < buildingContainer.Splines.Count && anchor.BuildingKnot < buildingContainer.Splines[anchor.BuildingSpline].Count;
+        }
+
+        // Места всех точек перегородки, по сплайнам.
+        private static List<Vector3[]> KnotPositionsOf(SplineContainer container)
+        {
+            var positions = new List<Vector3[]>();
+
+            foreach (var spline in container.Splines)
+            {
+                var knots = new Vector3[spline.Count];
+
+                for (var index = 0; index < knots.Length; index++)
+                    knots[index] = spline[index].Position;
+
+                positions.Add(knots);
+            }
+
+            return positions;
+        }
+
+        // Соседняя точка перегородки, откуда она идёт к стене: предыдущая, у первой — следующая. Одна точка — соседа нет.
+        private static bool TryGetNeighbourKnot(Vector3[] knots, int knot, bool isClosed, out Vector3 neighbour)
+        {
+            var neighbourIndex = knot > 0 ? knot - 1 : isClosed ? knots.Length - 1 : knot + 1;
+            var isFound = knots.Length > 1 && neighbourIndex >= 0 && neighbourIndex < knots.Length && neighbourIndex != knot;
+            neighbour = isFound ? knots[neighbourIndex] : default;
+            return isFound;
         }
 
 
@@ -205,10 +239,58 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Точка внутренней стороны отрезка контура напротив точки point; за концами отрезка — у его конца.
         private static Vector3 InnerPointOnSegment(SplineWallPath path, Spline spline, int segment, float innerOffset, Vector3 point)
         {
-            var startAlong = KnotAlong(path, spline, segment);
-            var endAlong = segment + 1 < spline.Count ? KnotAlong(path, spline, segment + 1) : path.Length;
-            var along = Mathf.Clamp(path.ClosestDistanceTo(point), Mathf.Min(startAlong, endAlong), Mathf.Max(startAlong, endAlong));
+            GetSegmentAlong(path, spline, segment, out var startAlong, out var endAlong);
+            var along = Mathf.Clamp(path.ClosestDistanceTo(point), startAlong, endAlong);
             return path.PointAt(along, innerOffset, 0f);
+        }
+
+        // Где перегородка, продолженная от соседней точки, встречает внутреннюю сторону отрезка: стена здания повернулась —
+        // перегородка не меняет направления и не ползёт вдоль неё; повернули обратно — точка ровно на прежнем месте.
+        // Соседа нет или перегородка идёт почти вдоль стены — напротив точки, как раньше.
+        private static Vector3 InnerPointAlongPartition(SplineWallPath path, Spline spline, int segment, float innerOffset, Vector3 point, Vector3? neighbour)
+        {
+            if (neighbour is not { } from)
+                return InnerPointOnSegment(path, spline, segment, innerOffset, point);
+
+            GetSegmentAlong(path, spline, segment, out var startAlong, out var endAlong);
+            var sideStart = path.PointAt(startAlong, innerOffset, 0f);
+            var sideEnd = path.PointAt(endAlong, innerOffset, 0f);
+
+            if (!TryIntersectFlat(from, point, sideStart, sideEnd, out var crossing))
+                return InnerPointOnSegment(path, spline, segment, innerOffset, point);
+
+            var along = Mathf.Clamp(path.ClosestDistanceTo(crossing), startAlong, endAlong);
+            return path.PointAt(along, innerOffset, 0f);
+        }
+
+        // Отрезок контура на пути, м от начала: от меньшего к большему.
+        private static void GetSegmentAlong(SplineWallPath path, Spline spline, int segment, out float startAlong, out float endAlong)
+        {
+            var first = KnotAlong(path, spline, segment);
+            var second = segment + 1 < spline.Count ? KnotAlong(path, spline, segment + 1) : path.Length;
+            startAlong = Mathf.Min(first, second);
+            endAlong = Mathf.Max(first, second);
+        }
+
+        // Пересечение прямых в плане: через from и to — и через sideStart и sideEnd. Почти параллельны (меньше ~6°) — нет.
+        private static bool TryIntersectFlat(Vector3 from, Vector3 to, Vector3 sideStart, Vector3 sideEnd, out Vector3 crossing)
+        {
+            crossing = default;
+            var direction = new Vector2(to.x - from.x, to.z - from.z);
+            var side = new Vector2(sideEnd.x - sideStart.x, sideEnd.z - sideStart.z);
+
+            if (direction.sqrMagnitude < 1e-6f || side.sqrMagnitude < 1e-6f)
+                return false;
+
+            var denominator = direction.x * side.y - direction.y * side.x;
+
+            if (Mathf.Abs(denominator) < 0.1f * direction.magnitude * side.magnitude)
+                return false;
+
+            var offset = new Vector2(sideStart.x - from.x, sideStart.z - from.z);
+            var distance = (offset.x * side.y - offset.y * side.x) / denominator;
+            crossing = new Vector3(from.x + direction.x * distance, to.y, from.z + direction.y * distance);
+            return true;
         }
 
         // Где на пути стоит точка контура, м от его начала: ближайшее к ней место пути, у скруглённого угла — середина дуги.

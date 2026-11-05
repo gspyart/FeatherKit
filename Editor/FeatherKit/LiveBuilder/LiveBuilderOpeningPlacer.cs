@@ -7,7 +7,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Клик инструментом «Проём»: наводишь на стену — рамка проёма выбранного размера (<see cref="LiveBuilderOpeningPresets"/>) и формы, клик — проём насквозь.
-    /// Место — по настройке «Место»: «Где навёл» — серединой ровно под мышью, «По сетке» — левым краем и низом по сетке.
+    /// Место — по настройке «Место»: «Где навёл» — серединой ровно под мышью, «По сетке» — низом по сетке, а вдоль стены край проёма, ближний к краю стены
+    /// (углу, краю соседнего проёма; <see cref="LiveBuilderFaceEdges"/>), — на сетке, отсчитанной от этого края: проём встаёт вровень с углом или через целые клетки.
     /// По высоте этажи есть только у здания (и его перегородок): там низ — от пола его этажа, выбранного в окне (если он у здания есть,
     /// иначе того, на который навёл), на «Низ над полом». Без здания низ — там же, где навёл, но не ниже пола: у стены по линии — её низа
     /// (у копий вверх — низа копии под мышью), у объекта из коробок — пола этажа уровня.
@@ -44,6 +45,24 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private LiveBuilderOpeningSize sizeAtLastHover;
 
 
+        // Грань стены под мышью для «По сетке»: чей меш, точка и нормаль в мире, куда в мире растёт координата вдоль стены (с масштабом).
+        private readonly struct WallFaceUnderMouse
+        {
+            public WallFaceUnderMouse(Component meshOwner, Vector3 point, Vector3 normal, Vector3 alongDirection)
+            {
+                MeshOwner = meshOwner;
+                Point = point;
+                Normal = normal;
+                AlongDirection = alongDirection;
+            }
+
+            public Component MeshOwner { get; }
+            public Vector3 Point { get; }
+            public Vector3 Normal { get; }
+            public Vector3 AlongDirection { get; }
+        }
+
+
         public bool HasTarget => targetModel != null || targetPathOwner != null;
 
         public string Hint => HasTarget
@@ -76,7 +95,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 && Mathf.Abs(hit.VisibleHit.normal.y) < 0.7f;
 
             if (isPathWallCloser)
-                AimAtPathWall(hit.PathOwner, hit.VisibleHit.point);
+                AimAtPathWall(hit.PathOwner, hit.VisibleHit);
             else if (hasModelWall)
                 AimAtModelWall(hit.BoxSurface);
         }
@@ -90,12 +109,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var normalAxis = BoxFaces.Axis(face);
             var alongAxis = normalAxis == 0 ? 2 : 0;
             var surfacePlane = MillimeterBox.ToMeters(hit.Surface.Plane);
-            var floor = StoreyFloorUnder(hit.Model.transform.TransformPoint(hit.LocalPoint));
-            var floorLocal = hit.Model.transform.InverseTransformPoint(new Vector3(0f, floor, 0f)).y;
+            var model = hit.Model.transform;
+            var worldPoint = model.TransformPoint(hit.LocalPoint);
+            var floor = StoreyFloorUnder(worldPoint);
+            var floorLocal = model.InverseTransformPoint(new Vector3(0f, floor, 0f)).y;
+            var faceUnderMouse = new WallFaceUnderMouse(hit.Model, worldPoint, model.TransformDirection(BoxFaces.Normal(face)),
+                model.TransformVector(alongAxis == 0 ? Vector3.right : Vector3.forward));
 
             var min = Vector3.zero;
             var max = Vector3.zero;
-            min[alongAxis] = LeftEdgeAlong(hit.LocalPoint[alongAxis] - size.Width / 2f, alongAxis);
+            min[alongAxis] = LeftEdgeAlong(hit.LocalPoint[alongAxis] - size.Width / 2f, size.Width, alongAxis, faceUnderMouse);
             max[alongAxis] = min[alongAxis] + size.Width;
             min.y = BottomUnderMouse(hit.LocalPoint.y, size.Height, floorLocal);
             max.y = min.y + size.Height;
@@ -139,9 +162,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Стена по линии или здания: место вдоль пути; низ — у здания от пола его этажа, иначе где навёл.
-        private void AimAtPathWall(Component wall, Vector3 worldPoint)
+        private void AimAtPathWall(Component wall, RaycastHit surfaceHit)
         {
             var size = LiveBuilderOpeningPresets.Selected;
+            var worldPoint = surfaceHit.point;
             var localPoint = wall.transform.InverseTransformPoint(worldPoint);
             SplineWallPath nearestPath = null;
             var nearestGap = float.MaxValue;
@@ -188,7 +212,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 buildingStoreyHeight = building.StoreyHeight;
             }
 
-            var alongFrom = Mathf.Clamp(LeftEdgeAlong(along - size.Width / 2f, 0), 0f, Mathf.Max(0f, nearestPath.Length - size.Width));
+            var alongDirection = wall.transform.TransformVector(nearestPath.DirectionOf(nearestPath.SegmentAt(along, out _)));
+            var faceUnderMouse = new WallFaceUnderMouse(surfaceHit.collider, worldPoint, surfaceHit.normal, alongDirection);
+            var alongFrom = Mathf.Clamp(LeftEdgeAlong(along - size.Width / 2f, size.Width, 0, faceUnderMouse), 0f, Mathf.Max(0f, nearestPath.Length - size.Width));
             var bottom = hasStoreys ? floorLocal + size.Sill : BottomUnderMouse(localPoint.y, size.Height, floorLocal);
             targetPathOwner = wall;
             FitCutterToWall(wall, nearestPath, alongFrom, size.Width, bottom, out cutterLocalBottom, out cutterLocalRotation, out cutterDepth);
@@ -204,9 +230,42 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
         // Левый край проёма вдоль стены: там, где середина под мышью, или по сетке — по настройке «Место».
-        private static float LeftEdgeAlong(float edgeUnderMouse, int gridAxis)
+        // По сетке — от края грани под мышью; краёв у грани не нашлось — по сетке мира.
+        private static float LeftEdgeAlong(float edgeUnderMouse, float width, int gridAxis, WallFaceUnderMouse faceUnderMouse)
         {
-            return LiveBuilderCutterSettings.IsSnappedToGrid ? LiveBuilderGrid.Snap(edgeUnderMouse, gridAxis) : edgeUnderMouse;
+            if (!LiveBuilderCutterSettings.IsSnappedToGrid)
+                return edgeUnderMouse;
+
+            return TryAlignToFaceEdge(edgeUnderMouse, width, LiveBuilderGrid.StepOn(gridAxis), faceUnderMouse, out var alignedEdge)
+                ? alignedEdge
+                : LiveBuilderGrid.Snap(edgeUnderMouse, gridAxis);
+        }
+
+        // Край проёма, ближний к ближайшему краю грани (углу стены, краю соседнего проёма), — на сетке, отсчитанной от этого края.
+        // Проём шириной не в целые клетки так встаёт вровень с углом и с той стороны, к которой ближе.
+        private static bool TryAlignToFaceEdge(float edgeUnderMouse, float width, float step, WallFaceUnderMouse faceUnderMouse, out float alignedEdge)
+        {
+            alignedEdge = edgeUnderMouse;
+            var up = LiveBuilderSurfaceRectangle.UpOn(faceUnderMouse.Normal);
+            var right = Vector3.Cross(faceUnderMouse.Normal, up);
+            var faceEdges = LiveBuilderFaceEdges.Find(faceUnderMouse.MeshOwner, faceUnderMouse.Point, faceUnderMouse.Normal, right, up);
+            var mouseOnFace = new Vector2(Vector3.Dot(faceUnderMouse.Point, right), Vector3.Dot(faceUnderMouse.Point, up));
+
+            // Сколько метров «вправо» по грани на единицу координаты вдоль стены: ±1, если стена не растянута.
+            var rightPerAlong = Vector3.Dot(faceUnderMouse.AlongDirection, right);
+
+            if (Mathf.Abs(rightPerAlong) < 0.5f || !faceEdges.TryFindNearestEdge(0, mouseOnFace, 0f, out var faceEdge))
+                return false;
+
+            // Середина проёма — под мышью; его концы на грани.
+            var halfWidthOnFace = width / 2f * rightPerAlong;
+            var firstEnd = mouseOnFace.x - halfWidthOnFace;
+            var secondEnd = mouseOnFace.x + halfWidthOnFace;
+            var nearEnd = Mathf.Abs(firstEnd - faceEdge) <= Mathf.Abs(secondEnd - faceEdge) ? firstEnd : secondEnd;
+            var snappedEnd = faceEdge + Mathf.Round((nearEnd - faceEdge) / step) * step;
+
+            alignedEdge = edgeUnderMouse + (snappedEnd - nearEnd) / rightPerAlong;
+            return true;
         }
 
         // Низ проёма без этажей здания: середина по высоте под мышью или низ по сетке — по настройке «Место»; не ниже пола.
