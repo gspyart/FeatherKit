@@ -9,8 +9,10 @@ namespace FeatherKit.LiveBuilder
     /// Этажи: только свой, «по этаж …» или «И этажи выше»:
     /// добавил этажей — копии «И этажи выше» добавились, убрал — убрались; пропал этаж самого объекта — объект спрятан, пока этаж не вернётся.
     /// Этаж, на котором стоит объект, — по его высоте. Ставит Live Builder, когда строишь в здании.
+    /// «На крыше» — объект стоит на крыше здания (чердак, будка выхода, вентиляция): едет за ней, когда у здания меняются этажи, их высота
+    /// и перекрытия; по этажам не повторяется.
     /// </summary>
-    [FDescription("Привязка к этажам здания: высоты — от здания, «И этажи выше» — копии на всех этажах выше, сами следят за числом этажей.")]
+    [FDescription("Привязка к этажам здания: высоты — от здания, «И этажи выше» — копии на всех этажах выше, сами следят за числом этажей. «На крыше» — едет за крышей.")]
     [AddComponentMenu("FeatherKit/Live Builder/Spline Building Storey Link")]
     [DisallowMultipleComponent]
     public class SplineBuildingStoreyLink : MonoBehaviour
@@ -28,6 +30,9 @@ namespace FeatherKit.LiveBuilder
 
         [Tooltip("Последний этаж — без копии. Новой лестнице ставится сам: с верхнего этажа обычно идти некуда. Выход на крышу — выключи.")]
         [SerializeField] private bool skipsTopStorey;
+
+        [Tooltip("Стоит на крыше здания: добавил этажей или поменял их высоту — поднимется вместе с крышей. По этажам не повторяется.")]
+        [SerializeField] private bool isOnRoof;
 
         // Где объект относительно здания: этаж и высота над его полом. Пишет редактор: здание поменяло этажи — объект встаёт на свой этаж заново.
         [SerializeField, HideInInspector] private int storey;
@@ -73,6 +78,13 @@ namespace FeatherKit.LiveBuilder
             set => skipsTopStorey = value;
         }
 
+        // На крыше: этаж — всегда «над верхним», пол этого этажа — верх крыши.
+        public bool IsOnRoof
+        {
+            get => isOnRoof;
+            set => isOnRoof = value;
+        }
+
         public int Storey
         {
             get => storey;
@@ -107,10 +119,10 @@ namespace FeatherKit.LiveBuilder
 
 
         // Сколько копий начиная с этажа storey: «И этажи выше» — до последнего этажа (у лестницы — до предпоследнего),
-        // «по этаж» — до него включительно, но не выше здания; иначе одна.
+        // «по этаж» — до него включительно, но не выше здания; на крыше и иначе — одна.
         public int CopiesFrom(int storey)
         {
-            if (building == null)
+            if (building == null || isOnRoof)
                 return 1;
 
             var available = Mathf.Max(1, building.StoreyCount - storey - (skipsTopStorey ? 1 : 0));

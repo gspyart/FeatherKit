@@ -11,6 +11,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// (этажи уровня и здания — одни и те же: здание стоит низом на этаже уровня, его этажи идут с тем же шагом). Отсюда пол этажа,
     /// сколько до потолка и сколько этажей выше. Стена, комната, лестница и проём сами берут высоты здания,
     /// а «Только этот» или «И этажи выше» решает, встанет ли новое на одном этаже или на всех выше разом.
+    /// Здесь же — к какому зданию отнести новое: внутри чьих стен оно, частью какого здания стала коробка, на которой рисуешь, на чьей крыше стоит.
     /// Прилипание к стенам здания — <see cref="SplineBuildingWallSnapping"/>, здание и этажи уровня — <see cref="SplineBuildingLevelAlignment"/>.
     /// </summary>
     public sealed class LiveBuilderBuildingContext
@@ -19,6 +20,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // Что-то перед полом этажа выше него хотя бы на столько — закрывает его от мыши, м: земля вровень с полом не закрывает.
         private const float FloorBlockTolerance = 0.05f;
+
+        // Низ объекта ближе к верху крыши, чем на столько, — стоит на крыше, м.
+        private const float RoofTolerance = 0.05f;
 
         // Больше зданий в памяти — забыть всех: удалённые здания иначе копились бы.
         private const int MaxCachedBuildings = 256;
@@ -176,6 +180,79 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return IsInsideInnerContours(building, new Vector2(localPoint.x, localPoint.z));
         }
 
+
+        // ── Части здания ─────────────────────────────────────────────────
+
+        // Здание, частью которого стала коробка, комната или лестница: привязана к его этажам сама или вместе с группой либо лежит в его интерьере. Нет — null.
+        public static SplineBuilding BuildingOfPiece(Component piece)
+        {
+            if (piece == null)
+                return null;
+
+            var link = piece.GetComponentInParent<SplineBuildingStoreyLink>(true);
+            return link != null && link.IsValid ? link.Building : piece.GetComponentInParent<SplineBuilding>(true);
+        }
+
+
+        // Коробка под мышью — часть здания (площадка, балкон), и новое на ней встанет в тот же объект, что и здание, а не в группу внутри: это здание. Иначе — null.
+        public static SplineBuilding BuildingOfSurface(BoxModelSurfaceHit hit)
+        {
+            var building = BuildingOfPiece(BoxModelPicker.SourceBoxOf(hit)?.Owner);
+            return building != null && SplineWallRebuilder.OuterModelOf(building) == hit.Model ? building : null;
+        }
+
+
+        // ── Крыша ────────────────────────────────────────────────────────
+
+        // Здание этого объекта, на крыше которого стоит точка мира: в плане — внутри его стен, по высоте — на верху крыши. Нет такого — null.
+        public static SplineBuilding BuildingWithRoofAt(BoxModel model, Vector3 worldPoint)
+        {
+            foreach (var building in model.GetComponentsInChildren<SplineBuilding>(false))
+                if (SplineWallRebuilder.OuterModelOf(building) == model && IsOnRoof(building, worldPoint))
+                    return building;
+
+            return null;
+        }
+
+
+        // Любое включённое здание, на крыше которого стоит точка мира. Нет такого — null.
+        public static SplineBuilding BuildingWithRoofAt(Vector3 worldPoint)
+        {
+            foreach (var building in UnityEditor.SceneManagement.StageUtility.GetCurrentStageHandle().FindComponentsOfType<SplineBuilding>())
+                if (building.gameObject.activeInHierarchy && IsOnRoof(building, worldPoint))
+                    return building;
+
+            return null;
+        }
+
+
+        // Здание, на крыше которого стоит выделенная постройка: низ её габарита посередине — на верху крыши, а если что-то свисает ниже (площадка у двери чердака) —
+        // её опора, взятая посередине габарита. Нет такого — null.
+        public static SplineBuilding BuildingWithRoofUnder(GameObject selected)
+        {
+            if (!LiveBuilderSelectionInfo.TryDescribe(selected, out var info))
+                return null;
+
+            var bounds = info.LocalBounds;
+            var bottomCenter = info.Frame.MultiplyPoint3x4(new Vector3(bounds.center.x, bounds.min.y, bounds.center.z));
+            var building = BuildingWithRoofAt(bottomCenter);
+
+            return building != null ? building : BuildingWithRoofAt(new Vector3(bottomCenter.x, selected.transform.position.y, bottomCenter.z));
+        }
+
+        // Точка мира на крыше здания: в плане — внутри его стен, по высоте — на верху крыши.
+        private static bool IsOnRoof(SplineBuilding building, Vector3 worldPoint)
+        {
+            if (!building.HasRoof)
+                return false;
+
+            var localPoint = building.transform.InverseTransformPoint(worldPoint);
+            var roofTop = SplineBuildingLevelAlignment.BaseHeightOf(building) + building.TotalHeight;
+            return Mathf.Abs(localPoint.y - roofTop) <= RoofTolerance && IsInsideInnerContours(building, new Vector2(localPoint.x, localPoint.z));
+        }
+
+
+        // ── План и высота здания ─────────────────────────────────────────
 
         // Точка мира по высоте в здании — от низа до крыши, где бы она ни была в плане.
         public static bool IsWithinHeight(SplineBuilding building, Vector3 worldPoint)

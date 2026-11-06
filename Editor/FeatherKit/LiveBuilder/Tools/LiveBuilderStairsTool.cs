@@ -76,11 +76,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно ─────────────────────────────────────────────────────────
 
-        // Вид ступеней новой лестницы — меняют каждый раз.
+        // Форма и вид ступеней новой лестницы — меняют каждый раз.
         public override void DrawSettings()
         {
             using (LiveBuilderWindowControls.Card("Вид"))
             {
+                var isSwitchback = LiveBuilderWindowControls.Switch(
+                    new GUIContent("Форма", "Прямая — один марш. С площадкой — протяни всю лестничную клетку: два марша туда-обратно и площадка на середине высоты, " +
+                                            "поменяешь высоту этажа — пересчитается всё сразу"),
+                    LiveBuilderStairsSettings.Shape == BoxModelStairsShape.Switchback, "Прямая", "С площадкой");
+                LiveBuilderStairsSettings.Shape = isSwitchback ? BoxModelStairsShape.Switchback : BoxModelStairsShape.Straight;
+
                 var isSolid = LiveBuilderWindowControls.Switch(
                     new GUIContent("Ступени", "Отдельные — плиты, под лестницей пусто. Сплошная — ступенчатый объём от пола"),
                     LiveBuilderStairsSettings.Style == BoxModelStairsStyle.Solid, ("Отдельные", LiveBuilderOptionIcon.SeparateSteps), ("Сплошная", LiveBuilderOptionIcon.SolidSteps));
@@ -88,6 +94,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             LiveBuilderWindowControls.Explanation("Как кубик: протянул прямоугольник — длина и ширина, низ — где начал; отпустил — мышью высота, клик — готово. Tab — повернуть. " +
+                                                  "С площадкой: прямоугольник — вся клетка, первый марш — с той стороны, откуда начал тянуть. " +
                                                   "Готовую — ручки на гранях, Tab, «Повернуть» и «Развернуть»; на любой угол — поверни её объект.");
         }
 

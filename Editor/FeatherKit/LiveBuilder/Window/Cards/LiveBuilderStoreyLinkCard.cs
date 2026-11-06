@@ -10,7 +10,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// не само здание и не его собранные части.
     /// Одна привязка на цепочку копий: коробку, комнату и лестницу в уже привязанном объекте или группе не привязать — этажи им уже повторены;
     /// объект, в котором уже привязаны свои коробки, — тоже (<see cref="BoxModelShapeCollector"/>). Стене и вырезу копии даёт только своя привязка —
-    /// им можно всегда.
+    /// им можно всегда. Стоит на крыше здания (чердак, будка выхода) — кнопка привязать к крыше: переедет в интерьер здания и поедет за крышей.
     /// </summary>
     public sealed class LiveBuilderStoreyLinkCard : LiveBuilderSelectionCard
     {
@@ -37,9 +37,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return true;
             }
 
-            var building = selected.GetComponentInParent<SplineBuilding>();
+            if (!CanLinkToStoreys(selected))
+                return false;
 
-            if (building == null || !CanLinkToStoreys(selected))
+            var roofBuilding = LiveBuilderBuildingContext.BuildingWithRoofUnder(selected);
+            var building = roofBuilding != null ? roofBuilding : selected.GetComponentInParent<SplineBuilding>();
+
+            if (building == null)
                 return false;
 
             using (LiveBuilderWindowControls.Card("Этажи в здании"))
@@ -47,19 +51,39 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var repeatedReason = StoreyCopiesReasonOf(selected);
 
                 if (repeatedReason != null)
-                {
                     LiveBuilderWindowControls.Note(repeatedReason);
-                    return true;
-                }
-
-                LiveBuilderWindowControls.Note("Стоит в здании, но не следит за его этажами.");
-
-                if (GUILayout.Button(new GUIContent("Привязать к этажам здания «" + building.name + "»",
-                        "Встанет на свой этаж здания и будет следить за высотой этажа; повтор по этажам — здесь же")))
-                    SplineBuildingLinkSync.Attach(selected, building, false, selected.GetComponent<BoxModelStairs>() != null);
+                else if (roofBuilding != null)
+                    DrawAttachToRoof(selected, roofBuilding);
+                else
+                    DrawAttachToStoreys(selected, building);
             }
 
             return true;
+        }
+
+        private static void DrawAttachToStoreys(GameObject selected, SplineBuilding building)
+        {
+            LiveBuilderWindowControls.Note("Стоит в здании, но не следит за его этажами.");
+
+            if (GUILayout.Button(new GUIContent("Привязать к этажам здания «" + building.name + "»",
+                    "Встанет на свой этаж здания и будет следить за высотой этажа; повтор по этажам — здесь же")))
+                SplineBuildingLinkSync.Attach(selected, building, false, selected.GetComponent<BoxModelStairs>() != null);
+        }
+
+        // На крыше: переехать в интерьер здания — двигаешь здание, едет и это, — и привязаться к крыше.
+        private static void DrawAttachToRoof(GameObject selected, SplineBuilding building)
+        {
+            LiveBuilderWindowControls.Note("Стоит на крыше здания «" + building.name + "», но не следит за ней: добавишь этажей — останется на месте.");
+
+            if (!GUILayout.Button(new GUIContent("Привязать к крыше здания «" + building.name + "»",
+                    "Переедет в интерьер здания и поедет за крышей, когда у здания меняются этажи, их высота и перекрытия")))
+                return;
+
+            if (selected.GetComponentInParent<SplineBuilding>() != building)
+                Undo.SetTransformParent(selected.transform, BoxModelFactory.InteriorOf(building), true, "Attach To Building Roof");
+
+            SplineBuildingLinkSync.AttachToRoof(selected, building);
+            GUIUtility.ExitGUI();
         }
 
         // Вложенный объект из коробок (шахта, лестничная клетка) — тоже, целиком; само здание и его собранные части — нет.

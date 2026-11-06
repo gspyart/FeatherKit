@@ -17,6 +17,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Поменялись у здания высота этажа или пол — объект встаёт на свой этаж на ту же высоту над полом.
     /// Этажа объекта не стало (этажей меньше) — объект прячется; этаж вернулся — объект тоже.
     /// Здание то же, а объект сдвинули руками — запоминается его новое место.
+    /// На крыше — этаж всегда «над верхним», его пол — верх крыши: поменялись этажи, их высота или пол — объект за крышей, не прячется и не повторяется.
     /// </summary>
     public static class SplineBuildingLinkSync
     {
@@ -83,8 +84,30 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Undo.RecordObjects(ChangedBySync(target, link), "Attach To Building Storeys");
 
             link.Building = building;
+            link.IsOnRoof = false;
             link.IsToBuildingTop = isToBuildingTop;
             link.SkipsTopStorey = skipsTopStorey;
+            RememberPlace(link, building);
+            Sync(link);
+            return link;
+        }
+
+
+        // Новая привязка к крыше здания: объект едет за ней, когда меняются этажи, их высота и перекрытия; по этажам не повторяется.
+        public static SplineBuildingStoreyLink AttachToRoof(GameObject target, SplineBuilding building)
+        {
+            var link = target.GetComponent<SplineBuildingStoreyLink>();
+
+            if (link == null)
+                link = Undo.AddComponent<SplineBuildingStoreyLink>(target);
+
+            Undo.RecordObjects(ChangedBySync(target, link), "Attach To Building Roof");
+
+            link.Building = building;
+            link.IsOnRoof = true;
+            link.IsToBuildingTop = false;
+            link.HasLastStorey = false;
+            link.SkipsTopStorey = false;
             RememberPlace(link, building);
             Sync(link);
             return link;
@@ -121,6 +144,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var building = link.Building;
 
+            if (link.IsOnRoof)
+            {
+                SyncOnRoof(link, building);
+                return;
+            }
+
             if (link.Storey >= building.StoreyCount)
             {
                 Hide(link);
@@ -130,10 +159,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Show(link);
 
             var previousStoreyHeight = link.SyncedStoreyHeight;
-            var isBuildingChanged = Mathf.Abs(link.SyncedStoreyHeight - building.StoreyHeight) > Tolerance
-                || Mathf.Abs(link.SyncedFirstFloor - building.FirstFloorWorldHeight) > Tolerance;
 
-            if (isBuildingChanged)
+            if (IsBuildingChanged(link, building))
                 MoveToPlace(link, building);
             else
                 RememberPlace(link, building);
@@ -169,6 +196,30 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 SetIfDifferent(room, room.Size.y, building.ClearHeight, value => room.Size = new Vector3(room.Size.x, value, room.Size.z));
         }
 
+        // На крыше: число этажей тоже двигает крышу — тогда объект за ней; иначе запомнить, где он над ней сейчас.
+        private static void SyncOnRoof(SplineBuildingStoreyLink link, SplineBuilding building)
+        {
+            Show(link);
+
+            if (link.Storey == building.StoreyCount && !IsBuildingChanged(link, building))
+            {
+                RememberPlace(link, building);
+                return;
+            }
+
+            if (link.Storey != building.StoreyCount)
+                LiveBuilderSyncEdits.Apply(link, () => link.Storey = building.StoreyCount);
+
+            MoveToPlace(link, building);
+        }
+
+        // У здания с прошлой сверки поменялись высота этажа или пол первого этажа.
+        private static bool IsBuildingChanged(SplineBuildingStoreyLink link, SplineBuilding building)
+        {
+            return Mathf.Abs(link.SyncedStoreyHeight - building.StoreyHeight) > Tolerance
+                   || Mathf.Abs(link.SyncedFirstFloor - building.FirstFloorWorldHeight) > Tolerance;
+        }
+
 
         // ── Пропавший этаж ───────────────────────────────────────────────
 
@@ -198,11 +249,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Место на этаже ───────────────────────────────────────────────
 
         // Запомнить, где объект сейчас: этаж и высота над его полом. Что лежит в перекрытии над этажом — уже этаж выше, чуть ниже его пола:
-        // вырез в потолке едет за перекрытием, а «И этажи выше» не пробивает крышу.
+        // вырез в потолке едет за перекрытием, а «И этажи выше» не пробивает крышу. На крыше этаж — «над верхним», высота — над верхом крыши.
         private static void RememberPlace(SplineBuildingStoreyLink link, SplineBuilding building)
         {
             var worldHeight = link.transform.position.y;
-            var storey = building.StoreyAtHeight(worldHeight + building.SlabThickness);
+            var storey = link.IsOnRoof ? building.StoreyCount : building.StoreyAtHeight(worldHeight + building.SlabThickness);
             var heightAboveFloor = worldHeight - (building.FirstFloorWorldHeight + storey * building.StoreyHeight);
 
             if (link.Storey != storey || Mathf.Abs(link.HeightAboveFloor - heightAboveFloor) > Tolerance

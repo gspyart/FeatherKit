@@ -133,11 +133,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 stairs.Width = stairs.RunAxis == 0 ? size.z : size.x;
                 stairs.Height = size.y;
-                stairs.StepDepth = size[stairs.RunAxis] / stairs.StepCount;
+                stairs.StepDepth = stairs.StepDepthForLength(size[stairs.RunAxis]);
             }, axisNames);
         }
 
-        // Стрелка на полу от низа марша к верху и подпись: сколько ступеней, подъём и глубина ступени.
+        // Стрелка на полу от низа марша к верху и подпись: сколько ступеней, подъём и глубина ступени. У лестницы с площадкой — по первому маршу.
         private static void DrawStairsDirection(BoxModel model, BoxModelStairs stairs)
         {
             if (Event.current.type != EventType.Repaint)
@@ -148,14 +148,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var run = stairs.RunAxis;
             var cross = run == 0 ? 2 : 0;
             var start = min + Vector3.up * 0.03f;
-            start[cross] += size[cross] / 2f;
+            start[cross] += (stairs.IsFirstFlightOnOtherSide ? size[cross] - stairs.FlightWidth : 0f) + stairs.FlightWidth / 2f;
             start[run] += stairs.RunsTowardsPlus ? size[run] * 0.15f : size[run] * 0.85f;
 
             var end = start;
             end[run] = min[run] + (stairs.RunsTowardsPlus ? size[run] * 0.85f : size[run] * 0.15f);
 
             var along = (end - start).normalized;
-            var side = Vector3.Cross(Vector3.up, along) * Mathf.Min(size[cross] * 0.25f, 0.5f);
+            var side = Vector3.Cross(Vector3.up, along) * Mathf.Min(stairs.FlightWidth * 0.25f, 0.5f);
             var head = end - along * Mathf.Min(size[run] * 0.2f, 0.6f);
 
             using (new Handles.DrawingScope(StairsArrowColor, model.transform.localToWorldMatrix))
@@ -164,9 +164,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 Handles.DrawAAPolyLine(4f, head + side, end, head - side);
             }
 
+            var landing = stairs.IsSwitchback ? " · площадка " + LiveBuilderSceneText.FormatMeters(stairs.LandingDepth) + " м на середине" : "";
             LiveBuilderSceneText.DrawLabel(model.transform.TransformPoint(min + size), stairs.StepCount + " ступеней · подъём " +
                                                                                        LiveBuilderSceneText.FormatMeters(stairs.Height / stairs.StepCount) + " · глубина " +
-                                                                                       LiveBuilderSceneText.FormatMeters(stairs.StepDepth) + " м");
+                                                                                       LiveBuilderSceneText.FormatMeters(stairs.StepDepth) + " м" + landing);
         }
 
 

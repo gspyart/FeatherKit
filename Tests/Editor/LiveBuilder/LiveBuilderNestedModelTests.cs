@@ -119,6 +119,38 @@ namespace FeatherKit.Tests.LiveBuilder
         }
 
 
+        // ── На крыше ─────────────────────────────────────────────────────
+
+        // Чердак — отдельный объект на крыше: находится как «на крыше здания», привязывается к ней и едет за ней,
+        // когда добавляют этажи и меняют их высоту; спрятанным не считается и по этажам не повторяется.
+        [Test]
+        public void ModelOnRoof_AttachedToRoof_FollowsStoreyCountAndHeight()
+        {
+            var building = CreateBuilding(null, 2);
+            var roofTop = building.FirstFloorWorldHeight + 2 * StoreyHeight;
+            var attic = BoxModelFactory.CreateModel(new Vector3(Origin.x + 1f, roofTop, Origin.z + 1f));
+            BoxModelFactory.CreatePart(attic, Vector3.zero, new Vector3(6f, 3f, 6f), BoxModelPartMode.Add);
+            BoxModelRebuilder.Rebuild(attic);
+
+            Assert.AreEqual(building, LiveBuilderBuildingContext.BuildingWithRoofUnder(attic.gameObject), "стоит на крыше этого здания");
+
+            attic.transform.SetParent(BoxModelFactory.InteriorOf(building), true);
+            var link = SplineBuildingLinkSync.AttachToRoof(attic.gameObject, building);
+            Assert.AreEqual(0f, link.HeightAboveFloor, 0.001f, "низ — ровно на крыше");
+
+            building.StoreyCount = 3;
+            SplineBuildingLinkSync.SyncAll();
+            Assert.AreEqual(roofTop + StoreyHeight, attic.transform.position.y, 0.001f, "добавили этаж — поднялся с крышей");
+            Assert.IsTrue(attic.gameObject.activeSelf, "не спрятан: этажа «над верхним» и не бывает");
+            Assert.AreEqual(1, link.CopiesFrom(link.Storey), "по этажам не повторяется");
+
+            building.StoreyHeight = 5f;
+            SplineBuildingLinkSync.SyncAll();
+            Assert.AreEqual(building.FirstFloorWorldHeight + 3 * 5f, attic.transform.position.y, 0.001f, "этажи выше — тоже за крышей");
+            Assert.IsFalse(LiveBuilderLevelCheck.FindIssues().Exists(issue => issue.Target == attic.gameObject), "проверка уровня не ругается");
+        }
+
+
         // ── Помощники ────────────────────────────────────────────────────
 
         // Здание 8 × 8, этажи по 4 м.

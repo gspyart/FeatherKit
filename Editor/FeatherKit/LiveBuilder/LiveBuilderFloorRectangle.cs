@@ -9,6 +9,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Прямоугольник на полу для «Комнаты» и «Лестницы»: зажал — первый угол, тянешь — второй, всё по сетке.
     /// Пол — этаж здания по контуру под мышью (углы прилипают к его стенам); выделена группа этого здания — пол её этажа, и новое встаёт в неё;
     /// верх объекта из коробок, а если там стена, потолок, другая геометрия или пусто — пол текущего этажа.
+    /// Верх коробки, которая уже часть здания (площадка лестницы), — пол этой коробки, а здание помнится (<see cref="SurfaceBuilding"/>): новое — тоже его часть.
     /// Помнит, начат ли он внутри объекта из коробок — на полу под потолком того же объекта или в его сплошном объёме: тогда новое вырезается в нём.
     /// Тот же поиск пола под потолком дома нужен и комнате по контуру — <see cref="TryFindHouseFloor"/>.
     /// Пока тянешь, стороны можно набрать цифрами: «4 X 3» — ровно 4 по X и 3 по Z от первого угла, в сторону мыши (<see cref="HandleKey"/>).
@@ -52,6 +53,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Начат на полу здания по контуру — его этаж, высоты и стены; углы тогда в осях здания и прилипают к его стенам.
         public LiveBuilderBuildingContext BuildingContext { get; private set; }
 
+        // Начат на верху коробки, которая уже часть здания (площадка лестницы): это здание. Иначе — null.
+        public SplineBuilding SurfaceBuilding { get; private set; }
+
 
         // ── Жест ─────────────────────────────────────────────────────────
 
@@ -61,6 +65,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public bool TryBegin(Ray worldRay)
         {
             BuildingContext = null;
+            SurfaceBuilding = null;
             typedSides.Clear();
             var selectedGroup = BoxModelFactory.SelectedBuildingGroup(out var groupBuilding);
 
@@ -85,6 +90,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (isOnModelFloor && BoxModelDrawPlaneFinder.TryFind(worldRay, false, out plane, out point))
             {
                 IsInsideModel = TryFindCeilingAbove(surfaceHit.Model, surfaceHit.LocalPoint, out _);
+                SurfaceBuilding = LiveBuilderBuildingContext.BuildingOfSurface(surfaceHit);
             }
             else
             {
@@ -192,6 +198,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             isStarted = false;
             IsInsideModel = false;
             BuildingContext = null;
+            SurfaceBuilding = null;
         }
 
         // В здании: по сетке и к стенам здания, если до них меньше полшага.

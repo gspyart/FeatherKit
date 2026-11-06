@@ -3,13 +3,20 @@ using UnityEngine;
 
 namespace FeatherKit.EditorTools.LiveBuilder
 {
-    /// <summary>Настройки инструмента «Лестница»: вид, высота, ширина по умолчанию, пробивать ли перекрытие.</summary>
+    /// <summary>Настройки инструмента «Лестница»: форма (прямая или с площадкой), вид, высота, ширина по умолчанию, пробивать ли перекрытие.</summary>
     public static class LiveBuilderStairsSettings
     {
         // Заводские значения, пока человек их не поменял: с ними сверяется «Ещё» окна — изменено ли.
         public const float FactoryStepThickness = 0.2f;
         public const float FactoryDefaultWidth = 2f;
 
+
+        // Прямая — один марш; с площадкой — протянутый прямоугольник это вся лестничная клетка, два марша туда-обратно.
+        public static BoxModelStairsShape Shape
+        {
+            get => LiveBuilderPreferences.GetEnum("Stairs.Shape", BoxModelStairsShape.Straight);
+            set => LiveBuilderPreferences.SetInt("Stairs.Shape", (int)value);
+        }
 
         public static BoxModelStairsStyle Style
         {

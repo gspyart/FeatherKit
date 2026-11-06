@@ -6,7 +6,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Инспектор лестницы: куда идёт подъём — стрелками, как сверху, и кнопками поворота; всё внутри её коробки (<see cref="BoxModelStairsTurns"/>).
-    /// Потом форма → вокруг → тонко. Тот же инспектор показывает окно Live Builder.
+    /// Потом форма → вокруг → тонко. У лестницы с площадкой — ещё площадка, зазор между маршами и сторона первого марша;
+    /// сменил форму или глубину площадки — коробка та же, марши под неё. Тот же инспектор показывает окно Live Builder.
     /// </summary>
     [CustomEditor(typeof(BoxModelStairs))]
     [CanEditMultipleObjects]
@@ -29,12 +30,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
             DrawTurnButtons();
 
             LiveBuilderInspectorLayout.Section("Форма");
+            DrawShapeKeepingBox();
             LiveBuilderInspectorLayout.Properties(serializedObject, "style", "width", "height");
 
             using (new EditorGUI.DisabledScope(stairs.Style != BoxModelStairsStyle.SeparateSteps))
                 LiveBuilderInspectorLayout.Properties(serializedObject, "stepThickness");
 
             DrawLength(stairs);
+
+            if (stairs.IsSwitchback)
+                DrawLanding(stairs);
 
             LiveBuilderInspectorLayout.Section("Вокруг");
             LiveBuilderInspectorLayout.Properties(serializedObject, "cutsAbove", "material");
@@ -65,10 +70,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             serializedObject.Update();
         }
 
-        // Длина марша: меняет глубину ступени, число ступеней — от высоты.
+        // Длина лестницы: меняет глубину ступени, число ступеней — от высоты; у лестницы с площадкой площадка остаётся своей.
         private void DrawLength(BoxModelStairs stairs)
         {
-            var length = EditorGUILayout.FloatField(new GUIContent("Length", "Длина марша, м. Ступеней — от высоты, глубина ступени подгоняется под длину"),
+            var length = EditorGUILayout.FloatField(new GUIContent("Length", "Длина лестницы по подъёму, м. Ступеней — от высоты, глубина ступени подгоняется под длину"),
                 stairs.Length);
 
             GUILayout.Label(stairs.StepCount + " ступеней по " + LiveBuilderSceneText.FormatMeters(stairs.StepDepth) + " м", EditorStyles.miniLabel);
@@ -82,11 +87,29 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 var each = (BoxModelStairs)selected;
                 Undo.RecordObject(each, "Change Stairs Length");
-                each.StepDepth = length / each.StepCount;
+                each.StepDepth = each.StepDepthForLength(length);
             }
 
             serializedObject.Update();
         }
+
+
+        // Форма — прямая или с площадкой — в той же коробке: длина лестницы прежняя, ступени под неё.
+        private void DrawShapeKeepingBox()
+        {
+            KeepingLength(() => LiveBuilderInspectorLayout.Properties(serializedObject, "shape"), "Change Stairs Shape");
+        }
+
+
+        // Площадка, зазор между маршами и сторона первого марша; глубина площадки — в той же коробке, марши короче или длиннее.
+        private void DrawLanding(BoxModelStairs stairs)
+        {
+            KeepingLength(() => LiveBuilderInspectorLayout.Properties(serializedObject, "landingDepth"), "Change Stairs Landing");
+            LiveBuilderInspectorLayout.Properties(serializedObject, "flightGap", "isFirstFlightOnOtherSide");
+            GUILayout.Label("Марш шириной " + LiveBuilderSceneText.FormatMeters(stairs.FlightWidth) + " м: " + stairs.FirstFlightStepCount + " ступеней до площадки, " +
+                            stairs.SecondFlightStepCount + " после", EditorStyles.miniLabel);
+        }
+
 
         private void DrawTurnButtons()
         {
@@ -107,6 +130,33 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var stairs = (BoxModelStairs)selected;
                 BoxModelStairsTurns.Turn(stairs, turn(stairs.Direction));
             }
+        }
+
+
+        // Поле поменялось — длина лестницы та же, что до него: глубина ступени подгоняется.
+        private void KeepingLength(System.Action drawField, string undoName)
+        {
+            var lengthsBefore = new float[targets.Length];
+
+            for (var index = 0; index < targets.Length; index++)
+                lengthsBefore[index] = ((BoxModelStairs)targets[index]).Length;
+
+            EditorGUI.BeginChangeCheck();
+            drawField();
+
+            if (!EditorGUI.EndChangeCheck())
+                return;
+
+            serializedObject.ApplyModifiedProperties();
+
+            for (var index = 0; index < targets.Length; index++)
+            {
+                var each = (BoxModelStairs)targets[index];
+                Undo.RecordObject(each, undoName);
+                each.StepDepth = each.StepDepthForLength(lengthsBefore[index]);
+            }
+
+            serializedObject.Update();
         }
     }
 }

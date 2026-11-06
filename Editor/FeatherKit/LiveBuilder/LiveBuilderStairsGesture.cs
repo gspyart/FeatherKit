@@ -10,9 +10,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Низ — там, где начал; подъём — вдоль длинной стороны, к концу протягивания. Направление запоминается по первым 0,4 м
     /// и дальше не прыгает, Tab — повернуть на четверть оборота. Почти не протянул вдоль — длина по метрикам (ступени 0,2 × 0,3),
     /// почти не протянул поперёк — ширина по умолчанию. Глубина ступени подгоняется под длину.
-    /// Перекрытие не пробивает: проём над лестницей ставят вручную вырезающей коробкой.
+    /// Перекрытие над маршем пробивает сразу («Перекрытие над» в настройках лестницы).
     /// Лестница встаёт в объект, на чьём полу начали, или в выделенный; иначе — новым объектом (его можно повернуть на любой угол).
     /// В здании по контуру — в его объект, высота сначала — его этаж; «И этажи выше» — лестничная клетка до верхнего этажа.
+    /// На площадке, которая уже часть здания, — тоже его часть: второй марш встаёт к этажам, как и первый.
+    /// Форма «С площадкой»: прямоугольник — вся лестничная клетка. Марши по метрикам и средняя площадка (не мельче ширины марша) — у дальнего конца,
+    /// у ближнего остаётся этажная площадка — пол, перекрытие над ней цело; клетка короткая — ступени мельче. Первый марш — с той стороны, откуда начал тянуть.
     /// </summary>
     public sealed class LiveBuilderStairsGesture
     {
@@ -26,6 +29,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Ступень по метрикам, м.
         private const float StandardStepHeight = 0.2f;
         private const float StandardStepDepth = 0.3f;
+
+        // У лестницы с площадкой: площадка не мельче, зазор между маршами, м.
+        private const float MinLandingDepth = 1.2f;
+        private const float StandardFlightGap = 0.2f;
 
         private readonly LiveBuilderFloorRectangle rectangle = new();
 
@@ -58,10 +65,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
               "); цифры + Enter — точно. Клик или Enter — готово, Tab — повернуть, Esc — отмена"
             : rectangle.TypedText.Length > 0
             ? "Набрано " + rectangle.TypedText + " м: X — вторая сторона (по X и по Z); отпусти — ровно такая. Esc — стереть набор"
+            : IsSwitchback
+            ? "Вверх — " + DirectionName(CurrentDirection) + ". Тяни всю лестничную клетку — марши и площадка встанут сами; «4 X 8» — точно. Tab — повернуть. Отпусти — дальше высота. Esc — отмена"
             : "Вверх — " + DirectionName(CurrentDirection) + ". Тяни прямоугольник — длина и ширина лестницы; «1,2 X 4» — точно. Tab — повернуть. Отпусти — дальше высота. Esc — отмена";
 
         // Куда пойдёт вверх: запомненное, а пока не запомнилось — куда тянут сильнее.
         private BoxModelStairsDirection CurrentDirection => lockedDirection ?? DirectionOf(rectangle.End - rectangle.Start);
+
+        private static bool IsSwitchback => LiveBuilderStairsSettings.Shape == BoxModelStairsShape.Switchback;
 
 
         // ── Жест ─────────────────────────────────────────────────────────
@@ -162,27 +173,44 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             Undo.SetCurrentGroupName("Create Stairs");
-            var stepDepth = StepDepthFor(StairsHeight, length);
+            var height = StairsHeight;
+            var isFirstFlightOnOtherSide = IsStartOnFarSideAcross(min, direction, width);
+            var landingDepth = IsSwitchback ? FitSwitchbackIntoWell(ref min, direction, width, ref length, height) : 0f;
+            var stepDepth = StepDepthFor(height, length);
+            BoxModelStairs stairs;
+            BoxModel createdIn;
 
             if (rectangle.BuildingContext != null)
             {
-                CommitInBuilding(rectangle.BuildingContext, min, direction, width, StairsHeight, stepDepth);
-                Cancel();
-                return;
+                stairs = CreateInBuilding(rectangle.BuildingContext, min, direction, width, height, stepDepth);
+                createdIn = rectangle.BuildingContext.Model;
             }
-
-            var model = rectangle.TargetModel;
-
-            if (model == null)
+            else
             {
-                model = BoxModelFactory.CreateModel(rectangle.ToWorld(min));
-                min = Vector3.zero;
+                createdIn = rectangle.TargetModel;
+
+                if (createdIn == null)
+                {
+                    createdIn = BoxModelFactory.CreateModel(rectangle.ToWorld(min));
+                    min = Vector3.zero;
+                }
+
+                stairs = BoxModelFactory.CreateStairs(createdIn, min, direction, width, height, stepDepth,
+                    LiveBuilderStairsSettings.CutsAbove && rectangle.TargetModel != null);
+
+                if (rectangle.SurfaceBuilding != null)
+                    AttachToBuilding(stairs, rectangle.SurfaceBuilding);
             }
 
-            var stairs = BoxModelFactory.CreateStairs(model, min, direction, width, StairsHeight, stepDepth,
-                LiveBuilderStairsSettings.CutsAbove && rectangle.TargetModel != null);
-            Selection.activeGameObject = stairs.gameObject;
-            BoxModelRebuilder.Rebuild(model);
+            if (stairs != null)
+            {
+                if (IsSwitchback)
+                    MakeSwitchback(stairs, length, landingDepth, isFirstFlightOnOtherSide);
+
+                Selection.activeGameObject = stairs.gameObject;
+                RebuildModelsOf(stairs, createdIn);
+            }
+
             Cancel();
         }
 
@@ -195,30 +223,50 @@ namespace FeatherKit.EditorTools.LiveBuilder
             isChoosingHeight = false;
         }
 
-        // В здании: лестница в его объекте; «И этажи выше» — повтором до верхнего этажа. Высота во весь этаж следит за зданием, своя — остаётся. Проём в полу — «Перекрытие над» (сразу включено).
-        private static void CommitInBuilding(LiveBuilderBuildingContext context, Vector3 buildingLocalMin, BoxModelStairsDirection direction, float width,
+        // В здании: лестница в его объекте; «И этажи выше» — повтором до верхнего этажа. Высота во весь этаж следит за зданием, своя — остаётся.
+        // Проём в полу — «Перекрытие над» (сразу включено). У здания нет объекта из коробок — null.
+        private static BoxModelStairs CreateInBuilding(LiveBuilderBuildingContext context, Vector3 buildingLocalMin, BoxModelStairsDirection direction, float width,
             float height, float stepDepth)
         {
             var model = context.Model;
 
             if (model == null)
-                return;
+                return null;
 
             var building = context.Building;
             var localMin = model.transform.InverseTransformPoint(building.transform.TransformPoint(buildingLocalMin));
             var stairs = BoxModelFactory.CreateStairs(model, localMin, direction, width, height, stepDepth, LiveBuilderStairsSettings.CutsAbove);
+            AttachToBuilding(stairs, building);
+            return stairs;
+        }
+
+        // Два марша с площадкой: форма, площадка, зазор, сторона первого марша — и глубина ступени, чтобы всё легло в длину.
+        private static void MakeSwitchback(BoxModelStairs stairs, float length, float landingDepth, bool isFirstFlightOnOtherSide)
+        {
+            stairs.Shape = BoxModelStairsShape.Switchback;
+            stairs.LandingDepth = landingDepth;
+            stairs.FlightGap = StandardFlightGap;
+            stairs.IsFirstFlightOnOtherSide = isFirstFlightOnOtherSide;
+            stairs.StepDepth = stairs.StepDepthForLength(length);
+        }
+
+        // Лестница — часть здания: в его интерьер (или выделенную группу) и к его этажам; «И этажи выше» — копии до предпоследнего этажа.
+        private static void AttachToBuilding(BoxModelStairs stairs, SplineBuilding building)
+        {
             Undo.SetTransformParent(stairs.transform, BoxModelFactory.InteriorTargetOf(building), true, "Create Stairs");
 
             // В группе, привязанной к этажам, лестницу повторяет группа — своя привязка перемножила бы копии.
             if (!BoxModelShapeCollector.IsPieceInsideStoreyCopies(stairs.transform))
                 SplineBuildingLinkSync.Attach(stairs.gameObject, building, LiveBuilderBuildingContext.IsOnAllStoreys, true);
+        }
 
-            Selection.activeGameObject = stairs.gameObject;
-
-            BoxModelRebuilder.Rebuild(model);
+        // Сразу, а не после паузы: объект, где лестницу создали, и тот, куда она переехала.
+        private static void RebuildModelsOf(BoxModelStairs stairs, BoxModel createdIn)
+        {
+            BoxModelRebuilder.Rebuild(createdIn);
             var ownerModel = stairs.GetComponentInParent<BoxModel>();
 
-            if (ownerModel != model)
+            if (ownerModel != createdIn)
                 BoxModelRebuilder.Rebuild(ownerModel);
         }
 
@@ -240,7 +288,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (width < MinDrawnWidth)
             {
-                width = LiveBuilderStairsSettings.DefaultWidth;
+                width = IsSwitchback ? 2f * LiveBuilderStairsSettings.DefaultWidth + StandardFlightGap : LiveBuilderStairsSettings.DefaultWidth;
                 min[crossAxis] = rectangle.Start[crossAxis] - width / 2f;
             }
             else
@@ -281,21 +329,68 @@ namespace FeatherKit.EditorTools.LiveBuilder
             };
         }
 
-        // Длина марша на эту высоту, если её не протянули: ступени по метрикам.
+        // Длина лестницы на эту высоту, если её не протянули: ступени по метрикам; у лестницы с площадкой — длинный марш и площадка.
         private static float StandardLengthFor(float height)
         {
-            return StepCountFor(height) * StandardStepDepth;
+            return IsSwitchback
+                ? LongestFlightStepsFor(height) * StandardStepDepth + Mathf.Max(MinLandingDepth, LiveBuilderStairsSettings.DefaultWidth)
+                : StepCountFor(height) * StandardStepDepth;
         }
 
-        // Глубина ступени, чтобы ступени легли ровно в протянутую длину.
+        // Глубина ступени, чтобы ступени прямой лестницы легли ровно в протянутую длину.
         private static float StepDepthFor(float height, float length)
         {
             return Mathf.Max(BoxModelStairs.MinStepDepth, length / StepCountFor(height));
         }
 
+        // Ступеней на высоту по метрикам; у лестницы с площадкой — не меньше двух, по одной на марш.
         private static int StepCountFor(float height)
         {
-            return Mathf.Max(1, Mathf.RoundToInt(height / StandardStepHeight));
+            return Mathf.Max(IsSwitchback ? 2 : 1, Mathf.RoundToInt(height / StandardStepHeight));
+        }
+
+        // Ступеней в длинном марше лестницы с площадкой: в первом половина, во втором остальное.
+        private static int LongestFlightStepsFor(float height)
+        {
+            var stepCount = StepCountFor(height);
+            return stepCount - stepCount / 2;
+        }
+
+
+        // Лестница с площадкой в протянутую клетку: марши по метрикам и площадка не мельче ширины марша — у дальнего конца,
+        // остаток у ближнего — этажная площадка (min сдвигается, length — только лестница). Клетка короче — вся под лестницу, площадка мельче, ступени тоже.
+        // Возвращает глубину площадки.
+        private static float FitSwitchbackIntoWell(ref Vector3 min, BoxModelStairsDirection direction, float width, ref float length, float height)
+        {
+            var flightWidth = Mathf.Max(0.25f, (width - StandardFlightGap) / 2f);
+            var landingDepth = Mathf.Max(MinLandingDepth, flightWidth);
+            var stairsLength = LongestFlightStepsFor(height) * StandardStepDepth + landingDepth;
+
+            if (length < stairsLength)
+                return Mathf.Min(landingDepth, length * 0.4f);
+
+            if (IsTowardsPlus(direction))
+                min[RunAxisOf(direction)] += length - stairsLength;
+
+            length = stairsLength;
+            return landingDepth;
+        }
+
+        // Тянуть начали у дальней поперёк подъёма стороны — первый марш там.
+        private bool IsStartOnFarSideAcross(Vector3 min, BoxModelStairsDirection direction, float width)
+        {
+            var crossAxis = RunAxisOf(direction) == 0 ? 2 : 0;
+            return rectangle.Start[crossAxis] > min[crossAxis] + width / 2f + 0.001f;
+        }
+
+        private static int RunAxisOf(BoxModelStairsDirection direction)
+        {
+            return direction is BoxModelStairsDirection.PositiveX or BoxModelStairsDirection.NegativeX ? 0 : 2;
+        }
+
+        private static bool IsTowardsPlus(BoxModelStairsDirection direction)
+        {
+            return direction is BoxModelStairsDirection.PositiveX or BoxModelStairsDirection.PositiveZ;
         }
 
 
@@ -306,6 +401,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             if (!rectangle.IsActive || !TryGetShape(out var min, out var direction, out var width, out var length))
                 return;
+
+            if (IsSwitchback)
+            {
+                DrawSwitchbackPreview(min, direction, width, length);
+                return;
+            }
 
             var height = StairsHeight;
             var runAxis = direction is BoxModelStairsDirection.PositiveX or BoxModelStairsDirection.NegativeX ? 0 : 2;
@@ -329,6 +430,50 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderSceneText.DrawLabel(top, stepCount + " ступеней по " + LiveBuilderSceneText.FormatMeters(StepDepthFor(height, length)) + " м, " +
                                                     LiveBuilderSceneText.FormatMeters(length) + " × " +
                                                     LiveBuilderSceneText.FormatMeters(width) + " м, вверх на " + LiveBuilderSceneText.FormatMeters(height) + " м · Tab — повернуть");
+            }
+        }
+
+        // Лестница с площадкой: клетка — плоской рамкой на полу, лестница — рамкой габарита, стрелки первого марша вверх и второго обратно, надпись.
+        private void DrawSwitchbackPreview(Vector3 wellMin, BoxModelStairsDirection direction, float width, float wellLength)
+        {
+            var height = StairsHeight;
+            var runAxis = RunAxisOf(direction);
+            var crossAxis = runAxis == 0 ? 2 : 0;
+            var stairsMin = wellMin;
+            var stairsLength = wellLength;
+            var landingDepth = FitSwitchbackIntoWell(ref stairsMin, direction, width, ref stairsLength, height);
+            var flightWidth = Mathf.Max(0.25f, (width - StandardFlightGap) / 2f);
+            var isFirstOnOtherSide = IsStartOnFarSideAcross(wellMin, direction, width);
+
+            var wellSize = new Vector3(width, 0.02f, width);
+            wellSize[runAxis] = wellLength;
+            var stairsSize = new Vector3(width, height, width);
+            stairsSize[runAxis] = stairsLength;
+
+            // Марши — у ближнего к началу края лестницы, площадка — у дальнего.
+            var flightsMin = stairsMin;
+            var flightSize = stairsSize;
+            flightSize[runAxis] = stairsLength - landingDepth;
+            flightSize[crossAxis] = flightWidth;
+
+            if (!IsTowardsPlus(direction))
+                flightsMin[runAxis] += landingDepth;
+
+            var firstMin = flightsMin;
+            var secondMin = flightsMin;
+            firstMin[crossAxis] += isFirstOnOtherSide ? width - flightWidth : 0f;
+            secondMin[crossAxis] += isFirstOnOtherSide ? 0f : width - flightWidth;
+
+            using (new Handles.DrawingScope(rectangle.Plane.FrameToWorld))
+            {
+                Handles.color = BoxModelPartHandles.AddColor;
+                Handles.DrawWireCube(wellMin + wellSize / 2f, wellSize);
+                Handles.DrawWireCube(stairsMin + stairsSize / 2f, stairsSize);
+                DrawUpArrow(firstMin, flightSize, runAxis, direction);
+                DrawUpArrow(secondMin, flightSize, runAxis, BoxModelStairsTurns.Opposite(direction));
+
+                LiveBuilderSceneText.DrawLabel(stairsMin + stairsSize, StepCountFor(height) + " ступеней в двух маршах, площадка " + LiveBuilderSceneText.FormatMeters(landingDepth) +
+                                                                     " м, вверх на " + LiveBuilderSceneText.FormatMeters(height) + " м · Tab — повернуть");
             }
         }
 

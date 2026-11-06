@@ -12,6 +12,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Добавит коробка объём или вырежет дыру — по режиму <see cref="BoxModelDrawModeSetting"/>: в «Авто» наружу добавляет, внутрь вырезает.
     /// Рисуешь на объекте из коробок — коробка в нём; на прочей геометрии или в пустоте — в выделенном объекте или в новом.
     /// Новый объект на полу здания встаёт в его интерьер и привязывается к этажу целиком — вложенный объект (шахта, лестничная клетка).
+    /// Коробка на коробке, которая уже часть здания (площадка, балконная плита), — тоже его часть: в интерьер и к этажам, как она.
+    /// Коробка или новый объект на крыше здания — его часть, привязанная к крыше: добавил этажей — поднимется с ней.
     /// Вырезаешь в стене по линии или здании — встаёт вырез (<see cref="GeometryCutter"/>) в них, как у «Проёма»: едет за их точками и этажами.
     /// </summary>
     public sealed class BoxModelDrawGesture
@@ -32,6 +34,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // Стена по линии или здание, на котором начат прямоугольник: вырез в них — вырез-объект, а не коробка объекта вокруг. Иначе — null.
         private Component pathOwner;
+
+        // Здание, частью которого стала коробка, на которой начат прямоугольник (площадка, балкон). Иначе — null.
+        private SplineBuilding surfaceBuilding;
 
         private Vector3 rectangleStart;
         private Vector3 rectangleEnd;
@@ -77,6 +82,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             isCreatingNewModel = isForNewModel;
             pathOwner = isForNewModel ? null : PathOwnerUnder(worldRay);
+            surfaceBuilding = isForNewModel ? null : SurfaceBuildingUnder(worldRay);
             rectangleEnd = rectangleStart;
             typedSize.Clear();
             stage = DrawStage.Rectangle;
@@ -88,6 +94,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var hit = LiveBuilderSceneHit.Find(worldRay);
             return hit.IsPathOwnerCloser ? hit.PathOwner : null;
+        }
+
+        // Коробка под мышью — часть здания: новая на ней — тоже.
+        private static SplineBuilding SurfaceBuildingUnder(Ray worldRay)
+        {
+            return BoxModelPicker.TryPickSurface(worldRay, out var hit) ? LiveBuilderBuildingContext.BuildingOfSurface(hit) : null;
         }
 
 
@@ -266,7 +278,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (isNewModel)
                 AttachModelToBuilding(model, part);
             else
-                AttachToBuilding(model, part, pathOwner as SplineBuilding);
+                AttachToBuilding(model, part, pathOwner as SplineBuilding, surfaceBuilding);
 
             Selection.activeGameObject = part.gameObject;
 
@@ -305,8 +317,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Коробка в здании — его часть, как перегородка: в его интерьер и к его этажу. Коробка снаружи на стене здания (балкон, козырёк) — тоже,
-        // если по высоте она в здании. Вырез в перекрытии или балкон с «И этажи выше» — сразу на всех этажах выше; потом повтор по этажам — в «Этажи в здании».
-        private static void AttachToBuilding(BoxModel model, BoxModelPart part, SplineBuilding wallBuilding)
+        // если по высоте она в здании; и коробка на коробке, которая уже часть здания (ограждение на балконной плите).
+        // Вырез в перекрытии или балкон с «И этажи выше» — сразу на всех этажах выше; потом повтор по этажам — в «Этажи в здании».
+        // Коробка на крыше здания (будка выхода, вентиляция) — тоже его часть, но привязана к крыше: едет за ней, когда меняются этажи.
+        private static void AttachToBuilding(BoxModel model, BoxModelPart part, SplineBuilding wallBuilding, SplineBuilding surfaceBuilding)
         {
             var center = model.transform.TransformPoint(BoxModelShapeCollector.LocalMinOf(model, part.transform) + part.Size / 2f);
             var building = LiveBuilderBuildingContext.BuildingContaining(model, center);
@@ -314,8 +328,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (building == null && IsOnOuterWallOf(wallBuilding, model, center))
                 building = wallBuilding;
 
+            if (building == null && surfaceBuilding != null && SplineWallRebuilder.OuterModelOf(surfaceBuilding) == model)
+                building = surfaceBuilding;
+
             if (building == null)
+            {
+                AttachToRoof(part.transform, LiveBuilderBuildingContext.BuildingWithRoofAt(model, BottomCenterOf(model, part)));
                 return;
+            }
 
             Undo.SetTransformParent(part.transform, BoxModelFactory.InteriorTargetOf(building), true, "Create Box");
 
@@ -332,14 +352,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Новый объект на полу здания — вложенный объект в нём (шахта, лестничная клетка): в его интерьер и к его этажу целиком;
-        // с «И этажи выше» — сразу на всех этажах выше, одним мешем.
+        // с «И этажи выше» — сразу на всех этажах выше, одним мешем. Новый объект на крыше (чердак) — в интерьер и к крыше.
         private static void AttachModelToBuilding(BoxModel model, BoxModelPart firstPart)
         {
             var center = model.transform.TransformPoint(BoxModelShapeCollector.LocalMinOf(model, firstPart.transform) + firstPart.Size / 2f);
             var building = LiveBuilderBuildingContext.BuildingContaining(center);
 
             if (building == null)
+            {
+                AttachToRoof(model.transform, LiveBuilderBuildingContext.BuildingWithRoofAt(BottomCenterOf(model, firstPart)));
                 return;
+            }
 
             // Вложенный объект группа не повторяет (он сам по себе) — привязка своя, и в группе тоже.
             Undo.SetTransformParent(model.transform, BoxModelFactory.InteriorTargetOf(building), true, "Create Box Model");
@@ -355,6 +378,27 @@ namespace FeatherKit.EditorTools.LiveBuilder
             plane = default;
             isCreatingNewModel = false;
             pathOwner = null;
+            surfaceBuilding = null;
+        }
+
+
+        // Стоит на крыше здания — в его интерьер и к крыше. Здания нет — ничего.
+        private static void AttachToRoof(Transform node, SplineBuilding roofBuilding)
+        {
+            if (roofBuilding == null)
+                return;
+
+            Undo.SetTransformParent(node, BoxModelFactory.InteriorTargetOf(roofBuilding), true, "Create Box");
+
+            if (!BoxModelShapeCollector.IsPieceInsideStoreyCopies(node))
+                SplineBuildingLinkSync.AttachToRoof(node.gameObject, roofBuilding);
+        }
+
+        // Середина низа коробки в мире.
+        private static Vector3 BottomCenterOf(BoxModel model, BoxModelPart part)
+        {
+            var size = part.Size;
+            return model.transform.TransformPoint(BoxModelShapeCollector.LocalMinOf(model, part.transform) + new Vector3(size.x / 2f, 0f, size.z / 2f));
         }
 
 

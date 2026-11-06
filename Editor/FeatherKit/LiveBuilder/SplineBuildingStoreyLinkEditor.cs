@@ -7,7 +7,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Инспектор привязки к этажам здания — вместо сырых полей «Этаж» и «На этажах», как этажи у Revit:
     /// на каком этаже стоит и на каких повторяется — «Только этот», «По этаж…» или «И этажи выше»; у лестницы — ещё «и на последнем этаже».
-    /// Тот же блок показывает окно Live Builder у выделенного.
+    /// Привязано к крыше — одна строка об этом и кнопка поставить на этажи. Тот же блок показывает окно Live Builder у выделенного.
     /// </summary>
     [CustomEditor(typeof(SplineBuildingStoreyLink))]
     public class SplineBuildingStoreyLinkEditor : Editor
@@ -38,10 +38,30 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     Selection.activeGameObject = building.gameObject;
             }
 
+            if (link.IsOnRoof)
+            {
+                DrawRoof(link);
+                return;
+            }
+
             DrawStorey(link, count);
             DrawSpan(link, count);
             DrawTopStoreyToggle(link);
             GUILayout.Label("Высоты и шаг — от здания: поменяешь здание — подстроится само.", EditorStyles.wordWrappedMiniLabel);
+        }
+
+
+        // На крыше: где стоит и как вернуть на этажи.
+        private static void DrawRoof(SplineBuildingStoreyLink link)
+        {
+            GUILayout.Label("На крыше, " + LiveBuilderSceneText.FormatMeters(link.HeightAboveFloor) + " м над её верхом: добавишь этажей или поменяешь их высоту — поднимется с ней. " +
+                            "По этажам не повторяется.", EditorStyles.wordWrappedMiniLabel);
+
+            if (!GUILayout.Button(new GUIContent("Поставить на этажи", "Следить не за крышей, а за этажом, на котором стоит сейчас")))
+                return;
+
+            SplineBuildingLinkSync.Attach(link.gameObject, link.Building, false, link.GetComponent<BoxModelStairs>() != null);
+            GUIUtility.ExitGUI();
         }
 
 

@@ -44,7 +44,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     AddBuildingIssues(building, issues);
 
             foreach (var link in stage.FindComponentsOfType<SplineBuildingStoreyLink>())
-                if (link.IsValid && (link.Storey < 0 || link.Storey >= link.Building.StoreyCount))
+                if (link.IsValid && !link.IsOnRoof && (link.Storey < 0 || link.Storey >= link.Building.StoreyCount))
                     issues.Add(new LiveBuilderLevelIssue("«" + link.name + "» стоит на этаже " + (link.Storey + 1) + ", а у здания «" + link.Building.name +
                                                          "» этажей " + link.Building.StoreyCount + ": спрятан, пока этаж не вернётся.", link.gameObject));
 

@@ -41,7 +41,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var crossAxis = stairs.RunAxis == 0 ? 2 : 0;
             stairs.Width = box[crossAxis];
-            stairs.StepDepth = box[stairs.RunAxis] / stairs.StepCount;
+            stairs.StepDepth = stairs.StepDepthForLength(box[stairs.RunAxis]);
         }
     }
 }

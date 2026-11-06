@@ -21,15 +21,25 @@ namespace FeatherKit.LiveBuilder
     }
 
 
+    /// <summary>Сколько маршей: один прямой или два туда-обратно с площадкой посередине высоты (лестничная клетка).</summary>
+    public enum BoxModelStairsShape
+    {
+        [InspectorName("Прямая")] Straight,
+        [InspectorName("С площадкой")] Switchback
+    }
+
+
     /// <summary>
-    /// Лестничный марш в объекте из коробок: ступени — коробки объекта, поэтому режутся и повторяются как остальные.
+    /// Лестница в объекте из коробок: ступени — коробки объекта, поэтому режутся и повторяются как остальные.
+    /// Форма — один прямой марш или два марша туда-обратно с площадкой на середине высоты: вся лестничная клетка одной вещью,
+    /// поменял высоту — марши и площадка пересчитались.
     /// Вид — сплошной объём до пола или отдельные плиты ступеней, под которыми пусто.
     /// Число ступеней — от высоты: подъём ступени подгоняется, чтобы верх лестницы пришёлся ровно на высоту.
     /// Ходят по невидимому скату через носики ступеней — он только в коллайдере. Может пробить перекрытие над собой.
     /// Опора — угол с наименьшими координатами, как у коробки. В игру не попадает — остаётся собранный меш.
     /// </summary>
     [FDescription("Лестница: ступени — коробки объекта, ходят по невидимому скату через носики. Число ступеней — от высоты. " +
-                  "Вид — отдельные плиты ступеней или сплошной объём до пола. Опора — угол с наименьшими координатами.")]
+                  "Форма — прямой марш или два марша с площадкой. Вид — отдельные плиты ступеней или сплошной объём до пола. Опора — угол с наименьшими координатами.")]
     [AddComponentMenu("FeatherKit/Live Builder/Box Model Stairs")]
     [DisallowMultipleComponent]
     public class BoxModelStairs : MonoBehaviour
@@ -41,16 +51,30 @@ namespace FeatherKit.LiveBuilder
         public const float MinStepDepth = 0.1f;
 
         [Header("Форма")]
-        [Tooltip("Куда лестница идёт вверх, по осям объекта.")]
+        [Tooltip("Куда лестница идёт вверх, по осям объекта. У лестницы с площадкой — куда идёт первый марш.")]
         [SerializeField] private BoxModelStairsDirection direction = BoxModelStairsDirection.PositiveZ;
+
+        [Tooltip("Прямая — один марш. С площадкой — два марша туда-обратно и площадка на середине высоты: лестничная клетка одной вещью.")]
+        [SerializeField] private BoxModelStairsShape shape = BoxModelStairsShape.Straight;
 
         [Tooltip("Высота лестницы — от пола до верха последней ступени, м. Обычно высота этажа: 4.")]
         [Min(0.2f)]
         [SerializeField] private float height = 4f;
 
-        [Tooltip("Ширина марша, м.")]
+        [Tooltip("Ширина лестницы, м. У лестницы с площадкой — вся клетка: оба марша и зазор между ними.")]
         [Min(0.5f)]
         [SerializeField] private float width = 2f;
+
+        [Tooltip("Глубина площадки между маршами, м — только у лестницы с площадкой. По метрикам — не меньше ширины марша.")]
+        [Min(0.5f)]
+        [SerializeField] private float landingDepth = 1.6f;
+
+        [Tooltip("Зазор между маршами, м — только у лестницы с площадкой. 0 — марши вплотную, 0,2 — узкий колодец.")]
+        [Min(0f)]
+        [SerializeField] private float flightGap = 0.2f;
+
+        [Tooltip("Первый марш — с другой стороны клетки. Выключено — у меньших координат поперёк подъёма.")]
+        [SerializeField] private bool isFirstFlightOnOtherSide;
 
         [Tooltip("Ступени — каждая ступень отдельной плитой, под лестницей пусто. Сплошная — ступенчатый объём от пола.")]
         [SerializeField] private BoxModelStairsStyle style = BoxModelStairsStyle.SeparateSteps;
@@ -84,6 +108,12 @@ namespace FeatherKit.LiveBuilder
             set => direction = value;
         }
 
+        public BoxModelStairsShape Shape
+        {
+            get => shape;
+            set => shape = value;
+        }
+
         public float Height
         {
             get => height;
@@ -94,6 +124,24 @@ namespace FeatherKit.LiveBuilder
         {
             get => width;
             set => width = Mathf.Max(0.5f, value);
+        }
+
+        public float LandingDepth
+        {
+            get => landingDepth;
+            set => landingDepth = Mathf.Max(0.5f, value);
+        }
+
+        public float FlightGap
+        {
+            get => flightGap;
+            set => flightGap = Mathf.Max(0f, value);
+        }
+
+        public bool IsFirstFlightOnOtherSide
+        {
+            get => isFirstFlightOnOtherSide;
+            set => isFirstFlightOnOtherSide = value;
         }
 
         public BoxModelStairsStyle Style
@@ -128,11 +176,23 @@ namespace FeatherKit.LiveBuilder
             set => material = value;
         }
 
-        // Ступеней столько, чтобы подъём был ближе всего к желаемому.
-        public int StepCount => Mathf.Max(1, Mathf.RoundToInt(height / stepHeight));
+        // Ступеней столько, чтобы подъём был ближе всего к желаемому. У лестницы с площадкой — в обоих маршах вместе, не меньше двух.
+        public int StepCount => Mathf.Max(IsSwitchback ? 2 : 1, Mathf.RoundToInt(height / stepHeight));
 
-        // Длина марша по направлению подъёма, м.
-        public float Length => StepCount * stepDepth;
+        public bool IsSwitchback => shape == BoxModelStairsShape.Switchback;
+
+        // Ступеней в первом марше (до площадки) и во втором; у прямой второго нет.
+        public int FirstFlightStepCount => IsSwitchback ? StepCount / 2 : StepCount;
+        public int SecondFlightStepCount => StepCount - FirstFlightStepCount;
+
+        // Длина маршей по направлению подъёма, без площадки, м: марши лежат рядом, длина — по длинному.
+        public float FlightLength => Mathf.Max(FirstFlightStepCount, SecondFlightStepCount) * stepDepth;
+
+        // Ширина одного марша, м: у лестницы с площадкой — половина клетки без зазора.
+        public float FlightWidth => IsSwitchback ? Mathf.Max(0.25f, (width - flightGap) / 2f) : width;
+
+        // Длина всей лестницы по направлению подъёма, м: у лестницы с площадкой — марши и площадка.
+        public float Length => IsSwitchback ? FlightLength + landingDepth : StepCount * stepDepth;
 
         // Ось объекта, по которой идёт подъём: 0 — X, 2 — Z.
         public int RunAxis => direction is BoxModelStairsDirection.PositiveX or BoxModelStairsDirection.NegativeX ? 0 : 2;
@@ -148,6 +208,15 @@ namespace FeatherKit.LiveBuilder
                 size[RunAxis] = Length;
                 return size;
             }
+        }
+
+
+        // Глубина ступени, чтобы лестница легла ровно в эту длину по подъёму: у лестницы с площадкой площадка остаётся своей.
+        public float StepDepthForLength(float length)
+        {
+            var runLength = IsSwitchback ? length - landingDepth : length;
+            var steps = IsSwitchback ? Mathf.Max(FirstFlightStepCount, SecondFlightStepCount) : StepCount;
+            return Mathf.Max(MinStepDepth, runLength / steps);
         }
     }
 }
