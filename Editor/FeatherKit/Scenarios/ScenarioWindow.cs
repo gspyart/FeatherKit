@@ -37,7 +37,7 @@ namespace FeatherKit.EditorTools
 
         // ── Открыть и выбрать ────────────────────────────────────────────
 
-        [MenuItem("FeatherKit/Scenarios")]
+        [MenuItem("FeatherKit/Scenarios/Scenario List")]
         public static void OpenFromMenu()
         {
             Open(null);

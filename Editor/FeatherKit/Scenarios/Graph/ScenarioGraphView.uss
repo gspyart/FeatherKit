@@ -1,0 +1,363 @@
+/* Окно графа сценария. Тема редактора — классом на корне: .scenario-graph--dark или .scenario-graph--light. */
+
+/* ── Сетка: еле заметная, мелкая и крупная линия ──────────────────── */
+
+.scenario-graph--dark GridBackground {
+    --grid-background-color: rgb(32, 32, 32);
+    --line-color: rgba(255, 255, 255, 0.025);
+    --thick-line-color: rgba(255, 255, 255, 0.06);
+    --spacing: 20;
+    --thick-lines: 5;
+}
+
+.scenario-graph--light GridBackground {
+    --grid-background-color: rgb(196, 196, 196);
+    --line-color: rgba(0, 0, 0, 0.04);
+    --thick-line-color: rgba(0, 0, 0, 0.10);
+    --spacing: 20;
+    --thick-lines: 5;
+}
+
+/* ── Нода: шапка тёмная нейтральная, полоса категории слева, фон непрозрачный ── */
+
+.scenario-node #node-border {
+    border-left-width: 3px;
+}
+
+.scenario-node__header {
+    min-height: 34px;
+    border-bottom-width: 2px;
+    padding-right: 6px;
+    align-items: center;
+}
+
+.scenario-graph--dark .scenario-node__header { background-color: rgb(42, 42, 42); }
+.scenario-graph--light .scenario-node__header { background-color: rgb(206, 206, 206); }
+
+.scenario-node__icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    margin-left: 6px;
+    margin-right: 5px;
+}
+
+.scenario-node__titles {
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+    justify-content: center;
+}
+
+.scenario-node #title-label {
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+    -unity-font-style: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.scenario-graph--dark .scenario-node #title-label { color: rgb(228, 228, 228); }
+.scenario-graph--light .scenario-node #title-label { color: rgb(24, 24, 24); }
+
+.scenario-node__summary {
+    font-size: 10px;
+    margin: 0;
+    padding: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.scenario-graph--dark .scenario-node__summary { color: rgb(150, 150, 150); }
+.scenario-graph--light .scenario-node__summary { color: rgb(80, 80, 80); }
+
+.scenario-graph--dark .scenario-node #top,
+.scenario-graph--dark .scenario-node__body { background-color: rgb(52, 52, 52); }
+
+.scenario-graph--light .scenario-node #top,
+.scenario-graph--light .scenario-node__body { background-color: rgb(218, 218, 218); }
+
+.scenario-graph--light .scenario-node .port Label { color: rgb(30, 30, 30); }
+
+.scenario-node__fields {
+    padding: 2px 4px 4px 4px;
+}
+
+/* Подпись поля — 38 % ширины, длинная обрезается многоточием; полный текст в подсказке. */
+.scenario-node .unity-base-field__label {
+    width: 38%;
+    min-width: 80px;
+    max-width: 38%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Стопки блоков и исходы Wait For ──────────────────────────────── */
+
+.scenario-stack {
+    margin-top: 4px;
+    margin-bottom: 2px;
+}
+
+.scenario-stack__header {
+    flex-direction: row;
+    align-items: center;
+}
+
+.scenario-stack__header > Label {
+    -unity-font-style: bold;
+    min-width: 70px;
+    margin-left: 3px;
+}
+
+.scenario-stack__header > PropertyField {
+    flex-grow: 1;
+}
+
+.scenario-wait-cases {
+    margin-top: 4px;
+}
+
+.scenario-wait-cases > #cases-title {
+    -unity-font-style: bold;
+    margin-left: 3px;
+}
+
+.scenario-wait-cases > #cases-empty {
+    opacity: 0.6;
+    margin-left: 3px;
+}
+
+.scenario-wait-case {
+    margin-top: 2px;
+    padding: 0 3px 2px 3px;
+    border-radius: 3px;
+}
+
+.scenario-graph--dark .scenario-wait-case { background-color: rgba(0, 0, 0, 0.18); }
+.scenario-graph--light .scenario-wait-case { background-color: rgba(0, 0, 0, 0.07); }
+
+.scenario-wait-case #case-lost { color: rgb(230, 80, 80); }
+
+.scenario-wait-case__header {
+    flex-direction: row;
+    align-items: center;
+}
+
+.scenario-wait-case__header > Label {
+    flex-grow: 1;
+    -unity-font-style: bold;
+}
+
+.scenario-wait-case__button {
+    width: 22px;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.scenario-wait-cases__add {
+    flex-direction: row;
+    margin-top: 3px;
+}
+
+.scenario-wait-cases__add > Button {
+    flex-grow: 1;
+}
+
+/* ── Заметки: под нодами, текст обрезается рамкой ─────────────────── */
+
+.scenario-note {
+    position: absolute;
+    border-radius: 4px;
+    padding: 6px 8px;
+    overflow: hidden;
+}
+
+.scenario-note__text {
+    white-space: normal;
+    font-size: 13px;
+    color: rgb(236, 236, 236);
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.scenario-note__text--empty {
+    opacity: 0.5;
+}
+
+.scenario-note__field {
+    flex-grow: 1;
+    white-space: normal;
+}
+
+/* ── Поверх холста: подсказка пустого графа и строка состояния ────── */
+
+.scenario-overlay__hint {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 45%;
+    -unity-text-align: middle-center;
+    font-size: 14px;
+    opacity: 0.6;
+}
+
+.scenario-status-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 20px;
+    flex-direction: row;
+    align-items: center;
+    padding: 0 6px;
+}
+
+.scenario-graph--dark .scenario-status-bar { background-color: rgba(28, 28, 28, 0.9); }
+.scenario-graph--light .scenario-status-bar { background-color: rgba(222, 222, 222, 0.92); }
+
+.scenario-status-bar Label,
+.scenario-status-bar__button {
+    font-size: 11px;
+    margin-right: 12px;
+}
+
+.scenario-status-bar__button {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    padding: 0 2px;
+}
+
+.scenario-status-bar__keys {
+    margin-left: auto;
+    opacity: 0.6;
+}
+
+/* ── Шапка окна и полосы под ней ──────────────────────────────────── */
+
+.scenario-toolbar__crumbs {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.scenario-toolbar__button {
+    flex-direction: row;
+    align-items: center;
+}
+
+.scenario-toolbar__icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 3px;
+    flex-shrink: 0;
+}
+
+.scenario-toolbar__dirty {
+    -unity-font-style: bold;
+    font-size: 16px;
+    margin-left: 4px;
+}
+
+.scenario-bar {
+    flex-direction: row;
+    align-items: center;
+    padding: 3px 8px;
+}
+
+.scenario-bar > Label {
+    flex-grow: 1;
+    white-space: normal;
+}
+
+.scenario-graph--dark .scenario-bar--play { background-color: rgb(110, 85, 20); }
+.scenario-graph--light .scenario-bar--play { background-color: rgb(240, 205, 110); }
+.scenario-graph--dark .scenario-bar--shared { background-color: rgb(40, 70, 105); }
+.scenario-graph--light .scenario-bar--shared { background-color: rgb(165, 200, 235); }
+
+.scenario-window__empty-hint {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 40px;
+    -unity-text-align: middle-center;
+    opacity: 0.6;
+}
+
+/* ── Панель переменных ────────────────────────────────────────────── */
+
+.scenario-variable {
+    padding: 0 4px 4px 6px;
+}
+
+.scenario-variable__type,
+.scenario-variable__binding,
+.scenario-variable__warning {
+    flex-direction: row;
+    align-items: center;
+}
+
+.scenario-variable__type > Button,
+.scenario-variable__binding > .unity-base-field,
+.scenario-variable__binding > PropertyField {
+    flex-grow: 1;
+}
+
+.scenario-variable__warning {
+    margin-bottom: 2px;
+}
+
+.scenario-variable__warning > Image {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    margin-right: 3px;
+}
+
+.scenario-variable__hint {
+    white-space: normal;
+    opacity: 0.7;
+    padding: 2px 6px 4px 6px;
+}
+
+/* Строка переменной: имя — до 60 % с многоточием (полное — в подсказке), тип — справа и не сжимается. */
+.scenario-variable-field #contentItem {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.scenario-variable-field #pill {
+    max-width: 60%;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.scenario-variable-field #title-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.scenario-variable-field #typeLabel {
+    flex-shrink: 0;
+    min-width: 60px;
+    margin-left: 6px;
+    -unity-text-align: middle-right;
+}
+
+/* Подписи настроек переменной — 38 %, как на нодах. */
+.scenario-variable .unity-base-field__label,
+.scenario-variable__type > Label {
+    width: 38%;
+    min-width: 80px;
+    max-width: 38%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

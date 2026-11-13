@@ -59,6 +59,7 @@ namespace FeatherKit.Tests.Scenarios
                 asset.Graph.AddVariable(variable);
 
             var guard = asset.Graph.AddNode(new ScenarioGuardNode());
+            asset.Graph.AddNote(new ScenarioNote("Note", new Rect(0f, 0f, 200f, 100f)));
 
             try
             {
@@ -88,7 +89,10 @@ namespace FeatherKit.Tests.Scenarios
                     "id", "variableName", "kind", "objectTypeName", "isExposed", "isSaved", "initialValue",
                     "initialValue.flagValue", "initialValue.counterValue", "initialValue.numberValue", "initialValue.objectValue");
 
-                var lampIndex = asset.Graph.Variables.ToList().FindIndex(variable => variable.Name == "Lamp");
+                RequireRelative(graph.FindPropertyRelative("notes").GetArrayElementAtIndex(0), "id", "text", "area", "color");
+                Assert.That(serializedAsset.FindProperty("graph.notes.Array.data[0].color"), Is.Not.Null, "graph.notes.Array.data[0].color");
+
+                var lampIndex =asset.Graph.Variables.ToList().FindIndex(variable => variable.Name == "Lamp");
                 Assert.That(variables.GetArrayElementAtIndex(lampIndex).FindPropertyRelative("objectTypeName").stringValue,
                     Is.EqualTo("UnityEngine.Light, UnityEngine.CoreModule"));
             }

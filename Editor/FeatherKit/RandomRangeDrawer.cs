@@ -12,9 +12,9 @@ namespace FeatherKit.EditorTools
     public class RandomRangeDrawer : PropertyDrawer
     {
         private const float DotsWidth = 16f;
-        private const float BiasLabelWidth = 44f;
+        private const float BiasLabelWidth = 36f;
 
-        private static readonly GUIContent BiasLabel = new GUIContent("Уклон", "0 — всегда min, 0.5 — равномерно, 1 — всегда max");
+        private static readonly GUIContent BiasLabel = new GUIContent("Bias", "0 — always min, 0.5 — even, 1 — always max");
 
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)

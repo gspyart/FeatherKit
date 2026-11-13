@@ -12,6 +12,9 @@ namespace FeatherKit.Scenarios
         [SerializeField] private string text;
         [SerializeField] private Rect area = new Rect(0f, 0f, 200f, 100f);
 
+        [Tooltip("The note's background on the canvas. New notes are a muted blue")]
+        [SerializeField] private Color color = new Color(0.26f, 0.31f, 0.38f, 1f);
+
 
         public ScenarioNote(string text, Rect area)
         {
@@ -34,6 +37,12 @@ namespace FeatherKit.Scenarios
         {
             get => area;
             set => area = value;
+        }
+
+        public Color Color
+        {
+            get => color;
+            set => color = value;
         }
     }
 }
