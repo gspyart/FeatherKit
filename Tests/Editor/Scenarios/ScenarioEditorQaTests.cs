@@ -43,7 +43,7 @@ namespace FeatherKit.Tests.Scenarios
         // ── Заметки ──────────────────────────────────────────────────────
 
         [Test]
-        [Category("QA-Found")]
+        [Category("QA_Found")]
         public void NoteBeingEdited_CanvasRebuilt_TypedTextIsKept()
         {
             var noteView = graphView.graphElements.OfType<ScenarioNoteView>().Single();
@@ -62,7 +62,7 @@ namespace FeatherKit.Tests.Scenarios
         // ── Холст догоняет данные ────────────────────────────────────────
 
         [Test]
-        [Category("QA-Found")]
+        [Category("QA_Found")]
         public void NodeMovedOutsideCanvas_DataCheck_CanvasFollows()
         {
             var node = graphFile.Graph.Nodes[1];
@@ -82,7 +82,7 @@ namespace FeatherKit.Tests.Scenarios
         }
 
         [Test]
-        [Category("QA-Found")]
+        [Category("QA_Found")]
         public void VariableRenamedOutsideCanvas_DataCheck_PanelShowsNewName()
         {
             var serializedGraph = graphView.Host.SerializedGraph;
@@ -100,7 +100,7 @@ namespace FeatherKit.Tests.Scenarios
         // ── Зум ──────────────────────────────────────────────────────────
 
         [Test]
-        [Category("QA-Found")]
+        [Category("QA_Found")]
         public void FrameAll_CanZoomOutAsFarAsTheWheel()
         {
             // «A» и «Frame All» зовут GraphView.FrameAll, а он не отдаляет дальше minScale (0.25 без SetupZoom).
