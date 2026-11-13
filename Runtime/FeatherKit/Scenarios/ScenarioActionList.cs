@@ -7,7 +7,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>
     /// Вложенный столбик шагов внутри блока: ветки «Then» и «Else», тело повтора, ветка «In Parallel».
-    /// Шаги идут по очереди, фоновые — не дожидаясь; остановленный сценарий не начинает следующий шаг.
+    /// Шаги идут по очереди, фоновые — не дожидаясь; оборванная ветка или сценарий не начинает следующий шаг.
     /// </summary>
     [Serializable]
     public class ScenarioActionList
@@ -28,7 +28,7 @@ namespace FeatherKit.Scenarios
         {
             for (var index = 0; index < actions.Count; index++)
             {
-                if (run.IsStopped)
+                if (run.IsActiveBranchStopped)
                     yield break;
 
                 if (actions[index] != null)

@@ -1,23 +1,19 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using FeatherKit.Attributes;
-using AppContext = FeatherKit.Contexts.AppContext;
-using FeatherKit.Coroutines;
 using FeatherKit.Logging;
 using UnityEngine;
 
 namespace FeatherKit.Scenarios
 {
     /// <summary>
-    /// Сценарий без кода: когда что-то случилось и условия сошлись — выполнить шаги по очереди.
-    /// - слушает свои события, пока включён; запуск поверх идущего пропускается
-    /// - запуск идёт, пока идут и основные шаги, и фоновые — пущенные без «Wait Until Done»
-    /// - шаги идут на общем раннере корутин: выключение объекта их не обрывает, удаление — обрывает
-    /// - пересылает блокам свои Unity-сообщения: старт, вход в триггер и выход из него
-    /// - сообщает, чем кончилась каждая попытка запуска, — для журнала в редакторе
+    /// Сценарий без кода: граф, где ноды When начинают запуски, а провода ведут по нодам Do и нодам потока.
+    /// - граф встроенный или из файла; файл копируется на объект — у каждого свои переменные и Only Once
+    /// - слушает события нод When, пока включён; Stop обрывает запуски и плавно отпускает долгие эффекты
+    /// - пустой граф — старый режим: события, условия и шаги списками
+    /// - пересылает блокам Start и триггеры; сообщает журналу и подсветке, что идёт и чем кончилось
     /// </summary>
-    [FDescription("A scenario without code: “When” something happens and the “If” conditions are met — run the “Do” steps in order. Add blocks with the “+” button.")]
+    [FDescription("A scenario without code: “When” nodes start runs, wires lead them through “Do” steps and flow nodes. With an empty graph the old lists work: When → If → Do.")]
     public class Scenario : MonoBehaviour, IScenarioEventListener
     {
         private static readonly List<Scenario> activeScenarios = new List<Scenario>();
@@ -41,12 +37,17 @@ namespace FeatherKit.Scenarios
         [Tooltip("Permanent key of this scenario for checkpoints and saves")]
         [SerializeField] private string persistentId;
 
-        private bool isRunning;
-        private bool hasRun;
-        private int runNumber;
-        private CoroutineToken runToken;
-        private ScenarioRun currentRun;
-        private float runStartTime;
+        // Своя копия граф-файла: состояние нод и переменные не должны делиться между объектами.
+        [NonSerialized] private ScenarioGraphAsset graphAssetCopy;
+        [NonSerialized] private ScenarioGraph runningGraph;
+
+        private ScenarioWiring wiring;
+        private ScenarioRuns runs;
+        private ScenarioGraphVariables graphVariables;
+        private ScenarioHeldEffects heldEffects;
+        private ScenarioTriggerOccupants triggerOccupants;
+        private ScenarioListRunner listRunner;
+        private bool hasWarnedDisabledCall;
 
 
         /// <summary>Чем кончилась попытка запуска любого сценария — для журнала в редакторе.</summary>
@@ -63,13 +64,16 @@ namespace FeatherKit.Scenarios
         /// <summary>Сработал выход ноды графа: id ноды и id выхода. Для подсветки проводов в игре.</summary>
         public event Action<int, string> WireFired;
 
+        /// <summary>Сценарий позвали — TryRun, Run или нода Run Scenario; слушает событие Called.</summary>
+        internal event Action<GameObject> Called;
 
-        public bool IsRunning => isRunning;
 
-        public bool HasRun => hasRun;
+        public bool IsRunning => (listRunner != null && listRunner.IsRunning) || (runs != null && runs.HasRunningRuns);
 
-        /// <summary>Номер идущего основного шага; -1 — сценарий стоит или доигрывают только фоновые шаги.</summary>
-        public int CurrentActionIndex { get; private set; } = -1;
+        public bool HasRun => (listRunner != null && listRunner.HasRun) || (runs != null && runs.HasStarted);
+
+        /// <summary>Номер идущего основного шага старых списков; -1 — сценарий стоит или доигрывают только фоновые шаги.</summary>
+        public int CurrentActionIndex => listRunner != null ? listRunner.CurrentActionIndex : -1;
 
         public IReadOnlyList<ScenarioEvent> Events => events;
 
@@ -81,11 +85,14 @@ namespace FeatherKit.Scenarios
 
         public ScenarioGraphSource GraphSource => graphSource;
 
-        /// <summary>Граф, который исполняет сценарий: встроенный или из файла. Null — файл не выбран.</summary>
-        public ScenarioGraph Graph => graphSource == ScenarioGraphSource.Asset
-            ? graphAsset != null ? graphAsset.Graph : null
-            : graph;
-        // TODO этап 1, рантайм: копия граф-файла — [NonSerialized]-поле, уничтожается в OnDestroy; Graph в игре отдаёт копию.
+        /// <summary>Граф, который исполняет сценарий: встроенный или из файла, в игре — своя копия файла. Null — файл не выбран.</summary>
+        public ScenarioGraph Graph
+        {
+            get
+            {
+                return runningGraph ?? SourceGraph;
+            }
+        }
 
         public ScenarioGraphAsset GraphAsset => graphAsset;
 
@@ -98,130 +105,89 @@ namespace FeatherKit.Scenarios
         Scenario IScenarioEventListener.Scenario => this;
 
 
+        // ── Части ────────────────────────────────────────────────────────
+
+        internal ScenarioWiring Wiring => wiring;
+
+        internal ScenarioRuns Runs => runs;
+
+        internal ScenarioGraphVariables GraphVariables => graphVariables;
+
+        internal ScenarioHeldEffects HeldEffects => heldEffects;
+
+        // Старые списки — для части ScenarioListRunner: поля остаются здесь, чтобы не сбросить данные в сценах.
+        internal List<ScenarioAction> ListActions => actions;
+
+        internal List<ScenarioCondition> ListConditions => conditions;
+
+        internal ScenarioConditionsMode ListConditionsMode => conditionsMode;
+
+        internal bool ListRunsOnce => runsOnce;
+
+        /// <summary>Коллайдеры, которые сейчас внутри триггеров объекта, — для блоков, подписавшихся позже входа.</summary>
+        internal IReadOnlyCollection<Collider> CollidersInside => triggerOccupants != null
+            ? triggerOccupants.CollidersInside
+            : Array.Empty<Collider>();
+
+        /// <summary>Сценарий исполняет граф; пустой граф — живёт старыми списками. По данным: верно и до Awake.</summary>
+        internal bool UsesGraph
+        {
+            get
+            {
+                var usedGraph = runningGraph ?? SourceGraph;
+
+                return usedGraph != null && usedGraph.Nodes.Count > 0;
+            }
+        }
+
+        private ScenarioGraph SourceGraph => graphSource == ScenarioGraphSource.Asset
+            ? graphAsset != null ? graphAsset.Graph : null
+            : graph;
+
+
         // ── Запуск ───────────────────────────────────────────────────────
 
-        /// <summary>Запустить, если условия сошлись. False — уже идёт, уже отработал разовый или условия не сошлись.</summary>
+        /// <summary>
+        /// Запустить. Граф: сработают ноды When с событием Called; true — хоть одна пошла в Then.
+        /// Старые списки: false — уже идёт, уже отработал разовый или условия не сошлись.
+        /// </summary>
         public bool TryRun(GameObject instigator = null)
         {
-            if (isRunning || (runsOnce && hasRun))
-                return false;
-
-            var run = new ScenarioRun(this, instigator);
-
-            if (!AreConditionsMet(run))
+            if (!isActiveAndEnabled)
             {
-                Report(run, Time.time, ScenarioRunOutcome.ConditionsNotMet);
+                WarnDisabledCallOnce();
                 return false;
             }
 
-            var coroutines = AppContext.Current?.Coroutines;
+            if (UsesGraph)
+                return CallGraph(instigator, null);
 
-            if (coroutines == null)
-            {
-                FLog.Error(this, ("Scenario did not start: no AppContext — ", FLogColor.Bad), (name, FLogColor.Value));
-                return false;
-            }
-
-            hasRun = true;
-            isRunning = true;
-            runNumber++;
-            currentRun = run;
-            runStartTime = Time.time;
-
-            runToken = coroutines.Run(PerformRun(run, runNumber));
-
-            return true;
+            return listRunner != null && listRunner.TryRun(instigator);
         }
 
-        private bool AreConditionsMet(ScenarioRun run)
+        // Выключенный сценарий зовут часто — каждый кадр из Update или Timeline; одной строки в консоли хватит.
+        private void WarnDisabledCallOnce()
         {
-            return ScenarioConditionList.AreMet(conditions, conditionsMode, run);
-        }
-
-        // Основные шаги — своей веткой; запуск кончается, когда кончились все его ветки или одна упала.
-        // Номер запуска нужен, чтобы оборванная корутина не затёрла состояние следующего запуска.
-        private IEnumerator PerformRun(ScenarioRun run, int number)
-        {
-            run.StartBranch(PerformActions(run));
-
-            while (number == runNumber && run.Failure == null && run.HasRunningBranches)
-                yield return null;
-
-            if (number != runNumber)
-                yield break;
-
-            if (run.Failure == null)
-            {
-                FinishRun(number, ScenarioRunOutcome.Finished);
-                yield break;
-            }
-
-            var failedIndex = FailedActionIndexOf(run);
-
-            run.Stop();
-            ReportFailedAction(run, failedIndex);
-            FinishRun(number, ScenarioRunOutcome.Failed, failedIndex, run.Failure.Message);
-        }
-
-        private IEnumerator PerformActions(ScenarioRun run)
-        {
-            for (var index = 0; index < actions.Count; index++)
-            {
-                if (run.IsStopped)
-                    yield break;
-
-                if (actions[index] == null)
-                    continue;
-
-                CurrentActionIndex = index;
-                yield return run.PerformStep(actions[index]);
-            }
-
-            CurrentActionIndex = -1;
-        }
-
-        // Упал основной шаг или вложенный в него — номер идущего основного шага.
-        // Упал фоновый — его номер, если он сам основной шаг; вложенный фоновый номера не имеет.
-        private int FailedActionIndexOf(ScenarioRun run)
-        {
-            return run.HasFailedInBackground ? actions.IndexOf(run.FailedAction) : CurrentActionIndex;
-        }
-
-        private void ReportFailedAction(ScenarioRun run, int failedIndex)
-        {
-            var stepText = failedIndex >= 0 ? $" at step {failedIndex + 1}" : run.HasFailedInBackground ? " in a background step" : "";
-            var blockText = run.FailedAction != null ? $" ({run.FailedAction.GetType().Name})" : "";
-
-            FLog.Error(this, ("Scenario ", FLogColor.Bad), (name, FLogColor.Value),
-                ($" failed{stepText}{blockText}: ", FLogColor.Bad),
-                (run.Failure.Message, FLogColor.Muted));
-
-            Debug.LogException(run.Failure, this);
-        }
-
-        private void FinishRun(int number, ScenarioRunOutcome outcome, int failedActionIndex = -1, string failureMessage = null)
-        {
-            if (number != runNumber)
+            if (hasWarnedDisabledCall)
                 return;
 
-            isRunning = false;
-            CurrentActionIndex = -1;
-
-            Report(currentRun, runStartTime, outcome, failedActionIndex, failureMessage);
+            hasWarnedDisabledCall = true;
+            FLog.Warning(this, ("Scenario ", FLogColor.Bad), (name, FLogColor.Value), (" is disabled — not called", FLogColor.Bad));
         }
 
-        private void Report(ScenarioRun run, float startTime, ScenarioRunOutcome outcome,
-            int failedActionIndex = -1, string failureMessage = null)
+        /// <summary>Позвать граф: сработают ноды When с событием Called. Начатые запуски — в startedRuns, если он дан.</summary>
+        internal bool CallGraph(GameObject instigator, List<ScenarioRun> startedRuns)
         {
-            if (RunReported == null)
-                return;
+            if (!isActiveAndEnabled || runs == null)
+                return false;
 
-            var instigatorName = run.Instigator != null ? run.Instigator.name : null;
+            startedRuns ??= new List<ScenarioRun>();
+            var countBefore = startedRuns.Count;
 
-            RunReported(new ScenarioRunRecord(this, instigatorName, startTime, Time.time, outcome,
-                failedActionIndex, failureMessage));
+            runs.CollectStartedRuns(startedRuns, () => RaiseInOwnOccurrence(Called, instigator));
+
+            return startedRuns.Count > countBefore;
         }
-
 
         /// <summary>Запуск для кнопок UnityEvent и сигналов Timeline: им нужен метод без результата.</summary>
         public void Run()
@@ -231,40 +197,75 @@ namespace FeatherKit.Scenarios
 
 
         /// <summary>
-        /// Оборвать идущие шаги, фоновые тоже. Начатое шагами на других объектах —
-        /// звук, Timeline, другой сценарий — доигрывает само.
+        /// Оборвать все запуски, фоновые шаги тоже, и плавно отпустить долгие эффекты. Начатое шагами
+        /// на других объектах — звук, Timeline, другой сценарий — доигрывает само.
         /// </summary>
         public void Stop()
         {
-            if (!isRunning)
-                return;
-
-            runNumber++;
-            isRunning = false;
-            CurrentActionIndex = -1;
-
-            currentRun.Stop();
-            runToken.Stop();
-            Report(currentRun, runStartTime, ScenarioRunOutcome.Stopped);
+            try
+            {
+                listRunner?.Stop();
+                runs?.StopAll();
+            }
+            finally
+            {
+                ResetLiveNodes();
+                heldEffects?.ReleaseAll();
+            }
         }
 
+        // Запуски уже оборваны; то, что ноды держат сверх них, — подписки и списки ожиданий — сбрасываем тоже.
+        private void ResetLiveNodes()
+        {
+            if (runningGraph == null)
+                return;
+
+            foreach (var node in runningGraph.Nodes)
+                (node as IScenarioLiveNode)?.ResetLiveState();
+        }
+
+        // ── Подсветка и журнал ───────────────────────────────────────────
 
         /// <summary>Шаг сейчас идёт — основной, вложенный или фоновый. Для подсветки в инспекторе.</summary>
         public bool IsPerforming(ScenarioAction action)
         {
-            return isRunning && currentRun.IsPerforming(action);
+            return listRunner != null && listRunner.IsPerforming(action);
         }
 
         /// <summary>Нода графа сейчас идёт хоть в одном запуске. Для подсветки на холсте.</summary>
         public bool IsPerforming(int nodeId)
         {
-            return false; // TODO этап 1, рантайм
+            return runs != null && runs.IsPerforming(nodeId);
         }
 
 
         internal void ReportWireFired(int nodeId, string portId)
         {
             WireFired?.Invoke(nodeId, portId);
+        }
+
+        internal void ReportRun(ScenarioRunRecord record)
+        {
+            RunReported?.Invoke(record);
+        }
+
+
+        // Рассылка — свой «случай»: ожидание, начатое из-за неё, её же не засчитывает.
+        private static void RaiseInOwnOccurrence<T>(Action<T> handlers, T argument)
+        {
+            if (handlers == null)
+                return;
+
+            ScenarioEventOccurrences.Begin();
+
+            try
+            {
+                handlers.Invoke(argument);
+            }
+            finally
+            {
+                ScenarioEventOccurrences.End();
+            }
         }
 
 
@@ -283,14 +284,75 @@ namespace FeatherKit.Scenarios
         }
 
 
+        // ── Подготовка графа ─────────────────────────────────────────────
+
+        private void PrepareGraph()
+        {
+            runningGraph = graphSource == ScenarioGraphSource.Asset ? CopyGraphAsset() : graph;
+
+            // Привязки — только у граф-файла: во встроенном графе старые привязки не перекрывают его значения.
+            var bindings = graphSource == ScenarioGraphSource.Asset ? variableBindings : null;
+
+            wiring = new ScenarioWiring(runningGraph, this);
+            runs = new ScenarioRuns(this);
+            graphVariables = new ScenarioGraphVariables(runningGraph, bindings);
+            heldEffects = new ScenarioHeldEffects(this);
+            triggerOccupants = new ScenarioTriggerOccupants();
+            listRunner = new ScenarioListRunner(this);
+        }
+
+        private ScenarioGraph CopyGraphAsset()
+        {
+            if (graphAsset == null)
+                return null;
+
+            graphAssetCopy = Instantiate(graphAsset);
+            graphAssetCopy.name = graphAsset.name;
+
+            return graphAssetCopy.Graph;
+        }
+
+
+        private void AttachEvents()
+        {
+            if (UsesGraph)
+            {
+                foreach (var node in runningGraph.Nodes)
+                    (node as ScenarioWhenNode)?.Attach(this);
+
+                return;
+            }
+
+            foreach (var scenarioEvent in events)
+                scenarioEvent?.Attach(this);
+        }
+
+        private void ReleaseEvents()
+        {
+            if (UsesGraph)
+            {
+                foreach (var node in runningGraph.Nodes)
+                    (node as ScenarioWhenNode)?.Release();
+
+                return;
+            }
+
+            foreach (var scenarioEvent in events)
+                scenarioEvent?.Release();
+        }
+
+
         // ── Unity ────────────────────────────────────────────────────────
+
+        private void Awake()
+        {
+            PrepareGraph();
+        }
 
         private void OnEnable()
         {
             activeScenarios.Add(this);
-
-            foreach (var scenarioEvent in events)
-                scenarioEvent?.Attach(this);
+            AttachEvents();
         }
 
         private void Start()
@@ -301,24 +363,27 @@ namespace FeatherKit.Scenarios
         private void OnDisable()
         {
             activeScenarios.Remove(this);
-
-            foreach (var scenarioEvent in events)
-                scenarioEvent?.Release();
+            ReleaseEvents();
         }
 
         private void OnDestroy()
         {
             Stop();
+
+            if (graphAssetCopy != null)
+                Destroy(graphAssetCopy);
         }
 
         private void OnTriggerEnter(Collider other)
         {
-            TriggerEntered?.Invoke(other);
+            triggerOccupants?.HandleEntered(other);
+            RaiseInOwnOccurrence(TriggerEntered, other);
         }
 
         private void OnTriggerExit(Collider other)
         {
-            TriggerExited?.Invoke(other);
+            triggerOccupants?.HandleExited(other);
+            RaiseInOwnOccurrence(TriggerExited, other);
         }
     }
 }

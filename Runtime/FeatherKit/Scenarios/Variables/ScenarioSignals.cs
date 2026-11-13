@@ -12,8 +12,19 @@ namespace FeatherKit.Scenarios
 
         public static void Send(ScenarioSignal signal, GameObject instigator)
         {
-            if (signal != null)
-                Sent?.Invoke(signal, instigator);
+            if (signal == null || Sent == null)
+                return;
+
+            ScenarioEventOccurrences.Begin();
+
+            try
+            {
+                Sent.Invoke(signal, instigator);
+            }
+            finally
+            {
+                ScenarioEventOccurrences.End();
+            }
         }
 
 

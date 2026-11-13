@@ -6,14 +6,15 @@ using UnityEngine;
 namespace FeatherKit.Scenarios
 {
     /// <summary>
-    /// Нода «Wait For»: стоит, пока не наступит один из исходов, и идёт в его выход.
+    /// Нода «Wait For»: стоит, пока не наступит один из исходов, и идёт в его выход — в следующем кадре.
     /// - исход — событие или условие; первый наступивший побеждает, в одном кадре — верхний в списке
-    /// - события слушает, условия проверяет только пока на ноде кто-то ждёт
+    /// - события слушает, условия проверяет, пока на ноде ждут; событие, на котором ожидание началось, не в счёт
     /// - не дождался за Timeout — выход Timed Out; 0 — ждать вечно
+    /// - выключенный объект триггеров не получает: исход-триггер на нём дождётся только тайм-аута
     /// </summary>
     [Serializable]
     [ScenarioBlock("Flow/Wait For")]
-    public class ScenarioWaitForNode : ScenarioFlowNode, IScenarioEventListener
+    public class ScenarioWaitForNode : ScenarioFlowNode, IScenarioEventListener, IScenarioLiveNode
     {
         public static readonly ScenarioOutput TimedOut = new ScenarioOutput("timedOut", "Timed Out");
 
@@ -31,6 +32,9 @@ namespace FeatherKit.Scenarios
         [SerializeField] private float checkInterval;
 
         [NonSerialized] private Scenario listeningScenario;
+
+        // Идущие ожидания: при Run Alongside на одной ноде ждут несколько запусков.
+        [NonSerialized] private List<WaitForNodeWaiter> waiters;
 
 
         public IReadOnlyList<ScenarioWaitCase> Cases => cases;
@@ -153,18 +157,155 @@ namespace FeatherKit.Scenarios
 
         // ── Ожидание ─────────────────────────────────────────────────────
 
+        // Первая проверка — сразу: исход, наступивший до входа, пропускает ноду в том же кадре.
         protected override IEnumerator Perform(ScenarioRun run, ScenarioInput input)
         {
-            // TODO этап 1, рантайм: подписать события исходов на первом ожидании, проверять условия, тайм-аут.
-            // TODO этап 1, рантайм: listeningScenario заполнить до Attach событий исходов — им нужен Scenario.
-            yield break;
+            var waiter = BeginWaiting(run);
+            var schedule = new ScenarioCheckSchedule(checkInterval);
+            var startTime = Time.time;
+
+            while (true)
+            {
+                var winningIndex = waiter.HasEventFromEarlierFrame || !schedule.IsDue()
+                    ? waiter.EventCaseIndex
+                    : Mathf.Min(waiter.EventCaseIndex, FirstMetConditionIndex(run));
+
+                if (winningIndex < cases.Count)
+                {
+                    var winningCase = cases[winningIndex];
+                    EndWaiting(waiter);
+                    Fire(run, winningCase.Output);
+                    yield break;
+                }
+
+                if (timeout > 0f && Time.time - startTime >= timeout)
+                {
+                    EndWaiting(waiter);
+                    Fire(run, TimedOut);
+                    yield break;
+                }
+
+                yield return null;
+            }
+        }
+
+        private int FirstMetConditionIndex(ScenarioRun run)
+        {
+            for (var index = 0; index < cases.Count; index++)
+            {
+                var condition = cases[index]?.Condition;
+
+                if (condition != null && cases[index].AwaitedEvent == null && condition.IsMet(run))
+                    return index;
+            }
+
+            return int.MaxValue;
+        }
+
+
+        // ── Подписка на события исходов ──────────────────────────────────
+
+        // Конец ожидания ловим и у оборванной ветки: иначе события остались бы подписанными навсегда.
+        private WaitForNodeWaiter BeginWaiting(ScenarioRun run)
+        {
+            waiters ??= new List<WaitForNodeWaiter>();
+
+            var waiter = new WaitForNodeWaiter(ScenarioEventOccurrences.LatestStarted);
+            waiters.Add(waiter);
+            run.ActiveBranch?.CallWhenFinished(() => EndWaiting(waiter));
+
+            if (waiters.Count == 1)
+                AttachCaseEvents(run.Scenario);
+
+            return waiter;
+        }
+
+        private void AttachCaseEvents(Scenario scenario)
+        {
+            listeningScenario = scenario;
+
+            foreach (var waitCase in cases)
+                waitCase?.AwaitedEvent?.Attach(this);
+        }
+
+
+        private void EndWaiting(WaitForNodeWaiter waiter)
+        {
+            if (waiters.Remove(waiter) && waiters.Count == 0)
+                ReleaseCaseEvents();
+        }
+
+        private void ReleaseCaseEvents()
+        {
+            foreach (var waitCase in cases)
+                waitCase?.AwaitedEvent?.Release();
+
+            listeningScenario = null;
+        }
+
+
+        // IScenarioLiveNode
+        void IScenarioLiveNode.ResetLiveState()
+        {
+            if (waiters == null || waiters.Count == 0)
+                return;
+
+            waiters.Clear();
+            ReleaseCaseEvents();
         }
 
 
         // IScenarioEventListener
         public void HandleEventFired(ScenarioEvent firedEvent, GameObject instigator)
         {
-            // TODO этап 1, рантайм: исход-событие наступил — у всех идущих ожиданий этой ноды.
+            if (waiters == null)
+                return;
+
+            for (var caseIndex = 0; caseIndex < cases.Count; caseIndex++)
+            {
+                if (cases[caseIndex] == null || cases[caseIndex].AwaitedEvent != firedEvent)
+                    continue;
+
+                foreach (var waiter in waiters)
+                    waiter.NoteEvent(caseIndex);
+
+                return;
+            }
+        }
+
+
+        /// <summary>Одно идущее ожидание на ноде: какое событие исходов пришло и в каком кадре.</summary>
+        private class WaitForNodeWaiter
+        {
+            // Рассылки с номером не больше начались до ожидания: стук, начавший запуск, — не второй стук.
+            private readonly int lastOccurrenceBeforeWait;
+
+            private int eventFrame;
+
+
+            public WaitForNodeWaiter(int lastOccurrenceBeforeWait)
+            {
+                this.lastOccurrenceBeforeWait = lastOccurrenceBeforeWait;
+            }
+
+
+            /// <summary>Исход-событие, пришедшее первым; в одном кадре — верхнее. int.MaxValue — ещё не было.</summary>
+            public int EventCaseIndex { get; private set; } = int.MaxValue;
+
+            /// <summary>Событие пришло кадром раньше проверки условий — оно наступило первым и побеждает.</summary>
+            public bool HasEventFromEarlierFrame => EventCaseIndex != int.MaxValue && eventFrame < Time.frameCount;
+
+
+            public void NoteEvent(int caseIndex)
+            {
+                var occurrence = ScenarioEventOccurrences.Current;
+
+                if (HasEventFromEarlierFrame || (occurrence != 0 && occurrence <= lastOccurrenceBeforeWait))
+                    return;
+
+                eventFrame = Time.frameCount;
+                EventCaseIndex = Mathf.Min(EventCaseIndex, caseIndex);
+            }
         }
     }
 }

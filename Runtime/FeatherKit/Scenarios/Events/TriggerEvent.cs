@@ -43,6 +43,18 @@ namespace FeatherKit.Scenarios
 
             Scenario.TriggerEntered += HandleEntered;
             Scenario.TriggerExited += HandleExited;
+
+            CountVisitorsAlreadyInside();
+        }
+
+        // Гость, вошедший до подписки, — уже внутри: его выход сработает, Stay тикает сразу, а вход не повторяется.
+        private void CountVisitorsAlreadyInside()
+        {
+            foreach (var collider in Scenario.CollidersInside)
+                CountIn(collider, out _);
+
+            if (crossing == TriggerCrossing.Staying && collidersInsideByVisitor.Count > 0 && !staying.IsRunning)
+                staying = AppContext.Current.Coroutines.Run(FireEveryFrameWhileInside());
         }
 
         protected override void OnReleased()
@@ -60,13 +72,7 @@ namespace FeatherKit.Scenarios
 
         private void HandleEntered(Collider other)
         {
-            if (!IsVisitor(other, out var visitor))
-                return;
-
-            collidersInsideByVisitor.TryGetValue(visitor, out var count);
-            collidersInsideByVisitor[visitor] = count + 1;
-
-            if (count > 0)
+            if (!CountIn(other, out var visitor))
                 return;
 
             if (crossing == TriggerCrossing.Entered)
@@ -74,6 +80,22 @@ namespace FeatherKit.Scenarios
             else if (crossing == TriggerCrossing.Staying && !staying.IsRunning)
                 staying = AppContext.Current.Coroutines.Run(FireEveryFrameWhileInside());
         }
+
+        /// <summary>Учесть коллайдер гостя. True — гость только что вошёл: до этого его коллайдеров внутри не было.</summary>
+        private bool CountIn(Collider other, out GameObject visitor)
+        {
+            if (other == null || !IsVisitor(other, out visitor))
+            {
+                visitor = null;
+                return false;
+            }
+
+            collidersInsideByVisitor.TryGetValue(visitor, out var count);
+            collidersInsideByVisitor[visitor] = count + 1;
+
+            return count == 0;
+        }
+
 
         private void HandleExited(Collider other)
         {

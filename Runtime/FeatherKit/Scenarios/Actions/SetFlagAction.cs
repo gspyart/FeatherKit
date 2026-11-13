@@ -3,28 +3,28 @@ using UnityEngine;
 
 namespace FeatherKit.Scenarios
 {
-    /// <summary>Поставить флаг сценариев: включить, выключить или переключить.</summary>
+    /// <summary>Поставить флаг — общий или переменную графа: включить, выключить или переключить.</summary>
     [Serializable]
     [ScenarioBlock("Variables/Change Flag")]
     public class SetFlagAction : ScenarioInstantAction
     {
         [ScenarioLabel("Flag")]
-        [SerializeField] private ScenarioFlag flag;
+        [SerializeField] private ScenarioFlagReference flag = new ScenarioFlagReference();
 
 
         [ScenarioLabel("Action")]
         [SerializeField] private ScenarioSwitch change;
 
 
-        public override string Summary => flag != null ? $"{change.Describe()} {flag.name}" : "no flag selected";
+        public override string Summary => flag.IsEmpty ? flag.Summary : $"{change.Describe()} {flag.Summary}";
 
 
         protected override void Apply(ScenarioRun run)
         {
-            if (flag == null)
+            if (flag.IsEmpty)
                 throw new InvalidOperationException("No flag selected");
 
-            flag.Value = change.StateAfter(flag.Value);
+            flag.Set(run, change.StateAfter(flag.Get(run)));
         }
     }
 }

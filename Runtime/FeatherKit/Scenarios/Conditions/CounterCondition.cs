@@ -3,13 +3,13 @@ using UnityEngine;
 
 namespace FeatherKit.Scenarios
 {
-    /// <summary>Сравнить счётчик с числом: «рычагов ≥ 3».</summary>
+    /// <summary>Сравнить счётчик — общий или переменную графа — с числом: «рычагов ≥ 3».</summary>
     [Serializable]
     [ScenarioBlock("Variables/Compare Counter")]
     public class CounterCondition : ScenarioCondition
     {
         [ScenarioLabel("Counter")]
-        [SerializeField] private ScenarioCounter counter;
+        [SerializeField] private ScenarioCounterReference counter = new ScenarioCounterReference();
 
         [ScenarioLabel("Comparison")]
         [SerializeField] private ScenarioComparison comparison = ScenarioComparison.GreaterOrEqual;
@@ -18,12 +18,12 @@ namespace FeatherKit.Scenarios
         [SerializeField] private int value = 1;
 
 
-        public override string Summary => counter != null ? $"{counter.name} {comparison.Symbol()} {value}" : "no counter selected";
+        public override string Summary => counter.IsEmpty ? counter.Summary : $"{counter.Summary} {comparison.Symbol()} {value}";
 
 
         protected override bool Check(ScenarioRun run)
         {
-            return counter != null && comparison.Holds(ScenarioCounters.Get(counter), value);
+            return !counter.IsEmpty && comparison.Holds(counter.Get(run), value);
         }
     }
 }
