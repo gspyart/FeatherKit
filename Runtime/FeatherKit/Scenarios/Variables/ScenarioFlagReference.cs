@@ -32,6 +32,9 @@ namespace FeatherKit.Scenarios
 
         public bool UsesVariable => !string.IsNullOrEmpty(variableId);
 
+        /// <summary>Ни ассета, ни переменной — блок не настроен.</summary>
+        internal bool IsEmpty => !UsesVariable && flag == null;
+
         public string Summary => UsesVariable ? "graph variable" : flag != null ? flag.name : "no flag selected";
 
 
@@ -43,14 +46,14 @@ namespace FeatherKit.Scenarios
 
         public bool Get(ScenarioRun run)
         {
-            // TODO этап 1, рантайм: переменная графа из экземпляра, которому принадлежит run.
-            return !UsesVariable && ScenarioFlags.Get(flag);
+            return UsesVariable ? run.Scenario.GraphVariables.GetFlag(variableId) : ScenarioFlags.Get(flag);
         }
 
         public void Set(ScenarioRun run, bool value)
         {
-            // TODO этап 1, рантайм: переменная графа из экземпляра, которому принадлежит run.
-            if (!UsesVariable)
+            if (UsesVariable)
+                run.Scenario.GraphVariables.SetFlag(variableId, value);
+            else
                 ScenarioFlags.Set(flag, value);
         }
     }

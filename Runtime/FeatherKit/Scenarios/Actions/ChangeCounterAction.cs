@@ -3,13 +3,13 @@ using UnityEngine;
 
 namespace FeatherKit.Scenarios
 {
-    /// <summary>Изменить счётчик: прибавить (отрицательное — отнять) или задать значение.</summary>
+    /// <summary>Изменить счётчик — общий или переменную графа: прибавить (отрицательное — отнять) или задать значение.</summary>
     [Serializable]
     [ScenarioBlock("Variables/Change Counter")]
     public class ChangeCounterAction : ScenarioInstantAction
     {
         [ScenarioLabel("Counter")]
-        [SerializeField] private ScenarioCounter counter;
+        [SerializeField] private ScenarioCounterReference counter = new ScenarioCounterReference();
 
         [ScenarioLabel("Action")]
         [SerializeField] private CounterChange change;
@@ -19,17 +19,17 @@ namespace FeatherKit.Scenarios
         [SerializeField] private int amount = 1;
 
 
-        public override string Summary => counter == null
-            ? "no counter selected"
-            : change == CounterChange.Add ? $"{counter.name} {amount:+0;-0;+0}" : $"{counter.name} = {amount}";
+        public override string Summary => counter.IsEmpty
+            ? counter.Summary
+            : change == CounterChange.Add ? $"{counter.Summary} {amount:+0;-0;+0}" : $"{counter.Summary} = {amount}";
 
 
         protected override void Apply(ScenarioRun run)
         {
-            if (counter == null)
+            if (counter.IsEmpty)
                 throw new InvalidOperationException("No counter selected");
 
-            counter.Value = change == CounterChange.Add ? counter.Value + amount : amount;
+            counter.Set(run, change == CounterChange.Add ? counter.Get(run) + amount : amount);
         }
     }
 

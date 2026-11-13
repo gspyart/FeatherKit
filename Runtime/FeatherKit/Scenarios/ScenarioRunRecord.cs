@@ -2,12 +2,13 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>
     /// Чем кончилась одна попытка запуска сценария — строка журнала в окне сценариев.
-    /// Почему не сработал, кто вызвал, на каком шаге оборвался.
+    /// Почему не сработал, кто вызвал, на каком шаге или ноде графа оборвался.
     /// </summary>
     public readonly struct ScenarioRunRecord
     {
         public ScenarioRunRecord(Scenario scenario, string instigatorName, float startTime, float endTime,
-            ScenarioRunOutcome outcome, int failedActionIndex = -1, string failureMessage = null)
+            ScenarioRunOutcome outcome, int failedActionIndex = -1, string failureMessage = null,
+            int startNodeId = -1, int failedNodeId = -1)
         {
             Scenario = scenario;
             InstigatorName = instigatorName;
@@ -16,6 +17,8 @@ namespace FeatherKit.Scenarios
             Outcome = outcome;
             FailedActionIndex = failedActionIndex;
             FailureMessage = failureMessage;
+            StartNodeId = startNodeId;
+            FailedNodeId = failedNodeId;
         }
 
 
@@ -34,6 +37,12 @@ namespace FeatherKit.Scenarios
         public int FailedActionIndex { get; }
 
         public string FailureMessage { get; }
+
+        /// <summary>Id ноды When, с которой начался запуск графа; -1 — запуск старого списка шагов.</summary>
+        public int StartNodeId { get; }
+
+        /// <summary>Id ноды графа, на которой запуск упал; -1 — не падал или упал вне ноды.</summary>
+        public int FailedNodeId { get; }
     }
 
 

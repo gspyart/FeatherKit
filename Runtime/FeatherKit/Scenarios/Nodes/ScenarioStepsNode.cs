@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 
 namespace FeatherKit.Scenarios
@@ -26,6 +27,17 @@ namespace FeatherKit.Scenarios
         public void AddStep(ScenarioAction step)
         {
             steps.Add(step);
+        }
+
+
+        // ── Ход ноды ─────────────────────────────────────────────────────
+
+        internal IEnumerator Enter(ScenarioRun run)
+        {
+            yield return steps.Perform(run);
+
+            if (!run.IsActiveBranchStopped)
+                run.Fire(this, Done);
         }
     }
 }

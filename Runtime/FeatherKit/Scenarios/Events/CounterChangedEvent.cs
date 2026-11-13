@@ -3,13 +3,13 @@ using UnityEngine;
 
 namespace FeatherKit.Scenarios
 {
-    /// <summary>Счётчик изменился и теперь подходит под сравнение: «рычагов стало ≥ 3».</summary>
+    /// <summary>Счётчик — общий или переменная графа — изменился и теперь подходит под сравнение: «рычагов стало ≥ 3».</summary>
     [Serializable]
     [ScenarioBlock("Variables/Counter Changed")]
     public class CounterChangedEvent : ScenarioEvent
     {
         [ScenarioLabel("Counter")]
-        [SerializeField] private ScenarioCounter counter;
+        [SerializeField] private ScenarioCounterReference counter = new ScenarioCounterReference();
 
         [ScenarioLabel("Comparison")]
         [SerializeField] private ScenarioComparison comparison = ScenarioComparison.GreaterOrEqual;
@@ -17,23 +17,46 @@ namespace FeatherKit.Scenarios
         [ScenarioLabel("Number")]
         [SerializeField] private int value = 1;
 
+        // Переменные того экземпляра графа, где событие подписано: отписываться надо от них же.
+        [NonSerialized] private ScenarioGraphVariables listenedVariables;
 
-        public override string Summary => counter != null ? $"{counter.name} {comparison.Symbol()} {value}" : "no counter selected";
+
+        public override string Summary => counter.IsEmpty ? counter.Summary : $"{counter.Summary} {comparison.Symbol()} {value}";
 
 
         protected override void OnAttached()
         {
-            ScenarioCounters.Changed += HandleCounterChanged;
+            if (counter.UsesVariable)
+            {
+                listenedVariables = Scenario.GraphVariables;
+                listenedVariables.Changed += HandleVariableChanged;
+            }
+            else
+            {
+                ScenarioCounters.Changed += HandleCounterChanged;
+            }
         }
 
         protected override void OnReleased()
         {
             ScenarioCounters.Changed -= HandleCounterChanged;
+
+            if (listenedVariables != null)
+                listenedVariables.Changed -= HandleVariableChanged;
+
+            listenedVariables = null;
         }
+
 
         private void HandleCounterChanged(ScenarioCounter changedCounter, int newValue)
         {
-            if (changedCounter == counter && comparison.Holds(newValue, value))
+            if (changedCounter == counter.Counter && comparison.Holds(newValue, value))
+                Fire(null);
+        }
+
+        private void HandleVariableChanged(ScenarioVariableDefinition variable)
+        {
+            if (variable.Id == counter.VariableId && comparison.Holds(listenedVariables.GetCounter(variable.Id), value))
                 Fire(null);
         }
     }

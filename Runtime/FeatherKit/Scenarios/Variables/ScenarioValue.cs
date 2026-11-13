@@ -53,13 +53,10 @@ namespace FeatherKit.Scenarios
         }
 
 
+        /// <summary>Значение для запуска: своё или переменной графа того экземпляра, чей это запуск.</summary>
         public T Get(ScenarioRun run)
         {
-            if (!UsesVariable)
-                return value;
-
-            // TODO этап 1, рантайм: значение переменной графа из экземпляра, которому принадлежит run.
-            return default;
+            return UsesVariable ? run.Scenario.GraphVariables.Get<T>(variableId) : value;
         }
     }
 }

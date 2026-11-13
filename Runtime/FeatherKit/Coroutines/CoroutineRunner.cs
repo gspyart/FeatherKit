@@ -68,6 +68,10 @@ namespace FeatherKit.Coroutines
 
         internal void Stop(int id)
         {
+            // Раннер уже уничтожен (выход из игры, смена контекста) — останавливать нечего, а StopCoroutine бросит.
+            if (this == null)
+                return;
+
             if (!running.TryGetValue(id, out var coroutine))
                 return;
 

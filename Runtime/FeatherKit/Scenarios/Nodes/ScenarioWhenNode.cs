@@ -20,7 +20,7 @@ namespace FeatherKit.Scenarios
 
         [SerializeField] private ScenarioConditionList conditions = new ScenarioConditionList();
 
-        [Tooltip("What to do when an event fires while the previous run from this node is still going")]
+        [Tooltip("What to do when an event fires while the previous run from this node is still going — a run that went to “Not Met” and still runs counts too. Restart cuts the previous run only when the new one goes to “Then”")]
         [ScenarioLabel("If Already Running")]
         [ScenarioInspectorOnly]
         [SerializeField] private ScenarioRerunRule rerunRule = ScenarioRerunRule.SkipIfRunning;
@@ -86,7 +86,8 @@ namespace FeatherKit.Scenarios
         // IScenarioEventListener
         public void HandleEventFired(ScenarioEvent firedEvent, GameObject instigator)
         {
-            // TODO этап 1, рантайм: Only Once, правило повтора, условия → Then / Not Met.
+            if (owner != null)
+                owner.Runs.StartFrom(this, instigator);
         }
     }
 
