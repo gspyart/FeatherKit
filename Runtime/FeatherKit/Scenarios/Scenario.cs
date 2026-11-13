@@ -18,8 +18,10 @@ namespace FeatherKit.Scenarios
     /// - сообщает, чем кончилась каждая попытка запуска, — для журнала в редакторе
     /// </summary>
     [FDescription("A scenario without code: “When” something happens and the “If” conditions are met — run the “Do” steps in order. Add blocks with the “+” button.")]
-    public class Scenario : MonoBehaviour
+    public class Scenario : MonoBehaviour, IScenarioEventListener
     {
+        private static readonly List<Scenario> activeScenarios = new List<Scenario>();
+
         [SerializeReference] private List<ScenarioEvent> events = new List<ScenarioEvent>();
 
         [SerializeField] private ScenarioConditionsMode conditionsMode;
@@ -29,6 +31,15 @@ namespace FeatherKit.Scenarios
 
         [Tooltip("Run only once; after that, events are ignored")]
         [SerializeField] private bool runsOnce;
+
+        // Граф сценария: новые поля рядом со старыми списками, пока старый рантайм жив.
+        [SerializeField] private ScenarioGraphSource graphSource;
+        [SerializeField] private ScenarioGraph graph = new ScenarioGraph();
+        [SerializeField] private ScenarioGraphAsset graphAsset;
+        [SerializeField] private List<ScenarioVariableBinding> variableBindings = new List<ScenarioVariableBinding>();
+
+        [Tooltip("Permanent key of this scenario for checkpoints and saves")]
+        [SerializeField] private string persistentId;
 
         private bool isRunning;
         private bool hasRun;
@@ -49,6 +60,9 @@ namespace FeatherKit.Scenarios
 
         public event Action<Collider> TriggerExited;
 
+        /// <summary>Сработал выход ноды графа: id ноды и id выхода. Для подсветки проводов в игре.</summary>
+        public event Action<int, string> WireFired;
+
 
         public bool IsRunning => isRunning;
 
@@ -58,6 +72,30 @@ namespace FeatherKit.Scenarios
         public int CurrentActionIndex { get; private set; } = -1;
 
         public IReadOnlyList<ScenarioEvent> Events => events;
+
+
+        // ── Граф ─────────────────────────────────────────────────────────
+
+        /// <summary>Включённые сейчас сценарии — для окна сценариев и подсветки.</summary>
+        public static IReadOnlyList<Scenario> ActiveScenarios => activeScenarios;
+
+        public ScenarioGraphSource GraphSource => graphSource;
+
+        /// <summary>Граф, который исполняет сценарий: встроенный или из файла. Null — файл не выбран.</summary>
+        public ScenarioGraph Graph => graphSource == ScenarioGraphSource.Asset
+            ? graphAsset != null ? graphAsset.Graph : null
+            : graph;
+        // TODO этап 1, рантайм: копия граф-файла — [NonSerialized]-поле, уничтожается в OnDestroy; Graph в игре отдаёт копию.
+
+        public ScenarioGraphAsset GraphAsset => graphAsset;
+
+        /// <summary>Значения открытых переменных графа на этом объекте.</summary>
+        public IReadOnlyList<ScenarioVariableBinding> VariableBindings => variableBindings;
+
+        public string PersistentId => persistentId;
+
+        // IScenarioEventListener
+        Scenario IScenarioEventListener.Scenario => this;
 
 
         // ── Запуск ───────────────────────────────────────────────────────
@@ -217,11 +255,40 @@ namespace FeatherKit.Scenarios
             return isRunning && currentRun.IsPerforming(action);
         }
 
+        /// <summary>Нода графа сейчас идёт хоть в одном запуске. Для подсветки на холсте.</summary>
+        public bool IsPerforming(int nodeId)
+        {
+            return false; // TODO этап 1, рантайм
+        }
+
+
+        internal void ReportWireFired(int nodeId, string portId)
+        {
+            WireFired?.Invoke(nodeId, portId);
+        }
+
+
+        // IScenarioEventListener
+        void IScenarioEventListener.HandleEventFired(ScenarioEvent firedEvent, GameObject instigator)
+        {
+            TryRun(instigator);
+        }
+
+
+        // Список статический: без перезагрузки домена выключенные сценарии прошлого запуска дожили бы до следующего.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetOnEnterPlayMode()
+        {
+            activeScenarios.Clear();
+        }
+
 
         // ── Unity ────────────────────────────────────────────────────────
 
         private void OnEnable()
         {
+            activeScenarios.Add(this);
+
             foreach (var scenarioEvent in events)
                 scenarioEvent?.Attach(this);
         }
@@ -233,6 +300,8 @@ namespace FeatherKit.Scenarios
 
         private void OnDisable()
         {
+            activeScenarios.Remove(this);
+
             foreach (var scenarioEvent in events)
                 scenarioEvent?.Release();
         }

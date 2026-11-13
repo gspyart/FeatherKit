@@ -41,8 +41,7 @@ namespace FeatherKit.EditorTools
 
         public static string TitleOf(Type blockType)
         {
-            return blockType.GetCustomAttribute<ScenarioBlockAttribute>()?.Title
-                   ?? ObjectNames.NicifyVariableName(blockType.Name);
+            return ScenarioBlockAttribute.TitleOf(blockType);
         }
     }
 }

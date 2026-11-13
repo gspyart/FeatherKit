@@ -120,6 +120,23 @@ namespace FeatherKit.Scenarios
         }
 
 
+        // ── Провода графа ────────────────────────────────────────────────
+
+        /// <summary>Сработал выход ноды: пустить его провода. Вернёт кусок запуска — дождаться или оборвать.</summary>
+        internal ScenarioFiring Fire(ScenarioNode node, ScenarioOutput output)
+        {
+            // TODO этап 1, рантайм: найти провода выхода и пустить по ветке на каждый.
+            return new ScenarioFiring(this, node, output);
+        }
+
+
+        /// <summary>Взять долгий эффект под присмотр графа: обрыв куска и остановка отпустят его плавно.</summary>
+        public void Hold(IScenarioHeldEffect effect)
+        {
+            // TODO этап 1, рантайм: запомнить ветку, чтобы Cancel её куска или Stop графа отпустили эффект.
+        }
+
+
         // ── Обрыв ────────────────────────────────────────────────────────
 
         /// <summary>Оборвать все ветки. Звук, Timeline и другой сценарий, начатые шагами, доигрывают сами.</summary>

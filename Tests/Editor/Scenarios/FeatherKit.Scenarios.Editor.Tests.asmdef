@@ -1,0 +1,26 @@
+{
+    "name": "FeatherKit.Scenarios.Editor.Tests",
+    "rootNamespace": "FeatherKit.Tests.Scenarios",
+    "references": [
+        "FeatherKit",
+        "FeatherKit.Editor",
+        "FeatherKit.Scenarios.Tests",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

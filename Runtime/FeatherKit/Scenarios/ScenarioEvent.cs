@@ -4,30 +4,63 @@ using UnityEngine;
 namespace FeatherKit.Scenarios
 {
     /// <summary>
-    /// «When» сценария: следит за чем-то одним и запускает сценарий.
+    /// «When» сценария: следит за чем-то одним и сообщает слушателю — ноде When, Wait For или списку «When».
     /// Наследник подписывается в OnAttached, отписывается в OnReleased и зовёт Fire.
     /// </summary>
     [Serializable]
     public abstract class ScenarioEvent
     {
+        [NonSerialized] private IScenarioEventListener listener;
+
+
         /// <summary>Короткая подпись настроек для заголовка блока в инспекторе. Null — без неё.</summary>
         public virtual string Summary => null;
 
-        protected Scenario Scenario { get; private set; }
+        public bool IsAttached => listener != null;
+
+        /// <summary>Сценарий слушателя: его Start, триггеры и столкновения. Null — событие не подписано.</summary>
+        protected Scenario Scenario => listener?.Scenario;
 
 
         // ── Подписка ─────────────────────────────────────────────────────
 
-        internal void Attach(Scenario scenario)
+        /// <summary>Один блок — один слушатель: второй Attach без Release — ошибка, иначе событие ушло бы не туда.</summary>
+        public void Attach(IScenarioEventListener eventListener)
         {
-            Scenario = scenario;
-            OnAttached();
+            if (eventListener == null)
+                throw new ArgumentNullException(nameof(eventListener));
+
+            if (listener != null)
+                throw new InvalidOperationException(
+                    $"Event block {GetType().Name} is already attached to {listener}. Release it before attaching again");
+
+            listener = eventListener;
+
+            try
+            {
+                OnAttached();
+            }
+            catch
+            {
+                listener = null;
+                throw;
+            }
         }
 
-        internal void Release()
+        /// <summary>Не подписанный блок отпускать нечего — повторный Release ничего не делает.</summary>
+        public void Release()
         {
-            OnReleased();
-            Scenario = null;
+            if (listener == null)
+                return;
+
+            try
+            {
+                OnReleased();
+            }
+            finally
+            {
+                listener = null;
+            }
         }
 
 
@@ -37,8 +70,7 @@ namespace FeatherKit.Scenarios
 
         protected void Fire(GameObject instigator)
         {
-            if (Scenario != null)
-                Scenario.TryRun(instigator);
+            listener?.HandleEventFired(this, instigator);
         }
     }
 }

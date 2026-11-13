@@ -17,7 +17,17 @@ namespace FeatherKit.Scenarios
 
         public int Count => conditions.Count;
 
-        public ScenarioConditionsMode Mode => mode;
+        public ScenarioConditionsMode Mode
+        {
+            get => mode;
+            set => mode = value;
+        }
+
+
+        public void Add(ScenarioCondition condition)
+        {
+            conditions.Add(condition);
+        }
 
 
         public bool IsMet(ScenarioRun run)

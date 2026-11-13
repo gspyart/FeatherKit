@@ -18,6 +18,12 @@ namespace FeatherKit.Scenarios
         public int Count => actions.Count;
 
 
+        public void Add(ScenarioAction action)
+        {
+            actions.Add(action);
+        }
+
+
         public IEnumerator Perform(ScenarioRun run)
         {
             for (var index = 0; index < actions.Count; index++)

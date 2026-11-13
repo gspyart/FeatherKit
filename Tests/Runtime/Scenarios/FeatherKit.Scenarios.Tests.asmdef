@@ -1,0 +1,21 @@
+{
+    "name": "FeatherKit.Scenarios.Tests",
+    "rootNamespace": "FeatherKit.Tests.Scenarios",
+    "references": [
+        "FeatherKit",
+        "UnityEngine.TestRunner"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
