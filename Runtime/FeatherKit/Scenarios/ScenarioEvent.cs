@@ -72,5 +72,23 @@ namespace FeatherKit.Scenarios
         {
             listener?.HandleEventFired(this, instigator);
         }
+
+        /// <summary>
+        /// Fire «случаем» для событий, чей источник не рассылка FeatherKit: блоки этого типа с тем же Caller в одном кадре —
+        /// один случай, и Wait For, начатый от него, его же не засчитает. Стук, начавший запуск, — не второй стук.
+        /// </summary>
+        protected void FireAsOwnOccurrence(GameObject instigator)
+        {
+            ScenarioEventOccurrences.BeginShared(GetType(), instigator);
+
+            try
+            {
+                Fire(instigator);
+            }
+            finally
+            {
+                ScenarioEventOccurrences.End();
+            }
+        }
     }
 }

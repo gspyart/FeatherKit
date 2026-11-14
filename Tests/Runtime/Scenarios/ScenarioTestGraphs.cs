@@ -6,7 +6,8 @@ namespace FeatherKit.Tests.Scenarios
 {
     /// <summary>
     /// Графы сценария, собранные кодом, — общие для тестов рантайма и редактора.
-    /// - каждый граф проверяет свою часть: старт, разветвление, Wait For, Guard While, своя нода, переменные
+    /// - каждый граф проверяет свою часть: старт, разветвление, Wait For, Guard While, своя нода, переменные,
+    ///   For Each по списку, Gate и Once, Looks At, Distance
     /// - ноды находятся по подписи через FindNode, куда пошёл граф — по меткам ScenarioTestRecordAction
     /// </summary>
     public static class ScenarioTestGraphs
@@ -29,6 +30,22 @@ namespace FeatherKit.Tests.Scenarios
         public const string CoinTitle = "Coin";
         public const string HeadsTitle = "Heads";
         public const string TailsTitle = "Tails";
+
+        public const string ForEachTitle = "For Each";
+        public const string EachTitle = "Each";
+        public const string AllDoneTitle = "All Done";
+        public const string OpenWhenTitle = "Open When";
+        public const string GateTitle = "Gate";
+        public const string OnceTitle = "Once";
+        public const string PassedTitle = "Passed";
+        public const string SeenTitle = "Seen";
+        public const string UnseenTitle = "Unseen";
+        public const string NearTitle = "Near";
+        public const string FarTitle = "Far";
+
+        public const string LampsVariableName = "Lamps";
+        public const string CurrentLampVariableName = "Current Lamp";
+        public const string LookerVariableName = "Looker";
 
         public const string LookedAtCaseLabel = "Looked At";
         public const string LeftZoneCaseLabel = "Left Zone";
@@ -156,6 +173,102 @@ namespace FeatherKit.Tests.Scenarios
             group.AddNode(FindNode<ScenarioStepsNode>(graph, LampOnTitle));
 
             graph.AddNote(new ScenarioNote("Lamp comes from the object's bindings", new Rect(0f, 300f, 200f, 80f)));
+
+            return graph;
+        }
+
+
+        /// <summary>
+        /// For Each по открытой переменной Object List «Lamps» (лампы — Light), текущая лампа — в «Current Lamp»:
+        /// When → For Each: Each → «Each», Done → «All Done».
+        /// </summary>
+        public static ScenarioGraph ForEachOverList()
+        {
+            var graph = new ScenarioGraph();
+            var lamps = graph.AddVariable(new ScenarioVariableDefinition(LampsVariableName, ScenarioVariableKind.ObjectList));
+            lamps.ObjectType = typeof(Light);
+            lamps.IsExposed = true;
+            var currentLamp = graph.AddVariable(new ScenarioVariableDefinition(CurrentLampVariableName, ScenarioVariableKind.Object));
+            currentLamp.ObjectType = typeof(Light);
+
+            var when = AddWhen(graph, "start", new Vector2(0f, 0f));
+            var forEach = graph.AddNode(new ScenarioForEachNode { CustomTitle = ForEachTitle }, new Vector2(300f, 0f));
+            forEach.List.VariableId = lamps.Id;
+            forEach.Item.VariableId = currentLamp.Id;
+
+            var each = AddSteps(graph, EachTitle, new Vector2(600f, 0f));
+            var allDone = AddSteps(graph, AllDoneTitle, new Vector2(600f, 150f));
+
+            graph.Connect(when, ScenarioWhenNode.Then, forEach, ScenarioFlowNode.In);
+            graph.Connect(forEach, ScenarioForEachNode.Each, each, ScenarioStepsNode.In);
+            graph.Connect(forEach, ScenarioForEachNode.Done, allDone, ScenarioStepsNode.In);
+
+            return graph;
+        }
+
+        /// <summary>When → Gate (закрыта на старте) → Once → «Passed»; «Open When» → вход Open у Gate.</summary>
+        public static ScenarioGraph GateAndOnce()
+        {
+            var graph = new ScenarioGraph();
+            var when = AddWhen(graph, "pull lever", new Vector2(0f, 0f));
+            var openWhen = graph.AddNode(new ScenarioWhenNode { CustomTitle = OpenWhenTitle }, new Vector2(0f, 200f));
+            openWhen.AddEvent(new ScenarioTestManualEvent("power on"));
+
+            var gate = graph.AddNode(new ScenarioGateNode { CustomTitle = GateTitle, StartsOpen = false }, new Vector2(300f, 0f));
+            var once = graph.AddNode(new ScenarioOnceNode { CustomTitle = OnceTitle }, new Vector2(600f, 0f));
+            var passed = AddSteps(graph, PassedTitle, new Vector2(900f, 0f));
+
+            graph.Connect(when, ScenarioWhenNode.Then, gate, ScenarioGateNode.Enter);
+            graph.Connect(openWhen, ScenarioWhenNode.Then, gate, ScenarioGateNode.Open);
+            graph.Connect(gate, ScenarioGateNode.Out, once, ScenarioFlowNode.In);
+            graph.Connect(once, ScenarioOnceNode.Out, passed, ScenarioStepsNode.In);
+
+            return graph;
+        }
+
+        /// <summary>
+        /// When с условием Looks At: смотрит объект из переменной «Looker» (открытая, Object) на этот объект,
+        /// конус 30°, Clear View. Then → «Seen», Not Met → «Unseen».
+        /// </summary>
+        public static ScenarioGraph LooksAtWithLooker()
+        {
+            var graph = new ScenarioGraph();
+            var looker = graph.AddVariable(new ScenarioVariableDefinition(LookerVariableName, ScenarioVariableKind.Object));
+            looker.ObjectType = typeof(Transform);
+            looker.IsExposed = true;
+
+            var when = AddWhen(graph, "check gaze", new Vector2(0f, 0f));
+            var looksAt = new LooksAtCondition();
+            looksAt.Gaze.Looker.Kind = ScenarioPointKind.Variable;
+            looksAt.Gaze.Looker.VariableId = looker.Id;
+            looksAt.Gaze.Target.Kind = ScenarioPointKind.ThisObject;
+            looksAt.Gaze.Target.UsesRenderersCenter = true;
+            looksAt.Gaze.MaxAngle = 30f;
+            looksAt.Gaze.RequiresClearView = true;
+            when.Conditions.Add(looksAt);
+
+            var seen = AddSteps(graph, SeenTitle, new Vector2(300f, 0f));
+            var unseen = AddSteps(graph, UnseenTitle, new Vector2(300f, 150f));
+
+            graph.Connect(when, ScenarioWhenNode.Then, seen, ScenarioStepsNode.In);
+            graph.Connect(when, ScenarioWhenNode.NotMet, unseen, ScenarioStepsNode.In);
+
+            return graph;
+        }
+
+        /// <summary>When с условием Distance: игрок ближе 3 м к этому объекту, без высоты. Then → «Near», Not Met → «Far».</summary>
+        public static ScenarioGraph Distance()
+        {
+            var graph = new ScenarioGraph();
+            var when = AddWhen(graph, "check distance", new Vector2(0f, 0f));
+            var distance = new DistanceCondition { Comparison = ScenarioDistanceComparison.CloserThan, Distance = 3f, IsHorizontalOnly = true };
+            when.Conditions.Add(distance);
+
+            var near = AddSteps(graph, NearTitle, new Vector2(300f, 0f));
+            var far = AddSteps(graph, FarTitle, new Vector2(300f, 150f));
+
+            graph.Connect(when, ScenarioWhenNode.Then, near, ScenarioStepsNode.In);
+            graph.Connect(when, ScenarioWhenNode.NotMet, far, ScenarioStepsNode.In);
 
             return graph;
         }

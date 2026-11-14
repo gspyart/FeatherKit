@@ -11,7 +11,7 @@ namespace FeatherKit.Scenarios
     /// - граф встроенный или из файла; файл копируется на объект — у каждого свои переменные и Only Once
     /// - слушает события нод When, пока включён; Stop обрывает запуски и плавно отпускает долгие эффекты
     /// - пустой граф — старый режим: события, условия и шаги списками
-    /// - пересылает блокам Start и триггеры; сообщает журналу и подсветке, что идёт и чем кончилось
+    /// - пересылает блокам Start, триггеры и столкновения; сообщает журналу и подсветке, что идёт и чем кончилось
     /// </summary>
     [FDescription("A scenario without code: “When” nodes start runs, wires lead them through “Do” steps and flow nodes. With an empty graph the old lists work: When → If → Do.")]
     public class Scenario : MonoBehaviour, IScenarioEventListener
@@ -62,6 +62,10 @@ namespace FeatherKit.Scenarios
         public event Action<Collider> TriggerEntered;
 
         public event Action<Collider> TriggerExited;
+
+        public event Action<Collision> CollisionEntered;
+
+        public event Action<Collision> CollisionExited;
 
         /// <summary>Сработал выход ноды графа: id ноды и id выхода. Для подсветки проводов в игре.</summary>
         public event Action<int, string> WireFired;
@@ -404,6 +408,16 @@ namespace FeatherKit.Scenarios
         {
             triggerOccupants?.HandleExited(other);
             RaiseInOwnOccurrence(TriggerExited, other);
+        }
+
+        private void OnCollisionEnter(Collision collision)
+        {
+            RaiseInOwnOccurrence(CollisionEntered, collision);
+        }
+
+        private void OnCollisionExit(Collision collision)
+        {
+            RaiseInOwnOccurrence(CollisionExited, collision);
         }
 
         // Гость, ушедший без OnTriggerExit, — выключенный или унесённый телепортом; пока внутри никого, тут пусто.

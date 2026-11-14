@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -6,7 +7,8 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>
     /// Какая переменная графа подходит полю какого типа — одно правило для редактора и рантайма.
-    /// - bool — Flag, int — Counter, float — Number, объект Unity — Object; прочие типы без переменных
+    /// - bool — Flag, int — Counter, float — Number, Vector3, string — Text, Color, объект Unity — Object,
+    ///   список объектов — Object List; прочие типы без переменных
     /// - объект переводится между GameObject и его компонентами: в переменной объект, поле ждёт Light — берём Light с него
     /// </summary>
     public static class ScenarioVariableKinds
@@ -22,6 +24,14 @@ namespace FeatherKit.Scenarios
                 kind = ScenarioVariableKind.Counter;
             else if (valueType == typeof(float))
                 kind = ScenarioVariableKind.Number;
+            else if (valueType == typeof(Vector3))
+                kind = ScenarioVariableKind.Vector3;
+            else if (valueType == typeof(string))
+                kind = ScenarioVariableKind.Text;
+            else if (valueType == typeof(Color))
+                kind = ScenarioVariableKind.Color;
+            else if (TryGetListItemType(valueType, out _))
+                kind = ScenarioVariableKind.ObjectList;
             else if (valueType != null && typeof(Object).IsAssignableFrom(valueType))
                 kind = ScenarioVariableKind.Object;
             else
@@ -37,7 +47,32 @@ namespace FeatherKit.Scenarios
             if (variable == null || !TryGetKind(valueType, out var kind) || kind != variable.Kind)
                 return false;
 
-            return kind != ScenarioVariableKind.Object || CanConvertObject(variable.ObjectType, valueType);
+            return kind switch
+            {
+                ScenarioVariableKind.Object => CanConvertObject(variable.ObjectType, valueType),
+                ScenarioVariableKind.ObjectList => TryGetListItemType(valueType, out var itemType)
+                                                   && CanConvertObject(variable.ObjectType, itemType),
+                _ => true
+            };
+        }
+
+
+        /// <summary>Тип элемента у поля-списка объектов: List&lt;T&gt; или IReadOnlyList&lt;T&gt;, где T — объект Unity.</summary>
+        public static bool TryGetListItemType(Type valueType, out Type itemType)
+        {
+            itemType = null;
+
+            if (valueType == null || !valueType.IsGenericType)
+                return false;
+
+            var definition = valueType.GetGenericTypeDefinition();
+
+            if (definition != typeof(List<>) && definition != typeof(IReadOnlyList<>))
+                return false;
+
+            itemType = valueType.GetGenericArguments()[0];
+
+            return typeof(Object).IsAssignableFrom(itemType);
         }
 
 

@@ -19,6 +19,9 @@ namespace FeatherKit.Scenarios
 
         public string Title => MenuPath.Substring(MenuPath.LastIndexOf('/') + 1);
 
+        /// <summary>Что делает блок — одной фразой, для подсказки в поиске и шапке ноды. Задаётся по имени: Description = "…".</summary>
+        public string Description { get; set; }
+
 
         /// <summary>Название блока или ноды по атрибуту; без атрибута — имя класса. Для подписей в игре, без редактора.</summary>
         public static string TitleOf(Type blockType)
@@ -29,6 +32,17 @@ namespace FeatherKit.Scenarios
             var attribute = (ScenarioBlockAttribute)GetCustomAttribute(blockType, typeof(ScenarioBlockAttribute), inherit: false);
 
             return attribute != null ? attribute.Title : blockType.Name;
+        }
+
+        /// <summary>Описание блока или ноды по атрибуту; null — нет атрибута или описания.</summary>
+        public static string DescriptionOf(Type blockType)
+        {
+            if (blockType == null)
+                return null;
+
+            var attribute = (ScenarioBlockAttribute)GetCustomAttribute(blockType, typeof(ScenarioBlockAttribute), inherit: false);
+
+            return attribute?.Description;
         }
     }
 }

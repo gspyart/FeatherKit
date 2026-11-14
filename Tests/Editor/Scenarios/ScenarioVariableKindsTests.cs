@@ -22,8 +22,8 @@ namespace FeatherKit.Tests.Scenarios
             Assert.That(kind, Is.EqualTo(expectedKind));
         }
 
-        [TestCase(typeof(string))]
-        [TestCase(typeof(Vector3))]
+        [TestCase(typeof(Vector2))]
+        [TestCase(typeof(Quaternion))]
         [TestCase(typeof(double))]
         public void TryGetKind_OtherTypes_HaveNoVariables(System.Type valueType)
         {
