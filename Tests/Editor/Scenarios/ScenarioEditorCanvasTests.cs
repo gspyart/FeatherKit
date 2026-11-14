@@ -151,6 +151,59 @@ namespace FeatherKit.Tests.Scenarios
         }
 
 
+        // ── Панель переменных ────────────────────────────────────────────
+
+        [Test]
+        public void VariableRow_StaysExpanded_WhenTypeChangeRebuildsCanvas()
+        {
+            var lamp = graphFile.Graph.Variables.Single(variable => variable.Name == "Lamp");
+            RowOf(lamp.Id).expanded = true;
+
+            // Так меняют тип через выбор типа: правка и полная пересборка холста.
+            graphView.ApplyEdit(editing => editing.SetVariableObjectType(lamp.Id, typeof(AudioSource)));
+
+            Assert.That(RowOf(lamp.Id).expanded, Is.True, "Changing the type must not collapse the variable's row");
+            Assert.That(RowOf(graphFile.Graph.Variables[0].Id).expanded, Is.False, "Rows nobody opened stay closed");
+        }
+
+        private UnityEditor.Experimental.GraphView.BlackboardRow RowOf(string variableId)
+        {
+            return graphView.Blackboard.Query<UnityEditor.Experimental.GraphView.BlackboardRow>().ToList()
+                .Single(row => row.Q<UnityEditor.Experimental.GraphView.BlackboardField>().userData as string == variableId);
+        }
+
+
+        // ── Подсветка в игре ─────────────────────────────────────────────
+
+        [Test]
+        public void RunHighlighter_CanvasDisposed_StopsListeningToWires()
+        {
+            var owner = EditorUtility.CreateGameObjectWithHideFlags("Highlight Test", HideFlags.HideAndDontSave);
+            var watchingView = new ScenarioGraphView(window);
+
+            try
+            {
+                var scenario = owner.AddComponent<Scenario>();
+                watchingView.RunHighlighter.Target = scenario;
+                Assert.That(WireFiredHandlersOf(scenario), Is.Not.Null);
+
+                watchingView.Dispose();
+
+                Assert.That(WireFiredHandlersOf(scenario), Is.Null, "A closed window must not keep the scenario's wire event");
+            }
+            finally
+            {
+                Object.DestroyImmediate(owner);
+            }
+        }
+
+        private static System.Delegate WireFiredHandlersOf(Scenario scenario)
+        {
+            return (System.Delegate)typeof(Scenario).GetField("WireFired", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                .GetValue(scenario);
+        }
+
+
         // ── Привязки ─────────────────────────────────────────────────────
 
         [Test]

@@ -11,6 +11,7 @@ namespace FeatherKit.EditorTools
     /// Подсветка графа в игре — часть ScenarioGraphView: какие ноды сейчас идут и по какому проводу только что прошёл запуск.
     /// - чей граф смотрим: Scenario, через который он открыт; у граф-файла — выбранный в шапке «Debug: …»
     /// - раз в 100 мс спрашивает Scenario.IsPerforming(nodeId); провод вспыхивает на 0,3 с по WireFired
+    /// - подписку на провода снимает при выходе из игры и закрытии окна
     /// </summary>
     internal class ScenarioRunHighlighter
     {
@@ -29,6 +30,7 @@ namespace FeatherKit.EditorTools
         {
             this.graphView = graphView;
             graphView.schedule.Execute(RefreshRunningNodes).Every(PollMilliseconds);
+            EditorApplication.playModeStateChanged += HandlePlayModeChanged;
         }
 
 
@@ -82,9 +84,12 @@ namespace FeatherKit.EditorTools
 
         // ── Подсветка ────────────────────────────────────────────────────
 
-        // После пересборки холста классы теряются — опрос раз в 100 мс их и возвращает.
+        // После пересборки холста классы теряются — опрос раз в 100 мс их и возвращает. Вне игры гасить нечего — сразу выходим.
         private void RefreshRunningNodes()
         {
+            if (!EditorApplication.isPlaying && target == null && !graphView.nodes.Any(node => node.ClassListContains(RunningNodeClass)))
+                return;
+
             if (EditorApplication.isPlaying && target == null && !isChosenByHand)
                 ChooseDefaultTarget();
 
@@ -102,6 +107,22 @@ namespace FeatherKit.EditorTools
                 edge.AddToClassList(FiredWireClass);
                 edge.schedule.Execute(() => edge.RemoveFromClassList(FiredWireClass)).ExecuteLater(WireFlashMilliseconds);
             }
+        }
+
+
+        // ── Конец игры и закрытие ────────────────────────────────────────
+
+        // Сценарий игры живёт до выхода из неё: подписку на его провода снимаем заранее, а не держим мёртвый объект.
+        private void HandlePlayModeChanged(PlayModeStateChange change)
+        {
+            if (change == PlayModeStateChange.ExitingPlayMode)
+                Target = null;
+        }
+
+        public void Dispose()
+        {
+            EditorApplication.playModeStateChanged -= HandlePlayModeChanged;
+            Target = null;
         }
     }
 }

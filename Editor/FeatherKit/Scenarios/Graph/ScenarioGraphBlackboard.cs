@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using FeatherKit.Scenarios;
 using UnityEditor;
@@ -13,9 +14,12 @@ namespace FeatherKit.EditorTools
     /// - «+» добавляет, двойной клик по имени переименовывает, Delete или меню удаляет
     /// - у переменной: вид, тип объекта, значение по умолчанию, Set on Object, Saved
     /// - граф-файл, открытый через объект, — колонка «On …» с живой привязкой этого объекта и предупреждения
+    /// - раскрытые строки помнит по id переменной: пересборка и перезагрузка домена их не сворачивают
     /// </summary>
     internal class ScenarioGraphBlackboard : Blackboard
     {
+        private const string ExpandedRowsSessionKey = "FeatherKit.ScenarioGraph.ExpandedVariables";
+        private const char ExpandedRowsSeparator = ';';
         private const string KindPropertyName = "kind";
         private const string InitialValuePropertyName = "initialValue";
         private const string ExposedHintForEmbedded = "Only for graph files — here, put scene objects straight into the variable";
@@ -25,6 +29,7 @@ namespace FeatherKit.EditorTools
         private readonly ScenarioGraphView scenarioGraphView;
         private readonly BlackboardSection graphSection;
         private readonly BlackboardSection exposedSection;
+        private readonly HashSet<string> expandedVariableIds;
 
 
         public ScenarioGraphBlackboard(ScenarioGraphView graphView) : base(graphView)
@@ -39,6 +44,9 @@ namespace FeatherKit.EditorTools
 
             if (scrollView != null)
                 scrollView.mode = ScrollViewMode.Vertical;
+
+            expandedVariableIds = new HashSet<string>(SessionState.GetString(ExpandedRowsSessionKey, "")
+                .Split(new[] { ExpandedRowsSeparator }, System.StringSplitOptions.RemoveEmptyEntries));
 
             graphSection = new BlackboardSection { title = "Graph" };
             exposedSection = new BlackboardSection { title = "Set on Object" };
@@ -57,6 +65,7 @@ namespace FeatherKit.EditorTools
 
         public void Rebuild()
         {
+            RememberExpandedRows();
             graphSection.Clear();
             exposedSection.Clear();
 
@@ -101,7 +110,10 @@ namespace FeatherKit.EditorTools
                 menuEvent.menu.AppendAction("Delete", _ => scenarioGraphView.ApplyEdit(editing => editing.RemoveVariable(variable.Id)));
             }));
 
-            return new BlackboardRow(field, CreateSettings(variable, variableProperty, warning));
+            return new BlackboardRow(field, CreateSettings(variable, variableProperty, warning))
+            {
+                expanded = expandedVariableIds.Contains(variable.Id)
+            };
         }
 
         private static string KindTextOf(ScenarioVariableDefinition variable)
@@ -118,6 +130,24 @@ namespace FeatherKit.EditorTools
             var messages = scenarioGraphView.Problems.Where(problem => problem.VariableId == variable.Id).Select(problem => problem.Message).ToList();
 
             return messages.Count > 0 ? string.Join("\n", messages) : null;
+        }
+
+
+        // Строку раскрывают кнопкой BlackboardRow, события об этом нет — читаем раскрытость перед каждой пересборкой.
+        private void RememberExpandedRows()
+        {
+            foreach (var row in this.Query<BlackboardRow>().ToList())
+            {
+                if (row.Q<BlackboardField>()?.userData is not string variableId)
+                    continue;
+
+                if (row.expanded)
+                    expandedVariableIds.Add(variableId);
+                else
+                    expandedVariableIds.Remove(variableId);
+            }
+
+            SessionState.SetString(ExpandedRowsSessionKey, string.Join(ExpandedRowsSeparator.ToString(), expandedVariableIds));
         }
 
 
@@ -348,7 +378,8 @@ namespace FeatherKit.EditorTools
             var menu = new GenericMenu();
 
             foreach (ScenarioVariableKind kind in System.Enum.GetValues(typeof(ScenarioVariableKind)))
-                menu.AddItem(new GUIContent(kind.ToString()), false, () => scenarioGraphView.ApplyEdit(editing => editing.AddVariable(kind)));
+                menu.AddItem(new GUIContent(kind.ToString()), false,
+                    () => scenarioGraphView.ApplyEdit(editing => expandedVariableIds.Add(editing.AddVariable(kind).Id)));
 
             menu.ShowAsContext();
         }

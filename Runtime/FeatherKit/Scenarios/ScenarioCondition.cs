@@ -11,6 +11,7 @@ namespace FeatherKit.Scenarios
     public abstract class ScenarioCondition
     {
         [Tooltip("Inverted: the condition is met when the check does NOT pass")]
+        [ScenarioLabel("NOT")]
         [SerializeField] private bool isInverted;
 
 

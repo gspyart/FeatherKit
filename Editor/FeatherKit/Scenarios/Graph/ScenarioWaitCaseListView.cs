@@ -63,12 +63,30 @@ namespace FeatherKit.EditorTools
                 return row;
             }
 
-            var blockField = new PropertyField(blockProperty, BlockLabelOf(block));
-            blockField.BindProperty(blockProperty);
-            blockField.TrackPropertyValue(blockProperty, _ => blockField.label = BlockLabelOf(block));
-            row.Add(blockField);
+            row.Add(CreateBlockFoldout(block, blockProperty));
 
             return row;
+        }
+
+        // Поля блока своими подписями ([ScenarioLabel]: «NOT», а не «Is Inverted») — как в стопках блоков.
+        private static Foldout CreateBlockFoldout(object block, SerializedProperty blockProperty)
+        {
+            var foldout = new Foldout { text = BlockLabelOf(block), value = blockProperty.isExpanded };
+            foldout.RegisterValueChangedCallback(change => blockProperty.isExpanded = change.newValue);
+            foldout.TrackPropertyValue(blockProperty, _ => foldout.text = BlockLabelOf(block));
+
+            var field = blockProperty.Copy();
+            var end = blockProperty.GetEndProperty();
+
+            for (var hasField = field.NextVisible(true); hasField && !SerializedProperty.EqualContents(field, end); hasField = field.NextVisible(false))
+            {
+                var label = ScenarioBlockStyle.LabelOf(block.GetType(), field);
+                var fieldView = new PropertyField(field.Copy(), label.text) { tooltip = label.tooltip };
+                fieldView.BindProperty(field.Copy());
+                foldout.Add(fieldView);
+            }
+
+            return foldout;
         }
 
         // Сводка рядом с именем — «Chance · 50 %»: свёрнутый исход понятен без раскрытия.

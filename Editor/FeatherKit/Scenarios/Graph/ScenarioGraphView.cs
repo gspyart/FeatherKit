@@ -424,6 +424,7 @@ namespace FeatherKit.EditorTools
         public void Dispose()
         {
             NodeCreation.Dispose();
+            RunHighlighter.Dispose();
         }
     }
 }
