@@ -480,6 +480,28 @@ namespace FeatherKit.Tests.Scenarios
             Assert.That(Marks, Is.EqualTo(new[] { "Entered", "Exited" }));
         }
 
+        [UnityTest]
+        public IEnumerator OwnTriggerTurnedOff_ForgetsGuestsWithoutExit_AndCountsEntryOnceWhenBackOn()
+        {
+            var scenario = CreateScenario(EnterExitGraph());
+            var zone = scenario.gameObject.AddComponent<BoxCollider>();
+            zone.isTrigger = true;
+            var playerCollider = CreatePlayerCollider();
+
+            yield return WaitFixedUpdates(1);
+            scenario.SendMessage("OnTriggerEnter", playerCollider);
+            zone.enabled = false;
+            yield return WaitFixedUpdates(3);
+
+            Assert.That(Marks, Is.EqualTo(new[] { "Entered" }), "Turning the zone off is not the guest leaving");
+
+            zone.enabled = true;
+            scenario.SendMessage("OnTriggerEnter", playerCollider);
+            yield return WaitFixedUpdates(3);
+
+            Assert.That(Marks, Is.EqualTo(new[] { "Entered", "Entered" }), "Back on with the player inside — one new entry");
+        }
+
         // When «вошёл» → «Entered», When «вышел» → «Exited». Без коллайдера-триггера на сценарии проверка «далеко» молчит.
         private ScenarioGraph EnterExitGraph()
         {

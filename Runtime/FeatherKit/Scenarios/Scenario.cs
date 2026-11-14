@@ -47,6 +47,7 @@ namespace FeatherKit.Scenarios
         private ScenarioHeldEffects heldEffects;
         private ScenarioTriggerOccupants triggerOccupants;
         private Action<Collider> sendSilentExit;
+        private Action forgetTriggerGuests;
         private ScenarioListRunner listRunner;
         private bool hasWarnedDisabledCall;
 
@@ -67,6 +68,9 @@ namespace FeatherKit.Scenarios
 
         /// <summary>Сценарий позвали — TryRun, Run или нода Run Scenario; слушает событие Called.</summary>
         internal event Action<GameObject> Called;
+
+        /// <summary>Зону выключили, пока внутри были гости: блоки забывают их без выхода — при включении придёт новый вход.</summary>
+        internal event Action TriggerGuestsForgotten;
 
 
         public bool IsRunning => (listRunner != null && listRunner.IsRunning) || (runs != null && runs.HasRunningRuns);
@@ -258,6 +262,12 @@ namespace FeatherKit.Scenarios
         }
 
 
+        private void ForgetTriggerGuests()
+        {
+            TriggerGuestsForgotten?.Invoke();
+        }
+
+
         // Рассылка — свой «случай»: ожидание, начатое из-за неё, её же не засчитывает.
         private static void RaiseInOwnOccurrence<T>(Action<T> handlers, T argument)
         {
@@ -307,6 +317,7 @@ namespace FeatherKit.Scenarios
             heldEffects = new ScenarioHeldEffects(this);
             triggerOccupants = new ScenarioTriggerOccupants(this);
             sendSilentExit = SendSilentExit;
+            forgetTriggerGuests = ForgetTriggerGuests;
             listRunner = new ScenarioListRunner(this);
         }
 
@@ -398,7 +409,7 @@ namespace FeatherKit.Scenarios
         // Гость, ушедший без OnTriggerExit, — выключенный или унесённый телепортом; пока внутри никого, тут пусто.
         private void FixedUpdate()
         {
-            triggerOccupants?.ReleaseSilentlyLeft(sendSilentExit);
+            triggerOccupants?.ReleaseSilentlyLeft(sendSilentExit, forgetTriggerGuests);
         }
     }
 }

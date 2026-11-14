@@ -9,6 +9,7 @@ namespace FeatherKit.Scenarios
     /// - ведётся всегда, а не только пока кто-то слушает: блок, подписавшийся позже, узнаёт уже вошедших
     /// - коллайдер считается столько раз, сколько вошёл
     /// - ловит уход без OnTriggerExit: коллайдер выключили, уничтожили или унесли телепортом — и шлёт за него выход
+    /// - выключили саму зону — забывает гостей без выхода
     /// </summary>
     public class ScenarioTriggerOccupants
     {
@@ -64,12 +65,20 @@ namespace FeatherKit.Scenarios
 
         /// <summary>
         /// Выпустить гостей, ушедших молча, и прислать выход за каждый засчитанный вход — иначе Wait For «вышел» зависнет.
-        /// Уничтоженному выход не шлём: «Caller» уже нет.
+        /// Уничтоженному выход не шлём: «Caller» уже нет. Выключили саму зону — гостей забываем без выхода.
         /// </summary>
-        public void ReleaseSilentlyLeft(Action<Collider> sendExit)
+        public void ReleaseSilentlyLeft(Action<Collider> sendExit, Action forgetGuests)
         {
             if (entriesByCollider.Count == 0)
                 return;
+
+            // Зону выключил сам сценарий («сработал — выключил»): это не уход гостя, а при включении Unity пришлёт вход заново.
+            if (AreOwnTriggersOff())
+            {
+                entriesByCollider.Clear();
+                forgetGuests();
+                return;
+            }
 
             silentlyLeftColliders.Clear();
 
@@ -96,6 +105,21 @@ namespace FeatherKit.Scenarios
                    || IsAwayFromOwnTriggers(collider);
         }
 
+        private bool AreOwnTriggersOff()
+        {
+            if (ownTriggers.Count == 0)
+                return false;
+
+            foreach (var trigger in ownTriggers)
+            {
+                if (IsOn(trigger))
+                    return false;
+            }
+
+            return true;
+        }
+
+
         // Грубо, по габаритам: телепорт уносит далеко, а точный выход у края пришлёт сама физика.
         private bool IsAwayFromOwnTriggers(Collider collider)
         {
@@ -106,8 +130,7 @@ namespace FeatherKit.Scenarios
 
             foreach (var trigger in ownTriggers)
             {
-                if (trigger != null && trigger.enabled && trigger.gameObject.activeInHierarchy
-                    && trigger.bounds.Intersects(bounds))
+                if (IsOn(trigger) && trigger.bounds.Intersects(bounds))
                     return false;
             }
 
@@ -118,6 +141,7 @@ namespace FeatherKit.Scenarios
         // ── Общие помощники ──────────────────────────────────────────────
 
         // Сообщения о триггере идут на объект коллайдера и на объект его Rigidbody — только такие триггеры наши.
+        // Собирается при входе в пустую зону: триггер, добавленный, пока внутри кто-то есть, учтётся со следующего захода.
         private void CollectOwnTriggers()
         {
             owner.GetComponentsInChildren(true, ownTriggers);
@@ -127,6 +151,11 @@ namespace FeatherKit.Scenarios
                 if (!IsOwnTrigger(ownTriggers[index]))
                     ownTriggers.RemoveAt(index);
             }
+        }
+
+        private static bool IsOn(Collider trigger)
+        {
+            return trigger != null && trigger.enabled && trigger.gameObject.activeInHierarchy;
         }
 
         private bool IsOwnTrigger(Collider collider)

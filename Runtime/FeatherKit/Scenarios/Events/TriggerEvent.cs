@@ -43,6 +43,7 @@ namespace FeatherKit.Scenarios
 
             Scenario.TriggerEntered += HandleEntered;
             Scenario.TriggerExited += HandleExited;
+            Scenario.TriggerGuestsForgotten += HandleGuestsForgotten;
 
             CountVisitorsAlreadyInside();
         }
@@ -61,6 +62,7 @@ namespace FeatherKit.Scenarios
         {
             Scenario.TriggerEntered -= HandleEntered;
             Scenario.TriggerExited -= HandleExited;
+            Scenario.TriggerGuestsForgotten -= HandleGuestsForgotten;
 
             staying.Stop();
             collidersInsideByVisitor = null;
@@ -114,6 +116,14 @@ namespace FeatherKit.Scenarios
                 Fire(visitor);
             else if (crossing == TriggerCrossing.Staying && collidersInsideByVisitor.Count == 0)
                 staying.Stop();
+        }
+
+
+        // Зону выключили — это не выход гостя: счёт чистим молча, при включении Unity пришлёт вход заново.
+        private void HandleGuestsForgotten()
+        {
+            collidersInsideByVisitor.Clear();
+            staying.Stop();
         }
 
 
