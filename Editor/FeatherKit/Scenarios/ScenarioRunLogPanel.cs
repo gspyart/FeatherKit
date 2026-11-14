@@ -79,7 +79,8 @@ namespace FeatherKit.EditorTools
             var scenarioName = record.Scenario != null ? record.Scenario.name : "(deleted)";
             var repeat = entry.RepeatCount > 1 ? $"  ×{entry.RepeatCount}" : "";
             var instigator = record.InstigatorName != null ? $"  · called by {record.InstigatorName}" : "";
-            var text = $"{record.EndTime,7:0.00}   {scenarioName} — {OutcomeTextOf(record)}{repeat}{instigator}";
+            var startNode = record.StartNodeId >= 0 ? $"  · from “{NodeTitleOf(record, record.StartNodeId)}”" : "";
+            var text = $"{record.EndTime,7:0.00}   {scenarioName} — {OutcomeTextOf(record)}{repeat}{startNode}{instigator}";
 
             var previousColor = GUI.contentColor;
             GUI.contentColor = ColorOf(record.Outcome, previousColor);
@@ -96,11 +97,21 @@ namespace FeatherKit.EditorTools
             {
                 ScenarioRunOutcome.Finished => $"finished in {record.EndTime - record.StartTime:0.##} s",
                 ScenarioRunOutcome.Stopped => "stopped",
+                ScenarioRunOutcome.Failed when record.FailedNodeId >= 0 =>
+                    $"failed at node “{NodeTitleOf(record, record.FailedNodeId)}”: {record.FailureMessage}",
                 ScenarioRunOutcome.Failed => record.FailedActionIndex >= 0
                     ? $"failed at step {record.FailedActionIndex + 1}: {record.FailureMessage}"
                     : $"failed in a background step: {record.FailureMessage}",
                 _ => "conditions not met"
             };
+        }
+
+        // Нода могла исчезнуть, пока строка висит в журнале, — тогда хотя бы её id.
+        private static string NodeTitleOf(ScenarioRunRecord record, int nodeId)
+        {
+            var node = record.Scenario != null ? record.Scenario.Graph?.FindNode(nodeId) : null;
+
+            return node != null ? node.Title : $"node {nodeId}";
         }
 
         private static Color ColorOf(ScenarioRunOutcome outcome, Color normal)

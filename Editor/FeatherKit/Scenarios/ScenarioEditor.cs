@@ -6,7 +6,7 @@ namespace FeatherKit.EditorTools
 {
     /// <summary>
     /// Инспектор сценария: откуда граф (этот объект или граф-файл), значения открытых переменных, кнопка «Open Graph».
-    /// Пока встроенный граф пуст — ниже старые разделы «When / If / Do» из ScenarioSectionsDrawer, как раньше.
+    /// Пока встроенный граф пуст — ниже старые разделы «When / If / Do» из ScenarioSectionsDrawer и кнопка «Convert to Graph».
     /// </summary>
     [CustomEditor(typeof(Scenario))]
     public class ScenarioEditor : Editor
@@ -47,11 +47,28 @@ namespace FeatherKit.EditorTools
 
             EditorGUILayout.Space(6);
             EditorGUILayout.LabelField("List Mode", EditorStyles.boldLabel);
+            DrawConvertButton();
 
             if (GUILayout.Button("Open in Scenarios Window"))
                 ScenarioWindow.Open(Scenario);
 
             sections.Draw();
+        }
+
+        // Старые списки → нода When и нода Do; после — сразу граф, чтобы было видно, что получилось.
+        private void DrawConvertButton()
+        {
+            if (!ScenarioGraphConverter.CanConvert(Scenario))
+                return;
+
+            EditorGUILayout.HelpBox("Old lists: When → If → Do. Convert them to a graph — a When node and a Do node, one undo step.", MessageType.Info);
+
+            if (!GUILayout.Button("Convert to Graph"))
+                return;
+
+            ScenarioGraphConverter.Convert(Scenario);
+            ScenarioGraphWindow.Open(Scenario);
+            GUIUtility.ExitGUI();
         }
 
         private void DrawDescription()

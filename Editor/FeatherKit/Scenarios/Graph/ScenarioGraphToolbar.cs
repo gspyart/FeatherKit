@@ -16,7 +16,7 @@ namespace FeatherKit.EditorTools
     /// Шапка окна графа — часть ScenarioGraphWindow: что открыто и есть ли несохранённое.
     /// - крошки с иконками: сцена или префаб ▸ объект ▸ Scenario, или граф-файл ▸ via объект; клик выделяет и пингует
     /// - Lock, Frame All, Select, Save; места под «Make Graph File» и «Embed in Object» (этап 2)
-    /// - полосы под шапкой: Play Mode и «граф-файл на N объектах»
+    /// - полосы под шапкой: Play Mode и «граф-файл на N объектах»; в игре у граф-файла — «Debug: объект» для подсветки
     /// </summary>
     internal class ScenarioGraphToolbar
     {
@@ -33,6 +33,7 @@ namespace FeatherKit.EditorTools
         private readonly Image lockIcon;
         private readonly ToolbarButton selectButton;
         private readonly ToolbarButton saveButton;
+        private readonly ToolbarMenu debugTargetMenu;
         private readonly VisualElement playModeBar;
         private readonly VisualElement sharedFileBar;
         private readonly Label sharedFileText;
@@ -59,6 +60,9 @@ namespace FeatherKit.EditorTools
             crumbsLock.AddToClassList("scenario-toolbar__icon");
 
             toolbar.Add(new ToolbarSpacer { flex = true });
+
+            debugTargetMenu = new ToolbarMenu { tooltip = "Whose running graph to highlight" };
+            toolbar.Add(debugTargetMenu);
 
             var lockToggle = new ToolbarToggle { value = window.IsLocked, tooltip = "Locked — keeps this graph when selection changes" };
             lockIcon = new Image { image = ScenarioIcons.Lock(window.IsLocked) };
@@ -116,6 +120,7 @@ namespace FeatherKit.EditorTools
 
             playModeBar.style.display = EditorApplication.isPlaying ? DisplayStyle.Flex : DisplayStyle.None;
             RefreshSharedFileBar(host);
+            RefreshDebugTargetMenu(host);
         }
 
         private void RefreshSharedFileBar(ScenarioGraphHost host)
@@ -142,6 +147,33 @@ namespace FeatherKit.EditorTools
             // Поиск использований FeatherKit открыт только пунктом меню — зовём его, выделив файл.
             Selection.activeObject = host.Owner;
             EditorApplication.ExecuteMenuItem(FindUsagesMenuItem);
+        }
+
+
+        // ── Подсветка в игре ─────────────────────────────────────────────
+
+        // Граф-файл исполняют много объектов сразу — подсвечивать можно только один, его и выбирают здесь.
+        private void RefreshDebugTargetMenu(ScenarioGraphHost host)
+        {
+            var isShown = EditorApplication.isPlaying && host is { IsAlive: true, IsGraphFile: true };
+            debugTargetMenu.style.display = isShown ? DisplayStyle.Flex : DisplayStyle.None;
+
+            if (!isShown)
+                return;
+
+            var highlighter = graphView.RunHighlighter;
+            debugTargetMenu.text = highlighter.Target != null ? $"Debug: {highlighter.Target.name}" : "Debug: none";
+
+            var menu = debugTargetMenu.menu;
+            menu.ClearItems();
+            menu.AppendAction("None", _ => highlighter.ChooseByHand(null));
+
+            foreach (var scenario in ScenarioRunHighlighter.ScenariosRunning((ScenarioGraphAsset)host.Owner))
+            {
+                var chosen = scenario;
+                menu.AppendAction($"{chosen.name} ({chosen.gameObject.scene.name})", _ => highlighter.ChooseByHand(chosen),
+                    _ => chosen == highlighter.Target ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
+            }
         }
 
 

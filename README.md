@@ -491,82 +491,157 @@ var progress = SaveStorage.Load<ProgressData>("progress");
 через минуту гаснет. Никто не пишет для этого программу: у датчика одно правило
 «**когда** кто-то прошёл — **если** сейчас темно — **включить** свет».
 
-Сценарий — то же самое для игры. Вы собираете такие правила из готовых блоков прямо
-в инспекторе, без единой строчки кода. Похоже на Scratch, только проще: каждый сценарий —
-одно правило **«When → If → Do»** («когда → если → что сделать»).
+Сценарий — то же самое для игры, только правил может быть много и они идут друг за другом.
+Вы рисуете их схемой: квадратики-ноды соединены проводами, и запуск бежит по проводам от ноды
+к ноде — как фишка по клеткам настольной игры. Ни строчки кода: ноды и блоки готовые,
+их ищут поиском, как Add Component. Головоломка из пяти шагов — одна схема, а не пять
+разрозненных правил, связанных флажками.
 
-**Пример 1. Лампочка над входом.** Игрок подходит к двери дома — над ней загорается лампа.
-Отходит — лампа гаснет.
+**Пример: силуэт в окне.** Игрок поднимается на крышу и отворачивается от угла — в углу
+появляется тёмная фигура. Игрок оборачивается — фигура держится секунду и исчезает со звуком.
+Уходит с крыши, так и не обернувшись, — фигура пропадает молча.
 
-| Раздел | Блок |
-|---|---|
-| When | «Tagged Object in Trigger»: Enter, тег `Player` |
-| If | — ничего, загорается всегда |
-| Do | «Enable or Disable Component»: `Light` на лампе → Turn On |
+1. Нода **When** «Player in Trigger: Enter» — игрок вошёл в зону на крыше. От неё провод
+   идёт к следующей ноде.
+2. Нода **Do** — «Activate or Deactivate Object»: включить силуэт. Шаги внутри Do идут сверху
+   вниз, как список дел.
+3. Нода **Wait For** — ждёт первое из двух событий, у каждого свой выход:
+   - «Looked At» (игрок посмотрел на силуэт) → провод к ноде Do: «Wait» 1 с, «Play Sound»,
+     выключить силуэт;
+   - «Left Zone» (игрок вышел из зоны) → провод к ноде Do: выключить силуэт.
+4. Пока игра идёт, в окне графа подсвечивается нода, на которой сейчас стоит запуск, а провод,
+   по которому он только что прошёл, вспыхивает.
 
-Второй такой же сценарий с выходом из триггера лампу выключает.
-
-**Пример 2. Дверь на ключ.** Игрок подходит к складу. Если ключ он уже нашёл, раздаётся
-скрип, дверь плавно отъезжает в сторону, а через пять секунд закрывается обратно. Ключа
-нет — ничего не происходит.
-
-| Раздел | Блок |
-|---|---|
-| When | «Tagged Object in Trigger»: Enter, тег `Player` |
-| If | «Flag Is On»: `Ключ от склада` |
-| Do | «Play Sound»: скрип → «Move to Point»: дверь в открытое положение, плавно → «Wait»: 5 секунд → «Move to Point»: дверь обратно |
-
-Флаг `Ключ от склада` включает другой сценарий — на самом ключе: игрок его подобрал →
-«Change Flag»: Turn On.
-
-**Ещё идеи:** собрал все 10 монет — открылся сундук; нажал рычаг — опустился мост; вошёл
-в город впервые — показать заставку с его названием.
+**Ещё идеи:** собрал все 10 монет — открылся сундук; нажал рычаг — опустился мост; пока игрок
+стоит в тёмной комнате (Guard While), за спиной скрипят шаги — вышел на свет, и шаги обрываются.
 
 **Как собрать сценарий**
 
-1. Добавьте объекту компонент `Scenario`. Если сценарий срабатывает от триггера, на этом же
-   объекте нужен коллайдер с галкой Is Trigger.
-2. В каждом из трёх разделов нажмите «+» и выберите блок — откроется окно с поиском,
-   как Add Component.
-3. Шаги выполняются сверху вниз, по очереди. Блоки «If — Else», «Repeat»,
-   «In Parallel» держат внутри свой столбик шагов.
-4. Запустите игру: идущие шаги подсвечиваются — и во вложенных столбиках, и фоновые, а сценарий
-   можно запустить или оборвать кнопкой прямо в инспекторе.
+1. Добавьте объекту компонент `Scenario` и нажмите **Open Graph** в инспекторе (или меню
+   `FeatherKit → Scenarios → Graph`). Если сценарий срабатывает от триггера, на этом же объекте нужен
+   коллайдер с галкой Is Trigger.
+2. Пробел, правый клик или провод, брошенный в пустоту, — поиск нод. Блок-событие из поиска
+   сразу становится нодой When, блок-шаг — нодой Do; провод, брошенный в пустоту, сам соединится
+   с новой нодой.
+3. Тяните провод от выхода ноды ко входу следующей. С одного выхода можно пустить несколько
+   проводов — ветки пойдут разом. Провод назад — повтор.
+4. Поля нод правятся прямо на холсте; редкие настройки — в инспекторе ноды справа.
+   C — заметка-комментарий, A — показать весь граф, F — выделенное.
+5. Запустите игру — граф подсвечивается.
 
-**Одновременно и фоном.** У каждого долгого шага — звук, мигание, перемещение, Timeline, «Repeat»,
-«In Parallel» — есть галка «Wait Until Done». Снимите её, и шаг уйдёт в фон: сценарий сразу
-возьмёт следующий. Пример — монстр в коридоре:
+Холст двигается как в Figma: прокрутка двумя пальцами или колесом — сдвиг, щипок
+или Cmd + колесо — зум, тянуть с зажатым пробелом — сдвиг.
 
-| Шаг | Как идёт |
+**Один граф на много объектов.** Граф может лежать в объекте («In This Object») или в отдельном
+файле — Create → FeatherKit → Scenarios → Scenario Graph. Файл ставят на многие объекты: двадцать
+одинаковых ламп с одним поведением. Объекты сцены файл хранить не может, поэтому их отдают через
+переменные с галкой «Set on Object»: у каждого `Scenario` в инспекторе свой раздел «Set on Object»,
+где лампа указывает саму себя. Открыв файл через объект, в панели переменных видно колонку
+«On ‹объект›» с его значениями.
+
+**Переменные графа** — в панели слева на холсте: Flag (да/нет), Counter (целое), Number
+(дробное), Object. У каждого объекта, исполняющего граф, свои значения. Почти в любом поле блока
+кнопка слева переключает «своё значение» ↔ «переменная графа». Общие на всю игру флаги и счётчики —
+по-прежнему ассеты Create → FeatherKit → Scenarios.
+
+**Ждать и сторожить.**
+
+- **Wait For** стоит, пока не наступит один из исходов, и идёт в его выход. Исход — событие
+  («вышел из зоны») или условие («смотрит на окно»); у тайм-аута свой выход Timed Out.
+- **Guard While** пускает выход Body и держит его, пока верно условие. Нарушилось — всё, что
+  выросло из Body, обрывается, долгие эффекты плавно уходят, и запуск идёт в Broken.
+
+**Старые сценарии** — списки «When → If → Do» в инспекторе — работают как раньше, пока
+граф пуст. Кнопка **Convert to Graph** в инспекторе (или меню
+`FeatherKit → Scenarios → Convert Old Scenarios to Graphs` для всей открытой сцены или префаба)
+переложит их в ноду When и ноду Do одной записью undo. Окно со списком всех сценариев сцены
+и журналом запусков — `FeatherKit → Scenarios → Scenario List`.
+
+**Свой блок** — маленький класс. Он сам появится в поиске и в меню «+».
+
+```csharp
+[Serializable, ScenarioBlock("Light/Blink")]
+public class BlinkLightAction : ScenarioAction
+{
+    [ScenarioLabel("Lamp")] [SerializeField] private ScenarioValue<Light> lamp;
+
+    public override IEnumerator Perform(ScenarioRun run)
+    {
+        var light = lamp.Get(run);
+        light.enabled = false;
+        yield return new WaitForSeconds(0.1f);
+        light.enabled = true;
+    }
+}
+```
+
+**Своя нода потока** — когда нужен свой выбор, куда пойти.
+
+```csharp
+[Serializable, ScenarioBlock("Flow/Coin Flip")]
+public class CoinFlipNode : ScenarioFlowNode
+{
+    private static readonly ScenarioOutput Heads = new ScenarioOutput("heads", "Heads");
+    private static readonly ScenarioOutput Tails = new ScenarioOutput("tails", "Tails");
+
+    protected override IEnumerator Perform(ScenarioRun run, ScenarioInput input)
+    {
+        Fire(run, Random.value < 0.5f ? Heads : Tails);
+        yield break;
+    }
+}
+```
+
+**Подробности**
+
+- Порты ноды — её статические поля `ScenarioInput` / `ScenarioOutput`; id порта — то, что хранит
+  провод, менять его нельзя. Переменное число выходов — переопределить `DescribePorts`.
+- `Fire(run, output)` пускает провода выхода и идёт дальше; `FireAndWait` ждёт всё, что из них
+  выросло; `Fire(…).Cancel()` обрывает выросшее.
+- Повторный запуск от той же When: «If Already Running» — Skip (по умолчанию), Restart или
+  Run Alongside; «Only Once» — один раз за жизнь объекта.
+- Запуск снаружи: `TryRun(instigator)` из кода, `Run()` — из UnityEvent и сигналов Timeline,
+  нода или блок «Run Scenario» — из другого сценария. Граф откликается нодами When с событием «Called».
+- Долгий эффект, который должен плавно уходить при обрыве (звук по кругу, затемнение), реализует
+  `IScenarioHeldEffect`: граф отпустит его на Stop, при обрыве Guard While и при удалении объекта.
+- Ошибка в ноде обрывает запуск; журнал пишет, с какой ноды он начался и на какой упал.
+- У каждого условия есть галка «NOT»; сложная логика — вложенными группами «Condition Group».
+- На кого действует блок: «This Object», «Caller», «Player», «Object». Кто такой игрок, игра задаёт
+  через `ScenarioTarget.PlayerFinder`.
+- Блоки старых списков «If — Else», «In Parallel», «Random One Of», «Repeat», «Wait Until»,
+  «Wait for Background Steps» в графе заменяют ноды потока; конвертер оставляет их блоками в Do
+  и предупреждает в консоли.
+- Переименовали класс блока или ноды — пометьте его `[MovedFrom]`. Нода пропавшего класса видна
+  красной и данные не теряет; удалить её можно через меню «Delete Anyway…».
+- Цвет и иконку категории задаёт `ScenarioBlockStyle`; игра добавляет свои категории через
+  `ScenarioBlockStyle.RegisterCategory`.
+
+**Ноды потока**
+
+| Нода | Что делает |
 |---|---|
-| «Move to Point»: монстр к игроку за 3 с | без «Wait Until Done» — фоном |
-| «Flicker»: лампы 2 с, «Play Sound»: скрип | по очереди, пока монстр идёт |
-| «Wait for Background Steps» | ждём, пока монстр дойдёт |
-| «Play Sound»: крик | |
+| Branch | Условия сошлись — True, нет — False |
+| Wait For | Ждёт первый из исходов (событие или условие); Timed Out по тайм-ауту |
+| Guard While | Держит Body, пока верно условие; нарушилось — Broken, кончилось само — Done |
+| Parallel | Ветки Branch 1..N разом; дальше, когда кончились все или первая |
+| Sequence | Then 1..N по очереди, каждый — когда кончилось всё из прошлого |
+| Repeat | Each Time N раз, пока сходятся условия или бесконечно; вход Stop |
+| Run Scenario | Позвать другой сценарий, по желанию дождаться его |
+| Stop This Run, Stop Scenario | Оборвать свой запуск или весь сценарий |
 
-«In Parallel» запускает несколько столбиков разом и идёт дальше, когда закончатся все — или первый
-из них («Continue When»), тогда остальные обрываются. Так делается «монстр ползёт, пока игрок
-не обернулся»: ветка 1 — ползти, ветка 2 — «Wait Until» игрок смотрит.
+**Готовые блоки** — по категориям, как в поиске
 
-Когда сценариев много, удобнее окно **`FeatherKit → Scenarios`**: слева все сценарии сцены,
-справа выбранный на всю ширину, внизу журнал — какой сценарий сработал, какой нет и почему.
-
-Если событие должно случиться всего раз — скажем, катсцена при первом входе в город, —
-поставьте галку «Run Once». Чтобы сценарии общались между собой, есть флаги
-(«дверь открыта»), счётчики («собрано монет: 7») и сигналы («включить свет во всём доме»).
-
-**Готовые блоки** — по категориям, как в меню «+»
-
-| Раздел | Категория | Блоки |
+| Вид | Категория | Блоки |
 |---|---|---|
-| When | Object | Start, Every Frame (каждый кадр или раз в N секунд) |
+| События (When, Wait For) | Object | Start, Every Frame (каждый кадр или раз в N секунд) |
 | | Trigger | Tagged Object in Trigger: Enter, Exit, «Stay — Every Frame» |
 | | Variables | Flag Changed, Counter Changed |
 | | Signals | Signal Received |
-| If | Logic | Condition Group, Chance |
+| | Scenario | Called |
+| Условия | Logic | Condition Group, Chance |
 | | Variables | Flag Is On, Compare Counter |
 | | Object | Object Is Active |
-| Do | Control | Wait, Wait Until, Wait for Background Steps, If — Else, Random One Of, In Parallel, Repeat |
+| Шаги (Do) | Control | Wait; старые блоки списков — If — Else, Random One Of, In Parallel, Repeat, Wait Until, Wait for Background Steps |
 | | Scenario | Run Scenario, Stop Scenario |
 | | Object | Activate or Deactivate Object, Enable or Disable Component |
 | | Transform | Move to Point — сразу или плавно |
@@ -577,65 +652,26 @@ var progress = SaveStorage.Load<ProgressData>("progress");
 | | Signals | Send Signal |
 | | Code, Debug | Call Methods (UnityEvent), Write to Log |
 
-**Свой блок** — маленький класс. Он сам появится в меню «+».
-
-```csharp
-[Serializable]
-[ScenarioBlock("Light/Blink")]
-public class BlinkLightAction : ScenarioAction
-{
-    [ScenarioLabel("Lamp")]
-    [SerializeField] private Light lamp;
-
-    public override IEnumerator Perform(ScenarioRun run)
-    {
-        lamp.enabled = false;
-        yield return new WaitForSeconds(0.1f);
-        lamp.enabled = true;
-    }
-}
-```
-
-**Подробности**
-
-- У каждого условия есть галка «NOT». Сложная логика — вложенными группами:
-  «(a или b) и (b или c)» — это «All Conditions» → [группа «At Least One»: a, b] + [группа «At Least One»: b, c].
-- На кого действует блок: на этот объект, на того, кто запустил сценарий, на игрока или на
-  конкретный объект («This Object», «Caller», «Player», «Object»). Кто такой игрок, игра задаёт через `ScenarioTarget.PlayerFinder`.
-- Пустое поле компонента (аниматор, Timeline) — берётся компонент с объекта сценария.
-- Пока сценарий идёт, повторный запуск пропускается. Сценарий идёт, пока идут и его фоновые шаги:
-  бесконечный «Repeat» фоном держит его идущим до «Stop».
-- «Сработать, когда условие сойдётся» — триггер «Stay — Every Frame» или «Every Frame» плюс условие.
-- Пустой звук не обрывает сценарий: предупреждение в консоль, шаг пропускается.
-- Выключение объекта сценарий не обрывает; удаление объекта и «Stop» — обрывают,
-  в том числе все ветки «In Parallel» и фоновые шаги. Звук, Timeline и другой сценарий,
-  начатые шагами, доигрывают сами.
-- Фоновый шаг принадлежит всему запуску: обрыв ветки «In Parallel» его не трогает.
-- Ошибка в шаге на любой глубине, в фоновом тоже, обрывает сценарий и пишет, на каком шаге.
-- Запуск снаружи: `TryRun(instigator)` из кода, `Run()` — из UnityEvent и сигналов Timeline.
-- Свой блок: класс с `[Serializable]` и `[ScenarioBlock("Category/Name")]`, наследник одной
-  из баз; долгому шагу, который можно пустить фоном, — `ScenarioLongAction`: галку «Wait Until Done»
-  он получит сам, `Perform` всегда идёт до конца. Подписи полей — `[ScenarioLabel("…")]`, по-английски, как весь инструмент; вложенный столбик — поле `ScenarioActionList`
-  или `ScenarioConditionList`. Переименовали класс — пометьте его `[MovedFrom]`, иначе блоки
-  на сценах потеряются.
-- Цвет категории задаёт `ScenarioBlockStyle`; новая категория без цвета — серая.
-
 | Класс | Назначение |
 |---|---|
-| `Scenario` | Компонент: события, условия, шаги, запуск и остановка |
-| `ScenarioEvent`, `ScenarioCondition`, `ScenarioAction` | Базы блоков «When», «If», «Do» |
+| `Scenario` | Компонент: какой граф, привязки, запуск и остановка, подсветка и журнал; пустой граф — старые списки |
+| `ScenarioGraph`, `ScenarioGraphAsset` | Данные графа: ноды, провода, переменные, рамки, заметки; граф-файл |
+| `ScenarioNode`, `ScenarioWhenNode`, `ScenarioStepsNode`, `ScenarioFlowNode` | База ноды; When; Do; база ноды потока |
+| `ScenarioWaitForNode`, `ScenarioGuardNode` и ноды `Nodes/Flow` | Готовые ноды потока |
+| `ScenarioInput`, `ScenarioOutput`, `ScenarioPortList` | Порты ноды |
+| `ScenarioWire` | Провод: выход одной ноды → вход другой |
+| `ScenarioRun`, `ScenarioFiring` | Один запуск; кусок запуска от одного выхода — его можно дождаться или оборвать |
+| `ScenarioEvent`, `ScenarioCondition`, `ScenarioAction` | Базы блоков-событий, условий и шагов |
 | `ScenarioInstantAction`, `ScenarioLongAction` | Шаг без ожидания; долгий шаг с галкой «Wait Until Done» |
-| `ScenarioActionList`, `ScenarioConditionList` | Вложенный столбик шагов или условий внутри блока |
+| `ScenarioValue<T>`, `ScenarioFlagReference`, `ScenarioCounterReference` | Поле «своё значение или переменная графа» |
+| `ScenarioVariableDefinition`, `ScenarioVariableBinding` | Переменная графа; её значение на объекте |
+| `IScenarioHeldEffect` | Долгий эффект, который граф отпускает плавно |
 | `ScenarioTarget` | На какой объект действует блок |
-| `ScenarioBlockAttribute`, `ScenarioLabelAttribute` | Путь блока в меню «+»; подпись поля |
-| `ScenarioRun` | Один запуск: чей сценарий, кто его вызвал, его ветки; `PerformStep` — выполнить шаг, `StartBranch` — пустить ветку |
-| `ScenarioBranch` | Отдельно идущая ветка запуска: основные шаги, ветка «In Parallel» или фоновый шаг |
-| `ScenarioSteps` | Выполняет вложенные шаги; ошибка на любой глубине доходит до сценария |
-| `ScenarioFlag`, `ScenarioCounter`, `ScenarioSignal` | Флаг, счётчик и сигнал как ассеты: Create → FeatherKit → Scenarios |
-| `ScenarioFlags`, `ScenarioCounters`, `ScenarioSignals` | Их значения на весь запуск игры и рассылка сигналов |
+| `ScenarioBlockAttribute`, `ScenarioLabelAttribute`, `ScenarioInspectorOnlyAttribute` | Путь в поиске; подпись поля; поле только в инспекторе ноды |
+| `ScenarioFlag`, `ScenarioCounter`, `ScenarioSignal` | Общие флаг, счётчик и сигнал как ассеты |
 | `TriggerEvent` | База «вошёл в триггер или вышел»: игра решает, кто считается гостем |
-| `ScenarioRunRecord` | Чем кончилась попытка запуска — для журнала в окне сценариев |
-| `SwitchableComponents` | Включить и выключить компонент любого вида: скрипт, свет, рендерер, коллайдер |
+| `ScenarioRunRecord` | Чем кончилась попытка запуска — для журнала |
+| Редактор: `ScenarioGraphWindow` и папка `Editor/FeatherKit/Scenarios/Graph` | Окно графа, холст, поиск нод, панель переменных, конвертер, подсветка в игре |
 
 </details>
 
@@ -751,8 +787,9 @@ DebugPanel.Watch(this, "Игрок", "Скорость", () => speed.ToString("0
 | Инспекторы мультяшных шейдеров, база для своих инспекторов | `ToonLitShaderGUI`, `ToonTerrainShaderGUI`, `FeatherEditor` |
 | Разметка полей: `[FGroupBox]`, `[FInlineFields]`, `[FSection]`, `[FGroupStart]`, `[FBlockTitle]`; плоская рамка для своих инспекторов — `InspectorFrame`; меню поля по правому клику на своём заголовке — `PropertyTitleMenu` | Сами: у компонентов — `FDescriptionInspector`, у ассетов — запасной `FScriptableObjectInspector`; в своём инспекторе — `GroupedFieldsLayout.DrawFields` |
 | Отрисовка полей `RandomSpread` и `RandomRange` | Сама, через `RandomSpreadDrawer`, `RandomRangeDrawer` |
-| Инспектор сценария из цветных блоков | Сам, через `ScenarioEditor` и соседние классы в `Editor/FeatherKit/Scenarios` |
-| Окно сценариев: все сценарии сцены, редактор на всю ширину, журнал запусков | `FeatherKit → Scenarios` или кнопка в инспекторе сценария |
+| Инспектор сценария: источник графа, «Set on Object», «Open Graph»; у старых списков — цветные блоки и «Convert to Graph» | Сам, через `ScenarioEditor` и соседние классы в `Editor/FeatherKit/Scenarios` |
+| Окно графа сценария: холст, поиск нод, переменные, инспектор ноды, подсветка в игре | `FeatherKit → Scenarios → Graph`, «Open Graph» в инспекторе, двойной клик по граф-файлу |
+| Окно сценариев: все сценарии сцены, старые списки на всю ширину, журнал запусков | `FeatherKit → Scenarios → Scenario List` |
 
 </details>
 

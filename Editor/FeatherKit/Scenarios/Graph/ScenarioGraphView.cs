@@ -13,7 +13,8 @@ namespace FeatherKit.EditorTools
     /// Холст графа сценария: ноды, провода, заметки и панель переменных поверх, на еле заметной сетке.
     /// - любая правка — через ScenarioGraphEditing; после неё, после undo и после правки в обход холста — пересборка из данных
     /// - части: движение (ScenarioCanvasNavigator), создание нод и заметок (ScenarioNodeCreation),
-    ///   строка состояния (ScenarioCanvasOverlay), пропуск невидимых стопок (ScenarioCanvasDetailCulling)
+    ///   строка состояния (ScenarioCanvasOverlay), пропуск невидимых стопок (ScenarioCanvasDetailCulling),
+    ///   подсветка в игре (ScenarioRunHighlighter)
     /// - проблемы графа (ScenarioGraphValidation) — значками на нодах
     /// </summary>
     internal class ScenarioGraphView : GraphView
@@ -54,6 +55,7 @@ namespace FeatherKit.EditorTools
 
             Overlay = new ScenarioCanvasOverlay(this);
             DetailCulling = new ScenarioCanvasDetailCulling(this);
+            RunHighlighter = new ScenarioRunHighlighter(this);
 
             graphViewChanged = HandleGraphViewChanged;
         }
@@ -79,6 +81,8 @@ namespace FeatherKit.EditorTools
         public ScenarioGraphBlackboard Blackboard { get; }
 
         public ScenarioCanvasDetailCulling DetailCulling { get; }
+
+        public ScenarioRunHighlighter RunHighlighter { get; }
 
         /// <summary>Проблемы графа на момент последней пересборки.</summary>
         public IReadOnlyList<ScenarioGraphProblem> Problems { get; private set; } = new List<ScenarioGraphProblem>();
@@ -118,6 +122,7 @@ namespace FeatherKit.EditorTools
             Editing = host != null ? new ScenarioGraphEditing(host) : null;
 
             Rebuild();
+            RunHighlighter.ChooseDefaultTarget();
             schedule.Execute(Navigator.FrameWholeGraph).ExecuteLater(FrameAllDelayMilliseconds);
         }
 

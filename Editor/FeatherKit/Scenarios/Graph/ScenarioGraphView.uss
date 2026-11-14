@@ -361,3 +361,19 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+/* ── Подсветка в игре ─────────────────────────────────────────────── */
+
+.scenario-node--running #node-border {
+    border-top-width: 2px;
+    border-right-width: 2px;
+    border-bottom-width: 2px;
+    border-top-color: rgb(90, 230, 120);
+    border-right-color: rgb(90, 230, 120);
+    border-bottom-color: rgb(90, 230, 120);
+}
+
+.scenario-wire--fired {
+    --edge-color: rgb(110, 255, 140);
+    --edge-width: 4;
+}
