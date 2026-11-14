@@ -16,7 +16,7 @@ namespace FeatherKit.Scenarios
         [SerializeField] private string variableName;
         [SerializeField] private ScenarioVariableKind kind;
 
-        [Tooltip("For Object variables: which component or asset type fits. Empty — any object")]
+        [Tooltip("For Object — the object type; for Object List — the type of each item. Empty — any object")]
         [SerializeField] private string objectTypeName;
 
         [Tooltip("Set on Object: each Scenario using this graph gives its own value in its bindings")]

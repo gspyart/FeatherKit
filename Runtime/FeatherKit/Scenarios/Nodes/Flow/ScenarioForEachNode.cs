@@ -1,6 +1,5 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -32,9 +31,8 @@ namespace FeatherKit.Scenarios
 
         protected override IEnumerator Perform(ScenarioRun run, ScenarioInput input)
         {
-            var listCopy = new List<Object>(list.Get(run));
-
-            foreach (var listItem in listCopy)
+            // Get отдаёт новый список: правка переменной посреди обхода этот обход не меняет.
+            foreach (var listItem in list.Get(run))
             {
                 if (item.IsChosen)
                     item.Set(run, listItem);

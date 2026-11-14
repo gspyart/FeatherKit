@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FeatherKit.Logging;
 using UnityEngine;
 
 namespace FeatherKit.Scenarios
@@ -14,6 +15,8 @@ namespace FeatherKit.Scenarios
     {
         // Общий на все точки: центр рендереров считается редко, и звать его из двух мест разом некому.
         private static readonly List<Renderer> RenderersBuffer = new List<Renderer>();
+
+        private static bool hasWarnedEyesFinderMissing;
 
         [SerializeField] private ScenarioPointKind kind;
 
@@ -126,9 +129,33 @@ namespace FeatherKit.Scenarios
 
         private static Transform PlayerEyesOf(ScenarioRun run)
         {
-            var eyes = PlayerEyesFinder?.Invoke(run.Scenario);
+            if (PlayerEyesFinder == null)
+            {
+                WarnEyesFinderMissingOnce();
+                return PlayerTransformOf(run);
+            }
+
+            var eyes = PlayerEyesFinder(run.Scenario);
 
             return eyes != null ? eyes : PlayerTransformOf(run);
+        }
+
+        // Глаза — забота игры: без неё взгляд меряется от ног игрока, и это стоит заметить сразу.
+        private static void WarnEyesFinderMissingOnce()
+        {
+            if (hasWarnedEyesFinderMissing)
+                return;
+
+            hasWarnedEyesFinderMissing = true;
+            FLog.Warning(("ScenarioPoint.PlayerEyesFinder is not set — the player's pivot is used", FLogColor.Bad));
+        }
+
+
+        // Флаг статический: без перезагрузки домена предупреждение не повторилось бы в следующей игре.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetOnEnterPlayMode()
+        {
+            hasWarnedEyesFinderMissing = false;
         }
 
         // Переменная Vector3 объекта не даёт — у неё только позиция.

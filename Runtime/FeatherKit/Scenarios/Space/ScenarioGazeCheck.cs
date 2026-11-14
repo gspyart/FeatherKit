@@ -1,4 +1,5 @@
 using System;
+using FeatherKit.Logging;
 using UnityEngine;
 
 namespace FeatherKit.Scenarios
@@ -12,6 +13,8 @@ namespace FeatherKit.Scenarios
     [Serializable]
     public class ScenarioGazeCheck
     {
+        private static bool hasWarnedNotImplemented;
+
         [Tooltip("Who looks: player eyes, a monster, a searchlight")]
         [ScenarioLabel("Looker")]
         [SerializeField] private ScenarioPoint looker = new ScenarioPoint(ScenarioPointKind.PlayerEyes);
@@ -53,6 +56,11 @@ namespace FeatherKit.Scenarios
         [Range(0f, 50f)]
         [ScenarioLabel("Frame Margin, %")]
         [SerializeField] private float frameMarginPercent;
+
+        [Tooltip("The camera whose frame counts for “In Camera Frame”. Empty — a Camera on the looker, else the main camera "
+                 + "(the player's camera driven by Cinemachine: the eyes object itself has no Camera)")]
+        [ScenarioLabel("Frame Camera")]
+        [SerializeField] private ScenarioValue<Camera> frameCamera = new ScenarioValue<Camera>();
 
         [Tooltip("Meters. 0 — any distance")]
         [Min(0f)]
@@ -120,6 +128,8 @@ namespace FeatherKit.Scenarios
             set => frameMarginPercent = Mathf.Clamp(value, 0f, 50f);
         }
 
+        public ScenarioValue<Camera> FrameCamera => frameCamera;
+
         public float MaxDistance
         {
             get => maxDistance;
@@ -165,7 +175,26 @@ namespace FeatherKit.Scenarios
         /// <summary>Смотрит ли смотрящий на цель прямо сейчас. Смотрящего или цели нет — не смотрит.</summary>
         public bool IsLooking(ScenarioRun run)
         {
+            WarnNotImplementedOnce();
             return false; // TODO этап 2, рантайм: углы, кадр камеры, дистанция, Clear View.
+        }
+
+        // Заглушка до рантайма этапа 2: молча «не смотрит» — и уровень ломается непонятно почему.
+        private static void WarnNotImplementedOnce()
+        {
+            if (hasWarnedNotImplemented)
+                return;
+
+            hasWarnedNotImplemented = true;
+            FLog.Warning(("Looks At is not implemented yet — it always answers “not looking”", FLogColor.Bad));
+        }
+
+
+        // Флаг статический: без перезагрузки домена предупреждение не повторилось бы в следующей игре.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetOnEnterPlayMode()
+        {
+            hasWarnedNotImplemented = false;
         }
     }
 

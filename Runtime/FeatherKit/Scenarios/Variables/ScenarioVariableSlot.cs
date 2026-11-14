@@ -43,7 +43,7 @@ namespace FeatherKit.Scenarios
         }
 
 
-        /// <summary>Живой список переменной Object List — блоки списков меняют его на месте, затем MarkChanged.</summary>
+        /// <summary>Живой список переменной Object List — только для ScenarioVariableSlot&lt;List&lt;Object&gt;&gt;; блоки списков меняют его на месте, затем MarkChanged.</summary>
         public List<Object> GetLive(ScenarioRun run)
         {
             return run.Scenario.GraphVariables.GetObjectListLive(RequireChosen());

@@ -17,9 +17,6 @@ namespace FeatherKit.Scenarios
         [Tooltip("The graph's Object List variable to use instead of the own list. Empty — the own list is used")]
         [SerializeField] private string variableId;
 
-        // Переведённый в T список переменной: один на поле, перезаписывается следующим Get.
-        [NonSerialized] private List<T> convertedItems;
-
 
         public ScenarioObjectList()
         {
@@ -49,22 +46,30 @@ namespace FeatherKit.Scenarios
         }
 
 
-        /// <summary>
-        /// Список для запуска: свой или переменной графа, объекты переведены в T.
-        /// Список переменной живёт до следующего Get этого поля — обходить надо копию, если между делом ждёшь.
-        /// </summary>
+        /// <summary>Список для запуска: свой или переменной графа, объекты переведены в T. Новый список на каждый вызов — можно держать через ожидания.</summary>
         public IReadOnlyList<T> Get(ScenarioRun run)
         {
+            var list = new List<T>();
+            GetInto(run, list);
+
+            return list;
+        }
+
+        /// <summary>То же без выделения памяти: список заполняется заново.</summary>
+        public void GetInto(ScenarioRun run, List<T> target)
+        {
+            target.Clear();
+
             if (!UsesVariable)
-                return items;
+            {
+                target.AddRange(items);
+                return;
+            }
 
-            var converted = run.Scenario.GraphVariables.Get<List<T>>(variableId);
+            var variables = run.Scenario.GraphVariables;
 
-            convertedItems ??= new List<T>();
-            convertedItems.Clear();
-            convertedItems.AddRange(converted);
-
-            return convertedItems;
+            foreach (var storedObject in variables.GetObjectListLive(variableId))
+                target.Add((T)variables.ConvertObject(variableId, storedObject, typeof(T)));
         }
     }
 }

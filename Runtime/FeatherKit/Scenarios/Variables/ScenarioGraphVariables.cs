@@ -77,24 +77,21 @@ namespace FeatherKit.Scenarios
                 ScenarioVariableKind.Vector3 => value.VectorValue,
                 ScenarioVariableKind.Text => value.TextValue,
                 ScenarioVariableKind.Color => value.ColorValue,
-                ScenarioVariableKind.ObjectList => ConvertObjectList<T>(variableId, value.ObjectListValue),
+                ScenarioVariableKind.ObjectList => CopyObjectList<T>(value.ObjectListValue),
                 _ => ConvertObject(variableId, value.ObjectValue, typeof(T))
             };
 
             return result is T typedResult ? typedResult : default;
         }
 
-        // Список — новый, в типе поля: запись в него не меняет переменную, для этого есть GetObjectListLive.
-        private object ConvertObjectList<T>(string variableId, List<Object> storedObjects)
+        // Копия, а не живой список: запись в неё не меняет переменную. Список другого типа — через ScenarioObjectList.
+        private static object CopyObjectList<T>(List<Object> storedObjects)
         {
-            ScenarioVariableKinds.TryGetListItemType(typeof(T), out var itemType);
+            if (typeof(T) != typeof(List<Object>) && typeof(T) != typeof(IReadOnlyList<Object>))
+                throw new InvalidOperationException(
+                    $"A field of type {typeof(T).Name} cannot read an Object List directly — use ScenarioObjectList<T>");
 
-            var converted = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(itemType), storedObjects.Count);
-
-            foreach (var storedObject in storedObjects)
-                converted.Add(ConvertObject(variableId, storedObject, itemType));
-
-            return converted;
+            return new List<Object>(storedObjects);
         }
 
 
@@ -134,8 +131,8 @@ namespace FeatherKit.Scenarios
         }
 
 
-        // Привязали объект без нужного компонента — это ошибка настройки, а не «пусто».
-        private Object ConvertObject(string variableId, Object storedObject, Type valueType)
+        /// <summary>Объект переменной в тип поля. Привязали объект без нужного компонента — ошибка настройки, а не «пусто».</summary>
+        internal Object ConvertObject(string variableId, Object storedObject, Type valueType)
         {
             var converted = ScenarioVariableKinds.ConvertObject(storedObject, valueType);
 

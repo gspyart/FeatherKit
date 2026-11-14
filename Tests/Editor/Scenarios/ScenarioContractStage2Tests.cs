@@ -49,6 +49,26 @@ namespace FeatherKit.Tests.Scenarios
                 ["ThisObject"] = 0, ["Caller"] = 1, ["Player"] = 2, ["PlayerEyes"] = 3,
                 ["Object"] = 4, ["Variable"] = 5, ["WorldPoint"] = 6
             }));
+
+            Assert.That(EnumNumbers<ScenarioLookTargetMode>(), Is.EqualTo(new Dictionary<string, int>
+            {
+                ["Point"] = 0, ["WorldDirection"] = 1, ["ObjectAxis"] = 2
+            }));
+
+            Assert.That(EnumNumbers<ScenarioLookAngleMode>(), Is.EqualTo(new Dictionary<string, int>
+            {
+                ["Cone"] = 0, ["HorizontalAndVertical"] = 1, ["InCameraFrame"] = 2
+            }));
+
+            Assert.That(EnumNumbers<ScenarioObjectAxis>(), Is.EqualTo(new Dictionary<string, int>
+            {
+                ["Forward"] = 0, ["Back"] = 1, ["Up"] = 2, ["Down"] = 3, ["Right"] = 4, ["Left"] = 5
+            }));
+
+            Assert.That(EnumNumbers<ScenarioDistanceComparison>(), Is.EqualTo(new Dictionary<string, int>
+            {
+                ["CloserThan"] = 0, ["FartherThan"] = 1, ["Between"] = 2, ["Outside"] = 3
+            }));
         }
 
 
@@ -175,7 +195,8 @@ namespace FeatherKit.Tests.Scenarios
                     "gaze", "gaze.looker", "gaze.looker.kind", "gaze.looker.targetTransform", "gaze.looker.variableId",
                     "gaze.looker.worldPosition", "gaze.looker.offset", "gaze.looker.usesRenderersCenter",
                     "gaze.targetMode", "gaze.target", "gaze.worldDirection", "gaze.objectAxis", "gaze.angleMode",
-                    "gaze.maxAngle", "gaze.maxYaw", "gaze.maxPitch", "gaze.frameMarginPercent", "gaze.maxDistance",
+                    "gaze.maxAngle", "gaze.maxYaw", "gaze.maxPitch", "gaze.frameMarginPercent",
+                    "gaze.frameCamera", "gaze.frameCamera.value", "gaze.frameCamera.variableId", "gaze.maxDistance",
                     "gaze.requiresClearView", "gaze.clearViewLayers");
 
                 RequireRelative(FirstConditionProperty(asset, graph, "Distance When"),
@@ -187,6 +208,34 @@ namespace FeatherKit.Tests.Scenarios
             finally
             {
                 Object.DestroyImmediate(asset);
+            }
+        }
+
+
+        [Test]
+        public void ScenarioBindings_NewValueFields_HaveSerializedPaths()
+        {
+            var owner = EditorUtility.CreateGameObjectWithHideFlags("Scenario Bindings", HideFlags.HideAndDontSave);
+
+            try
+            {
+                var serializedScenario = new SerializedObject(owner.AddComponent<Scenario>());
+                var bindings = serializedScenario.FindProperty("variableBindings");
+                bindings.arraySize = 1;
+                serializedScenario.ApplyModifiedPropertiesWithoutUndo();
+
+                foreach (var path in new[]
+                         {
+                             "variableBindings.Array.data[0].value.objectListValue",
+                             "variableBindings.Array.data[0].value.vectorValue",
+                             "variableBindings.Array.data[0].value.textValue",
+                             "variableBindings.Array.data[0].value.colorValue"
+                         })
+                    Assert.That(serializedScenario.FindProperty(path), Is.Not.Null, path);
+            }
+            finally
+            {
+                Object.DestroyImmediate(owner);
             }
         }
 
