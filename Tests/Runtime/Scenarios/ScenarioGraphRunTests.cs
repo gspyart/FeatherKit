@@ -437,6 +437,83 @@ namespace FeatherKit.Tests.Scenarios
         }
 
 
+        // ── Триггеры: уход без OnTriggerExit ─────────────────────────────
+
+        [UnityTest]
+        public IEnumerator TriggerGuest_ColliderDisabled_GetsExit_AndEntersAgainLater()
+        {
+            var scenario = CreateScenario(EnterExitGraph());
+            var playerCollider = CreatePlayerCollider();
+
+            scenario.SendMessage("OnTriggerEnter", playerCollider);
+            playerCollider.enabled = false;
+            yield return WaitFixedUpdates(2);
+
+            Assert.That(Marks, Is.EqualTo(new[] { "Entered", "Exited" }));
+
+            playerCollider.enabled = true;
+            yield return WaitFixedUpdates(2);
+            scenario.SendMessage("OnTriggerEnter", playerCollider);
+
+            Assert.That(Marks, Is.EqualTo(new[] { "Entered", "Exited", "Entered" }));
+        }
+
+        [UnityTest]
+        public IEnumerator TriggerGuest_TeleportedFarAway_GetsExit()
+        {
+            var scenario = CreateScenario(EnterExitGraph());
+            var zone = scenario.gameObject.AddComponent<BoxCollider>();
+            zone.isTrigger = true;
+            var playerCollider = CreatePlayerCollider();
+
+            yield return WaitFixedUpdates(1);
+            scenario.SendMessage("OnTriggerEnter", playerCollider);
+            yield return WaitFixedUpdates(2);
+
+            Assert.That(Marks, Is.EqualTo(new[] { "Entered" }), "Still inside the zone — no exit");
+
+            playerCollider.enabled = false;
+            playerCollider.transform.position = new Vector3(100f, 0f, 0f);
+            playerCollider.enabled = true;
+            yield return WaitFixedUpdates(3);
+
+            Assert.That(Marks, Is.EqualTo(new[] { "Entered", "Exited" }));
+        }
+
+        // When «вошёл» → «Entered», When «вышел» → «Exited». Без коллайдера-триггера на сценарии проверка «далеко» молчит.
+        private ScenarioGraph EnterExitGraph()
+        {
+            var graph = new ScenarioGraph();
+            var entered = graph.AddNode(new ScenarioWhenNode { CustomTitle = "Enter When" });
+            entered.AddEvent(TriggerEventFor(TriggerCrossing.Entered));
+            var exited = graph.AddNode(new ScenarioWhenNode { CustomTitle = "Exit When", RerunRule = ScenarioRerunRule.RunAlongside });
+            exited.AddEvent(TriggerEventFor(TriggerCrossing.Exited));
+            ConnectToIn(graph, entered, ScenarioWhenNode.Then, AddSteps(graph, "Entered"));
+            ConnectToIn(graph, exited, ScenarioWhenNode.Then, AddSteps(graph, "Exited"));
+
+            return graph;
+        }
+
+        private static TaggedTriggerEvent TriggerEventFor(TriggerCrossing crossing)
+        {
+            var triggerEvent = new TaggedTriggerEvent();
+            SetField(triggerEvent, "crossing", crossing);
+
+            return triggerEvent;
+        }
+
+        private BoxCollider CreatePlayerCollider()
+        {
+            return CreateGameObject("Player").AddComponent<BoxCollider>();
+        }
+
+        private static IEnumerator WaitFixedUpdates(int count)
+        {
+            for (var index = 0; index < count; index++)
+                yield return new WaitForFixedUpdate();
+        }
+
+
         // ── Вызов и старый режим ─────────────────────────────────────────
 
         [Test]
