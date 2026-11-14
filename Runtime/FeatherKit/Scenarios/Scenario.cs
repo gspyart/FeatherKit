@@ -46,6 +46,7 @@ namespace FeatherKit.Scenarios
         private ScenarioGraphVariables graphVariables;
         private ScenarioHeldEffects heldEffects;
         private ScenarioTriggerOccupants triggerOccupants;
+        private Action<Collider> sendSilentExit;
         private ScenarioListRunner listRunner;
         private bool hasWarnedDisabledCall;
 
@@ -250,6 +251,13 @@ namespace FeatherKit.Scenarios
         }
 
 
+        // Выход за гостя, ушедшего молча: из счёта он уже выписан, остаётся сообщить блокам.
+        private void SendSilentExit(Collider other)
+        {
+            RaiseInOwnOccurrence(TriggerExited, other);
+        }
+
+
         // Рассылка — свой «случай»: ожидание, начатое из-за неё, её же не засчитывает.
         private static void RaiseInOwnOccurrence<T>(Action<T> handlers, T argument)
         {
@@ -297,7 +305,8 @@ namespace FeatherKit.Scenarios
             runs = new ScenarioRuns(this);
             graphVariables = new ScenarioGraphVariables(runningGraph, bindings);
             heldEffects = new ScenarioHeldEffects(this);
-            triggerOccupants = new ScenarioTriggerOccupants();
+            triggerOccupants = new ScenarioTriggerOccupants(this);
+            sendSilentExit = SendSilentExit;
             listRunner = new ScenarioListRunner(this);
         }
 
@@ -384,6 +393,12 @@ namespace FeatherKit.Scenarios
         {
             triggerOccupants?.HandleExited(other);
             RaiseInOwnOccurrence(TriggerExited, other);
+        }
+
+        // Гость, ушедший без OnTriggerExit, — выключенный или унесённый телепортом; пока внутри никого, тут пусто.
+        private void FixedUpdate()
+        {
+            triggerOccupants?.ReleaseSilentlyLeft(sendSilentExit);
         }
     }
 }
