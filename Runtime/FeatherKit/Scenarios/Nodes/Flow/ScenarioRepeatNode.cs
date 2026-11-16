@@ -11,7 +11,7 @@ namespace FeatherKit.Scenarios
     /// - вход Stop обрывает идущие на ноде повторы: виток обрывается, повтор уходит в Finished
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Flow/Repeat")]
+    [ScenarioBlock("Flow/Repeat", Description = "Run “Each Time” again and again, then go to Finished")]
     public class ScenarioRepeatNode : ScenarioFlowNode, IScenarioLiveNode
     {
         public static readonly ScenarioInput Stop = new ScenarioInput("stop", "Stop");

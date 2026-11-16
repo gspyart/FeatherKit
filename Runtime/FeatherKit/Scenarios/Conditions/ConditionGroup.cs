@@ -8,7 +8,7 @@ namespace FeatherKit.Scenarios
     /// так собирается (a или b) и (b или c); галка «NOT» отрицает всю группу.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Logic/Condition Group")]
+    [ScenarioBlock("Logic/Condition Group", Description = "Combine conditions with all of / at least one of")]
     public class ConditionGroup : ScenarioCondition
     {
         [ScenarioLabel("Conditions")]

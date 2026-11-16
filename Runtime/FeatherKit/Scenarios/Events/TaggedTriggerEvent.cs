@@ -6,7 +6,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Вход в триггер или выход из него для объектов с нужным тегом; без тега — для любых.</summary>
     [Serializable]
-    [ScenarioBlock("Trigger/Tagged Object in Trigger")]
+    [ScenarioBlock("Trigger/Tagged Object in Trigger", Description = "Fires when an object enters, leaves or stays in the trigger")]
     [MovedFrom(false, sourceClassName: "TaggedZoneEvent")]
     public class TaggedTriggerEvent : TriggerEvent
     {

@@ -9,7 +9,7 @@ namespace FeatherKit.Scenarios
     /// Без конца — не чаще раза в кадр, иначе мгновенные шаги подвесили бы игру.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Control/Repeat")]
+    [ScenarioBlock("Control/Repeat", Description = "Repeat the inner steps (old lists)")]
     public class RepeatAction : ScenarioLongAction
     {
         [Tooltip("How many times. 0 — endlessly, until the scenario is stopped or the “while” conditions stop being met")]

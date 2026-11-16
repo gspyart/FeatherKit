@@ -6,7 +6,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Пауза между шагами. Игровое время: на паузе игры ожидание тоже стоит.</summary>
     [Serializable]
-    [ScenarioBlock("Control/Wait")]
+    [ScenarioBlock("Control/Wait", Description = "Wait for some seconds of game time")]
     public class WaitAction : ScenarioAction
     {
         [Tooltip("How many seconds to wait")]

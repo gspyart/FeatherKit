@@ -11,7 +11,7 @@ namespace FeatherKit.Scenarios
     /// - выход без проводов в ожидании не участвует
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Flow/Parallel")]
+    [ScenarioBlock("Flow/Parallel", Description = "Run all branches at once and wait for all or the first")]
     public class ScenarioParallelNode : ScenarioFlowNode
     {
         private const string BranchIdPrefix = "branch";

@@ -5,7 +5,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Оборвать идущий сценарий — другой или этот же: шаги после этого блока не выполнятся.</summary>
     [Serializable]
-    [ScenarioBlock("Scenario/Stop Scenario")]
+    [ScenarioBlock("Scenario/Stop Scenario", Description = "Stop a scenario — another one or this one")]
     public class StopScenarioAction : ScenarioInstantAction
     {
         [Tooltip("Which scenario to stop. Empty — this one")]

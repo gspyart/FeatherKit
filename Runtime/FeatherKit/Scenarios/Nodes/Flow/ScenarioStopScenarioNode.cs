@@ -6,7 +6,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Нода «Stop Scenario»: останавливает весь сценарий — другой или этот же, со всеми запусками и долгими эффектами.</summary>
     [Serializable]
-    [ScenarioBlock("Flow/Stop Scenario")]
+    [ScenarioBlock("Flow/Stop Scenario", Description = "Stop a whole scenario with all its runs")]
     public class ScenarioStopScenarioNode : ScenarioFlowNode
     {
         public static readonly ScenarioOutput Done = new ScenarioOutput("done", "Done");

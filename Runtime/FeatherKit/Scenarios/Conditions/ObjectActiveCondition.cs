@@ -5,7 +5,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Объект включён на сцене — сам и все его родители.</summary>
     [Serializable]
-    [ScenarioBlock("Object/Object Is Active")]
+    [ScenarioBlock("Object/Object Is Active", Description = "An object is active in the scene")]
     public class ObjectActiveCondition : ScenarioCondition
     {
         [Tooltip("Which object to check")]

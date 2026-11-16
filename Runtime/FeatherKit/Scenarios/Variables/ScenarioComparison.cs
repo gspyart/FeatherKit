@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace FeatherKit.Scenarios
 {
-    /// <summary>Как сравнить число счётчика с заданным: равно, больше, не меньше…</summary>
+    /// <summary>Как сравнить число с заданным: равно, больше, не меньше…</summary>
     public enum ScenarioComparison
     {
         [InspectorName("=")] Equal,
@@ -22,6 +22,19 @@ namespace FeatherKit.Scenarios
             {
                 ScenarioComparison.Equal => value == other,
                 ScenarioComparison.NotEqual => value != other,
+                ScenarioComparison.Greater => value > other,
+                ScenarioComparison.GreaterOrEqual => value >= other,
+                ScenarioComparison.Less => value < other,
+                _ => value <= other
+            };
+        }
+
+        public static bool Holds(this ScenarioComparison comparison, float value, float other)
+        {
+            return comparison switch
+            {
+                ScenarioComparison.Equal => Mathf.Approximately(value, other),
+                ScenarioComparison.NotEqual => !Mathf.Approximately(value, other),
                 ScenarioComparison.Greater => value > other,
                 ScenarioComparison.GreaterOrEqual => value >= other,
                 ScenarioComparison.Less => value < other,

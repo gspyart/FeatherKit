@@ -13,7 +13,7 @@ namespace FeatherKit.Scenarios
     /// - провод из Body назад в эту же ноду не заводит второго сторожа: Body просто идёт заново
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Flow/Guard While")]
+    [ScenarioBlock("Flow/Guard While", Description = "Run Body and cut it off the moment the conditions stop holding")]
     public class ScenarioGuardNode : ScenarioFlowNode, IScenarioLiveNode
     {
         public static readonly ScenarioOutput Body = new ScenarioOutput("body", "Body");

@@ -46,6 +46,26 @@ namespace FeatherKit.Scenarios
         }
 
 
+        /// <summary>Цель по умолчанию — «этот объект» без выбранного объекта и переменной: переносить нечего.</summary>
+        internal bool IsDefault => kind == ScenarioTargetKind.Self && !ScenarioFieldMigration.IsAssigned(specificObject) && string.IsNullOrEmpty(variableId);
+
+        /// <summary>Та же цель точкой — для переноса старых полей блоков на ScenarioPoint.</summary>
+        internal ScenarioPoint ToPoint()
+        {
+            return kind switch
+            {
+                ScenarioTargetKind.Self => new ScenarioPoint(ScenarioPointKind.ThisObject),
+                ScenarioTargetKind.Instigator => new ScenarioPoint(ScenarioPointKind.Caller),
+                ScenarioTargetKind.Player => new ScenarioPoint(ScenarioPointKind.Player),
+                ScenarioTargetKind.Variable => ScenarioPoint.FromVariable(variableId),
+                _ => new ScenarioPoint(ScenarioPointKind.Object)
+                {
+                    TargetTransform = ScenarioFieldMigration.IsAssigned(specificObject) ? specificObject.transform : null
+                }
+            };
+        }
+
+
         public static ScenarioTarget FromVariable(string graphVariableId)
         {
             return new ScenarioTarget { kind = ScenarioTargetKind.Variable, variableId = graphVariableId };

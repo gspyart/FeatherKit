@@ -4,7 +4,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Объект сценария появился и впервые включился — обычно это старт сцены.</summary>
     [Serializable]
-    [ScenarioBlock("Object/Start")]
+    [ScenarioBlock("Object/Start", Description = "Fires once when the scenario object starts")]
     public class ObjectStartedEvent : ScenarioEvent
     {
         protected override void OnAttached()

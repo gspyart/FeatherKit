@@ -6,7 +6,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Нода «Sequence»: выходы Then 1..N по очереди — следующий, когда всё выросшее из прошлого кончилось; затем Done.</summary>
     [Serializable]
-    [ScenarioBlock("Flow/Sequence")]
+    [ScenarioBlock("Flow/Sequence", Description = "Run the outputs one after another, each to its end")]
     public class ScenarioSequenceNode : ScenarioFlowNode
     {
         private const string ThenIdPrefix = "then";

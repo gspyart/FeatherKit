@@ -5,22 +5,24 @@ using UnityEngine;
 namespace FeatherKit.Scenarios
 {
     /// <summary>
-    /// Перенести объект к точке — сразу или плавно за заданное время, по желанию с её поворотом.
-    /// Для игрока — «Player/Teleport Player»: перемещение игрока само обновляет физику и камеру.
+    /// Перенести объект к точке — сразу или плавно за заданное время, по желанию с поворотом её объекта.
+    /// Старое поле «point» переносится в новое при загрузке. Для игрока — «Player/Teleport Player».
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Transform/Move to Point")]
-    public class MoveToPointAction : ScenarioLongAction
+    [ScenarioBlock("Transform/Move to Point", Description = "Move an object to a point, at once or smoothly")]
+    public class MoveToPointAction : ScenarioLongAction, ISerializationCallbackReceiver
     {
         [Tooltip("Which object to move")]
         [ScenarioLabel("What to Move")]
         [SerializeField] private ScenarioTarget target = new ScenarioTarget();
 
-        [Tooltip("Where to: the position and, if checked, the rotation of this point")]
-        [ScenarioLabel("Point")]
-        [SerializeField] private Transform point;
+        [SerializeField, HideInInspector] private Transform point;
 
-        [Tooltip("Rotate the object the same way as the point")]
+        [Tooltip("Where to: the position and, if checked, the rotation of the point's object")]
+        [ScenarioLabel("Point")]
+        [SerializeField] private ScenarioPoint destination = new ScenarioPoint(ScenarioPointKind.Object);
+
+        [Tooltip("Rotate the object the same way as the point's object")]
         [ScenarioLabel("Match Point Rotation")]
         [SerializeField] private bool copiesRotation = true;
 
@@ -34,42 +36,58 @@ namespace FeatherKit.Scenarios
         [SerializeField] private AnimationCurve easing = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
 
 
-        public override string Summary => $"{target.Summary} → {(point != null ? point.name : "no point selected")}"
-                                          + (duration > 0f ? $" · {duration:0.##} s" : "");
+        public ScenarioTarget Target => target;
+
+        public ScenarioPoint Destination => destination;
+
+        public override string Summary => $"{target.Summary} → {destination.Summary}" + (duration > 0f ? $" · {duration:0.##} s" : "");
 
 
         public override IEnumerator Perform(ScenarioRun run)
         {
-            if (point == null)
-                throw new InvalidOperationException("No point selected");
+            var moved = target.ResolveRequired(run).transform;
 
-            yield return Move(target.ResolveRequired(run).transform);
+            if (!destination.TryGetPosition(run, out var endPosition))
+                throw new InvalidOperationException($"Point “{destination.Summary}” not found");
+
+            var pointTransform = copiesRotation ? destination.ResolveTransform(run) : null;
+            var endRotation = pointTransform != null ? pointTransform.rotation : moved.rotation;
+
+            yield return Move(moved, endPosition, endRotation);
         }
 
-        private IEnumerator Move(Transform moved)
+        private IEnumerator Move(Transform moved, Vector3 endPosition, Quaternion endRotation)
         {
             var startPosition = moved.position;
             var startRotation = moved.rotation;
 
-            for (var elapsed = 0f; elapsed < duration && moved != null && point != null; elapsed += Time.deltaTime)
+            for (var elapsed = 0f; elapsed < duration && moved != null; elapsed += Time.deltaTime)
             {
                 var progress = easing.Evaluate(elapsed / duration);
 
-                moved.position = Vector3.LerpUnclamped(startPosition, point.position, progress);
-
-                if (copiesRotation)
-                    moved.rotation = Quaternion.SlerpUnclamped(startRotation, point.rotation, progress);
+                moved.SetPositionAndRotation(Vector3.LerpUnclamped(startPosition, endPosition, progress),
+                    Quaternion.SlerpUnclamped(startRotation, endRotation, progress));
 
                 yield return null;
             }
 
-            if (moved == null || point == null)
-                yield break;
+            if (moved != null)
+                moved.SetPositionAndRotation(endPosition, endRotation);
+        }
 
-            moved.position = point.position;
 
-            if (copiesRotation)
-                moved.rotation = point.rotation;
+        // ISerializationCallbackReceiver
+        public void OnBeforeSerialize()
+        {
+        }
+
+        // ISerializationCallbackReceiver
+        public void OnAfterDeserialize()
+        {
+            if (ScenarioFieldMigration.IsAssigned(point))
+                destination = new ScenarioPoint(ScenarioPointKind.Object) { TargetTransform = point };
+
+            point = null;
         }
     }
 }

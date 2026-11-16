@@ -5,7 +5,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Послать сигнал всем сценариям, которые его ждут. «Caller» передаётся им дальше.</summary>
     [Serializable]
-    [ScenarioBlock("Signals/Send Signal")]
+    [ScenarioBlock("Signals/Send Signal", Description = "Send a signal to every scenario listening for it")]
     public class SendSignalAction : ScenarioInstantAction
     {
         [ScenarioLabel("Signal")]

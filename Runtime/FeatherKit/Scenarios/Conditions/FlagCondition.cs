@@ -5,7 +5,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Флаг включён — общий или переменная графа. С галкой «NOT» — выключен.</summary>
     [Serializable]
-    [ScenarioBlock("Variables/Flag Is On")]
+    [ScenarioBlock("Variables/Flag Is On", Description = "A flag is on")]
     public class FlagCondition : ScenarioCondition
     {
         [ScenarioLabel("Flag")]

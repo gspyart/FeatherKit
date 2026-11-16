@@ -13,7 +13,7 @@ namespace FeatherKit.Scenarios
     /// - выключенный объект триггеров не получает: исход-триггер на нём дождётся только тайм-аута
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Flow/Wait For")]
+    [ScenarioBlock("Flow/Wait For", Description = "Wait until one of the cases happens and go to its output")]
     public class ScenarioWaitForNode : ScenarioFlowNode, IScenarioEventListener, IScenarioLiveNode
     {
         public static readonly ScenarioOutput TimedOut = new ScenarioOutput("timedOut", "Timed Out");

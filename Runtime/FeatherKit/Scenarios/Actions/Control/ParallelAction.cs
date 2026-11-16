@@ -11,7 +11,7 @@ namespace FeatherKit.Scenarios
     /// Ошибка в любой ветке обрывает сценарий, как ошибка обычного шага.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Control/In Parallel")]
+    [ScenarioBlock("Control/In Parallel", Description = "Run branches of steps at once (old lists)")]
     public class ParallelAction : ScenarioLongAction
     {
         [Tooltip("When the next step starts: after all branches are done, or after the first one — the rest are cut off")]

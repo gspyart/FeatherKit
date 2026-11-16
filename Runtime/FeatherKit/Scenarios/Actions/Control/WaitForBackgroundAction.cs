@@ -8,7 +8,7 @@ namespace FeatherKit.Scenarios
     /// Пример: монстр идёт фоном, пока мигает свет и играет звук; перед криком — дождаться, пока он дойдёт.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Control/Wait for Background Steps")]
+    [ScenarioBlock("Control/Wait for Background Steps", Description = "Wait until the background steps are done")]
     public class WaitForBackgroundAction : ScenarioAction
     {
         public override IEnumerator Perform(ScenarioRun run)
