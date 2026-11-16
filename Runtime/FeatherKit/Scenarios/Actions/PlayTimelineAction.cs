@@ -5,10 +5,10 @@ using UnityEngine.Playables;
 
 namespace FeatherKit.Scenarios
 {
-    /// <summary>Проиграть Timeline с начала — для постановочных сцен. Старое поле «director» переносится в новое при загрузке.</summary>
+    /// <summary>Проиграть Timeline с начала — для постановочных сцен. Старое поле «director» переносится в новое перед работой и кнопкой «Upgrade Fields».</summary>
     [Serializable]
     [ScenarioBlock("Animation/Play Timeline", Description = "Play a Timeline from the start and wait for its end")]
-    public class PlayTimelineAction : ScenarioLongAction, ISerializationCallbackReceiver
+    public class PlayTimelineAction : ScenarioLongAction, IScenarioUpgradableBlock
     {
         [SerializeField, HideInInspector] private PlayableDirector director;
 
@@ -17,7 +17,14 @@ namespace FeatherKit.Scenarios
         [SerializeField] private ScenarioValue<PlayableDirector> timeline = new ScenarioValue<PlayableDirector>();
 
 
-        public ScenarioValue<PlayableDirector> Timeline => timeline;
+        public ScenarioValue<PlayableDirector> Timeline
+        {
+            get
+            {
+                TryUpgradeLegacyFields();
+                return timeline;
+            }
+        }
 
         public override string Summary => timeline.UsesVariable ? "graph variable"
             : timeline.Value != null ? timeline.Value.name : "this object";
@@ -25,6 +32,7 @@ namespace FeatherKit.Scenarios
 
         public override IEnumerator Perform(ScenarioRun run)
         {
+            TryUpgradeLegacyFields();
             var targetDirector = run.ComponentOrOwners(timeline.Get(run));
 
             if (targetDirector == null)
@@ -41,20 +49,19 @@ namespace FeatherKit.Scenarios
         }
 
 
-        // ISerializationCallbackReceiver
-        public void OnBeforeSerialize()
+        // IScenarioUpgradableBlock
+        // Новое поле главнее: задано — старое просто очищается, не затирая его.
+        public bool TryUpgradeLegacyFields()
         {
-        }
+            if (!ScenarioFieldMigration.IsAssigned(director))
+                return false;
 
-        // ISerializationCallbackReceiver
-        public void OnAfterDeserialize()
-        {
-            timeline ??= new ScenarioValue<PlayableDirector>();
-
-            if (ScenarioFieldMigration.IsAssigned(director) && !ScenarioFieldMigration.IsAssigned(timeline.Value) && !timeline.UsesVariable)
+            if (!ScenarioFieldMigration.IsAssigned(timeline.Value) && !timeline.UsesVariable)
                 timeline.Value = director;
 
             director = null;
+
+            return true;
         }
     }
 }

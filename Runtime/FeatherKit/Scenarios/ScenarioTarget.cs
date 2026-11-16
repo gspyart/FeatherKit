@@ -49,7 +49,7 @@ namespace FeatherKit.Scenarios
         /// <summary>Цель по умолчанию — «этот объект» без выбранного объекта и переменной: переносить нечего.</summary>
         internal bool IsDefault => kind == ScenarioTargetKind.Self && !ScenarioFieldMigration.IsAssigned(specificObject) && string.IsNullOrEmpty(variableId);
 
-        /// <summary>Та же цель точкой — для переноса старых полей блоков на ScenarioPoint.</summary>
+        /// <summary>Та же цель точкой — для переноса старых полей блоков на ScenarioPoint. Главный поток: берёт Transform объекта.</summary>
         internal ScenarioPoint ToPoint()
         {
             return kind switch

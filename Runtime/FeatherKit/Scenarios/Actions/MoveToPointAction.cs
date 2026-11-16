@@ -6,11 +6,11 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>
     /// Перенести объект к точке — сразу или плавно за заданное время, по желанию с поворотом её объекта.
-    /// Старое поле «point» переносится в новое при загрузке. Для игрока — «Player/Teleport Player».
+    /// Старое поле «point» переносится в новое перед работой и кнопкой «Upgrade Fields». Для игрока — «Player/Teleport Player».
     /// </summary>
     [Serializable]
     [ScenarioBlock("Transform/Move to Point", Description = "Move an object to a point, at once or smoothly")]
-    public class MoveToPointAction : ScenarioLongAction, ISerializationCallbackReceiver
+    public class MoveToPointAction : ScenarioLongAction, IScenarioUpgradableBlock
     {
         [Tooltip("Which object to move")]
         [ScenarioLabel("What to Move")]
@@ -38,13 +38,21 @@ namespace FeatherKit.Scenarios
 
         public ScenarioTarget Target => target;
 
-        public ScenarioPoint Destination => destination;
+        public ScenarioPoint Destination
+        {
+            get
+            {
+                TryUpgradeLegacyFields();
+                return destination;
+            }
+        }
 
         public override string Summary => $"{target.Summary} → {destination.Summary}" + (duration > 0f ? $" · {duration:0.##} s" : "");
 
 
         public override IEnumerator Perform(ScenarioRun run)
         {
+            TryUpgradeLegacyFields();
             var moved = target.ResolveRequired(run).transform;
 
             if (!destination.TryGetPosition(run, out var endPosition))
@@ -76,18 +84,19 @@ namespace FeatherKit.Scenarios
         }
 
 
-        // ISerializationCallbackReceiver
-        public void OnBeforeSerialize()
+        // IScenarioUpgradableBlock
+        // Новое поле главнее: задано — старое просто очищается, не затирая его.
+        public bool TryUpgradeLegacyFields()
         {
-        }
+            if (!ScenarioFieldMigration.IsAssigned(point))
+                return false;
 
-        // ISerializationCallbackReceiver
-        public void OnAfterDeserialize()
-        {
-            if (ScenarioFieldMigration.IsAssigned(point))
+            if (destination.IsDefault)
                 destination = new ScenarioPoint(ScenarioPointKind.Object) { TargetTransform = point };
 
             point = null;
+
+            return true;
         }
     }
 }

@@ -6,11 +6,11 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>
     /// Нода «Cooldown»: пропускает в Out не чаще раза в N секунд игрового времени; слишком рано — в Blocked.
-    /// Время последнего прохода общее для ноды, а не для запуска; Stop его забывает.
+    /// Время последнего прохода — память ноды, общая для всех запусков; Stop её не трогает, забывает Scenario.ResetNodeMemory.
     /// </summary>
     [Serializable]
     [ScenarioBlock("Flow/Cooldown", Description = "Let the flow through at most once per N seconds")]
-    public class ScenarioCooldownNode : ScenarioFlowNode, IScenarioLiveNode
+    public class ScenarioCooldownNode : ScenarioFlowNode, IScenarioNodeMemory
     {
         public static readonly ScenarioOutput Out = new ScenarioOutput("out", "Out");
         public static readonly ScenarioOutput Blocked = new ScenarioOutput("blocked", "Blocked");
@@ -46,8 +46,8 @@ namespace FeatherKit.Scenarios
         }
 
 
-        // IScenarioLiveNode
-        void IScenarioLiveNode.ResetLiveState()
+        // IScenarioNodeMemory
+        public void ForgetMemory()
         {
             hasPassed = false;
         }

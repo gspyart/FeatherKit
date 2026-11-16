@@ -6,46 +6,119 @@ using UnityEngine;
 namespace FeatherKit.Scenarios
 {
     /// <summary>
-    /// Нода «Switch on Counter»: идёт в выход того значения счётчика, что сейчас; другого значения нет в списке — Default.
-    /// Id выхода — само значение: поменяли число в списке — провод к старому выходу пропадёт.
+    /// Нода «Switch on Counter»: идёт в выход случая с текущим значением счётчика; такого случая нет — Default.
+    /// - у случая постоянный id: поменяли число — провод остаётся
+    /// - одно значение в двух случаях — первый побеждает, проверка графа о повторе предупреждает
     /// </summary>
     [Serializable]
     [ScenarioBlock("Flow/Switch on Counter", Description = "Go to the output of the counter's current value")]
     public class ScenarioSwitchOnCounterNode : ScenarioFlowNode
     {
-        private const string ValueIdPrefix = "value.";
-
         public static readonly ScenarioOutput Default = new ScenarioOutput("default", "Default");
 
         [ScenarioLabel("Counter")]
         [SerializeField] private ScenarioCounterReference counter = new ScenarioCounterReference();
 
-        [Tooltip("One output per value; the same value twice makes one output")]
-        [ScenarioLabel("Values")]
-        [SerializeField] private List<int> values = new List<int> { 0, 1, 2 };
+        [Tooltip("One output per case; the counter value picks the case")]
+        [ScenarioLabel("Cases")]
+        [SerializeField] private List<ScenarioSwitchCase> cases = new List<ScenarioSwitchCase>();
 
 
         public ScenarioCounterReference Counter => counter;
 
-        public List<int> Values => values;
+        public IReadOnlyList<ScenarioSwitchCase> Cases => cases;
 
         public override string Summary => counter.Summary;
 
 
-        public static ScenarioOutput ValueOutput(int value)
+        // ── Случаи ───────────────────────────────────────────────────────
+
+        public ScenarioSwitchCase AddCase(int value)
         {
-            return new ScenarioOutput(ValueIdPrefix + value, value.ToString());
+            var switchCase = new ScenarioSwitchCase(value);
+            cases.Add(switchCase);
+
+            return switchCase;
         }
 
 
-        // Выходы значений — до Default: на ноде он стоит последним.
+        /// <summary>Убрать случай. Провода его выхода снимает тот, кто правит граф: ScenarioGraph.DisconnectPort.</summary>
+        public bool RemoveCase(string caseId)
+        {
+            var switchCase = FindCase(caseId);
+
+            return switchCase != null && cases.Remove(switchCase);
+        }
+
+
+        public ScenarioSwitchCase FindCase(string caseId)
+        {
+            foreach (var switchCase in cases)
+            {
+                if (switchCase != null && string.Equals(switchCase.Id, caseId, StringComparison.Ordinal))
+                    return switchCase;
+            }
+
+            return null;
+        }
+
+
+        /// <summary>Выдать новые id пустым и повторным: копия элемента в инспекторе несёт id соседа. True — повторы были.</summary>
+        public bool EnsureUniqueCaseIds()
+        {
+            var usedIds = new HashSet<string>(StringComparer.Ordinal);
+            var hadRepeats = false;
+
+            foreach (var switchCase in cases)
+            {
+                if (switchCase == null)
+                    continue;
+
+                if (string.IsNullOrEmpty(switchCase.Id) || usedIds.Contains(switchCase.Id))
+                {
+                    switchCase.AssignNewId();
+                    hadRepeats = true;
+                }
+
+                usedIds.Add(switchCase.Id);
+            }
+
+            return hadRepeats;
+        }
+
+
+        /// <summary>Одно значение в двух случаях — для проверки графа: второй случай никогда не сработает.</summary>
+        public bool TryFindRepeatedValue(out int repeatedValue)
+        {
+            var seenValues = new HashSet<int>();
+
+            foreach (var switchCase in cases)
+            {
+                if (switchCase != null && !seenValues.Add(switchCase.Value))
+                {
+                    repeatedValue = switchCase.Value;
+                    return true;
+                }
+            }
+
+            repeatedValue = 0;
+            return false;
+        }
+
+
+        // ── Порты и ход ──────────────────────────────────────────────────
+
+        // Выходы случаев — до Default: на ноде он стоит последним.
         public override void DescribePorts(ScenarioPortList ports)
         {
             foreach (var input in ScenarioNodePorts.InputsOf(GetType()))
                 ports.AddInput(input);
 
-            foreach (var value in values)
-                ports.AddOutput(ValueOutput(value));
+            foreach (var switchCase in cases)
+            {
+                if (switchCase != null)
+                    ports.AddOutput(switchCase.Output);
+            }
 
             ports.AddOutput(Default);
         }
@@ -55,8 +128,16 @@ namespace FeatherKit.Scenarios
         {
             var current = counter.Get(run);
 
-            Fire(run, values.Contains(current) ? ValueOutput(current) : Default);
-            yield break;
+            foreach (var switchCase in cases)
+            {
+                if (switchCase != null && switchCase.Value == current)
+                {
+                    Fire(run, switchCase.Output);
+                    yield break;
+                }
+            }
+
+            Fire(run, Default);
         }
     }
 }

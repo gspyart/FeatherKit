@@ -52,11 +52,17 @@ namespace FeatherKit.Scenarios
             if (comparison.IsEmptinessCheck())
                 return ScenarioVariableValues.IsEmpty(definition.Kind, current) == (comparison == ScenarioVariableComparison.IsEmpty);
 
-            var other = otherVariable.IsChosen ? variables.GetLiveValue(otherVariable.VariableId, out _) : value;
+            var otherDefinition = definition;
+            var other = otherVariable.IsChosen ? variables.GetLiveValue(otherVariable.VariableId, out otherDefinition) : value;
 
+            // Counter и Number сравниваются числами — даже друг с другом.
             if (ScenarioVariableValues.TryGetNumber(definition.Kind, current, out var number)
-                && ScenarioVariableValues.TryGetNumber(definition.Kind, other, out var otherNumber))
+                && ScenarioVariableValues.TryGetNumber(otherDefinition.Kind, other, out var otherNumber))
                 return comparison.Holds(number, otherNumber);
+
+            if (otherDefinition.Kind != definition.Kind)
+                throw new InvalidOperationException(
+                    $"“{definition.Name}” is a {definition.Kind}, “{otherDefinition.Name}” is a {otherDefinition.Kind}: they cannot be compared");
 
             var areEqual = ScenarioVariableValues.AreEqual(definition.Kind, current, other);
 

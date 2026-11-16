@@ -6,11 +6,11 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>
     /// Нода «Toggle»: входы по очереди уходят то в A, то в B.
-    /// Очередь общая для ноды, а не для запуска; Stop возвращает к начальной.
+    /// Очередь — память ноды, общая для всех запусков; Stop её не трогает, забывает Scenario.ResetNodeMemory.
     /// </summary>
     [Serializable]
     [ScenarioBlock("Flow/Toggle", Description = "Go to A, then to B, then to A again")]
-    public class ScenarioToggleNode : ScenarioFlowNode, IScenarioLiveNode
+    public class ScenarioToggleNode : ScenarioFlowNode, IScenarioNodeMemory
     {
         public static readonly ScenarioOutput A = new ScenarioOutput("a", "A");
         public static readonly ScenarioOutput B = new ScenarioOutput("b", "B");
@@ -38,8 +38,8 @@ namespace FeatherKit.Scenarios
         }
 
 
-        // IScenarioLiveNode
-        void IScenarioLiveNode.ResetLiveState()
+        // IScenarioNodeMemory
+        public void ForgetMemory()
         {
             passCount = 0;
         }

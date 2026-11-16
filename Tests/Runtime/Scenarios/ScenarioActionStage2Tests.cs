@@ -34,6 +34,24 @@ namespace FeatherKit.Tests.Scenarios
             Assert.That(player.GetComponent<CharacterController>().enabled, Is.True);
         }
 
+        [UnityTest]
+        public IEnumerator SetPosition_Rigidbody_ResetsVelocity()
+        {
+            var crate = CreateGameObject("Crate");
+            var body = crate.AddComponent<Rigidbody>();
+            body.useGravity = false;
+            body.linearVelocity = new Vector3(0f, 0f, 10f);
+            var setPosition = WithField(new SetPositionAction(), "target", TargetObject(crate));
+            setPosition.Point.Kind = ScenarioPointKind.WorldPoint;
+            setPosition.Point.WorldPosition = new Vector3(3f, 0f, 0f);
+
+            RaiseWhen(CreateStepsScenario(new ScenarioGraph(), setPosition));
+            yield return new WaitForFixedUpdate();
+
+            Assert.That(body.linearVelocity, Is.EqualTo(Vector3.zero));
+            Assert.That(Vector3.Distance(crate.transform.position, new Vector3(3f, 0f, 0f)), Is.LessThan(0.01f));
+        }
+
         [Test]
         public void RotateTo_FacesPoint_HorizontalOnly()
         {

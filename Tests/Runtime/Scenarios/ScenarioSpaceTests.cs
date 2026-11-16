@@ -147,6 +147,33 @@ namespace FeatherKit.Tests.Scenarios
             Assert.That(scenario.IsRunning, Is.False);
         }
 
+        [UnityTest]
+        public IEnumerator LookedAt_DoesNotCheckWhilePaused()
+        {
+            looker.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+            var graph = new ScenarioGraph();
+            AddLookWhen(graph, ScenarioLookMoment.StartsLooking, "Started");
+            CreateScenario(graph);
+            yield return WaitFrames(2);
+
+            try
+            {
+                Time.timeScale = 0f;
+                looker.transform.rotation = Quaternion.identity;
+                yield return WaitFrames(4);
+
+                Assert.That(Marks, Is.Empty, "Paused game — no checks");
+            }
+            finally
+            {
+                Time.timeScale = 1f;
+            }
+
+            yield return WaitFrames(3);
+
+            Assert.That(Marks, Is.EqualTo(new[] { "Started" }));
+        }
+
         private void AddLookWhen(ScenarioGraph graph, ScenarioLookMoment moment, string title)
         {
             var lookedAt = WithField(new LookedAtEvent { Moment = moment, CheckInterval = 0f }, "gaze", NewGaze());

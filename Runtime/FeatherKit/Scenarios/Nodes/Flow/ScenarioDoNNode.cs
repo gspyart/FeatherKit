@@ -6,11 +6,11 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>
     /// Нода «Do N»: первые N входов идут в Out, дальше — в Exhausted; Reset начинает счёт заново.
-    /// Счёт общий для ноды, а не для запуска; Stop его сбрасывает.
+    /// Счёт — память ноды, общая для всех запусков; Stop его не трогает, забывает Reset и Scenario.ResetNodeMemory.
     /// </summary>
     [Serializable]
     [ScenarioBlock("Flow/Do N", Description = "Let the flow through N times, then go to Exhausted")]
-    public class ScenarioDoNNode : ScenarioFlowNode, IScenarioLiveNode
+    public class ScenarioDoNNode : ScenarioFlowNode, IScenarioNodeMemory
     {
         public static readonly ScenarioInput Reset = new ScenarioInput("reset", "Reset");
         public static readonly ScenarioOutput Out = new ScenarioOutput("out", "Out");
@@ -51,8 +51,8 @@ namespace FeatherKit.Scenarios
         }
 
 
-        // IScenarioLiveNode
-        void IScenarioLiveNode.ResetLiveState()
+        // IScenarioNodeMemory
+        public void ForgetMemory()
         {
             passCount = 0;
         }

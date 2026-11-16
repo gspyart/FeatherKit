@@ -14,6 +14,9 @@ namespace FeatherKit.Scenarios
     /// </summary>
     public class ScenarioGraphVariables
     {
+        // Уничтоженный объект из списка выпадает при первом же обращении: лампу разбили — её в коридоре больше нет.
+        private static readonly Predicate<Object> IsDestroyed = listed => listed == null;
+
         private readonly Dictionary<string, LiveGraphVariable> variablesById =
             new Dictionary<string, LiveGraphVariable>(StringComparer.Ordinal);
 
@@ -295,7 +298,10 @@ namespace FeatherKit.Scenarios
         /// <summary>Сам живой список переменной: блоки списков меняют его на месте и зовут MarkChanged.</summary>
         public List<Object> GetObjectListLive(string variableId)
         {
-            return Require(variableId, ScenarioVariableKind.ObjectList).Value.ObjectListValue;
+            var liveList = Require(variableId, ScenarioVariableKind.ObjectList).Value.ObjectListValue;
+            liveList.RemoveAll(IsDestroyed);
+
+            return liveList;
         }
 
         // ── Значение целиком ─────────────────────────────────────────────

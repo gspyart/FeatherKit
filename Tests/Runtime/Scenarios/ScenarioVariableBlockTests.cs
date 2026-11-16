@@ -55,22 +55,35 @@ namespace FeatherKit.Tests.Scenarios
         // ── Change Number ────────────────────────────────────────────────
 
         [Test]
-        public void ChangeNumber_CounterIsRounded_NumberIsNot()
+        public void ChangeNumber_CounterInWholeNumbers_NumberInFractions()
         {
             var graph = new ScenarioGraph();
             var levers = graph.AddVariable(new ScenarioVariableDefinition("Levers", ScenarioVariableKind.Counter));
-            levers.InitialValue.CounterValue = 3;
+            levers.InitialValue.CounterValue = 7;
             var delay = graph.AddVariable(new ScenarioVariableDefinition("Delay", ScenarioVariableKind.Number));
             delay.InitialValue.NumberValue = 3f;
 
-            var multiplyLevers = NumberChange(levers, ScenarioNumberOperation.Multiply, 1.5f);
-            var multiplyDelay = NumberChange(delay, ScenarioNumberOperation.Multiply, 1.5f);
-
-            RaiseWhen(CreateStepsScenario(graph, multiplyLevers, multiplyDelay,
+            RaiseWhen(CreateStepsScenario(graph,
+                NumberChange(levers, ScenarioNumberOperation.Divide, 2f),
+                NumberChange(delay, ScenarioNumberOperation.Multiply, 1.5f),
                 new ScenarioTestRecordCounterAction(ScenarioValue<int>.FromVariable(levers.Id)),
                 new ScenarioTestRecordNumberAction(ScenarioValue<float>.FromVariable(delay.Id))));
 
-            Assert.That(Marks, Is.EqualTo(new[] { "Steps", "4", "4.5" }));
+            Assert.That(Marks, Is.EqualTo(new[] { "Steps", "3", "4.5" }), "7 / 2 on a Counter drops the fraction toward zero");
+        }
+
+        [Test]
+        public void ChangeNumber_CounterByFraction_FailsRun()
+        {
+            var graph = new ScenarioGraph();
+            var levers = graph.AddVariable(new ScenarioVariableDefinition("Levers", ScenarioVariableKind.Counter));
+
+            LogAssert.Expect(LogType.Error, new Regex("whole numbers"));
+            LogAssert.Expect(LogType.Exception, new Regex("whole numbers"));
+
+            RaiseWhen(CreateStepsScenario(graph, NumberChange(levers, ScenarioNumberOperation.Multiply, 1.5f)));
+
+            Assert.That(ReportedRuns[0].Outcome, Is.EqualTo(ScenarioRunOutcome.Failed));
         }
 
         [Test]

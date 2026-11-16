@@ -290,8 +290,11 @@ namespace FeatherKit.Scenarios
             if (!Physics.Linecast(eyePosition, targetPosition, out var hit, clearViewLayers, QueryTriggerInteraction.Ignore))
                 return true;
 
-            return (targetTransform != null && hit.transform.IsChildOf(targetTransform))
-                   || hit.transform.IsChildOf(lookerTransform)
+            // Коллайдер, а не hit.transform: тот отдаёт объект с Rigidbody, а не с коллайдером — голова монстра «закрыла» бы саму себя.
+            var hitTransform = hit.collider.transform;
+
+            return (targetTransform != null && hitTransform.IsChildOf(targetTransform))
+                   || hitTransform.IsChildOf(lookerTransform)
                    || (targetPosition - hit.point).sqrMagnitude < NearTargetDistance * NearTargetDistance;
         }
     }

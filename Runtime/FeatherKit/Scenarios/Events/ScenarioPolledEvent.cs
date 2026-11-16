@@ -10,6 +10,7 @@ namespace FeatherKit.Scenarios
     /// Событие, которое само проверяет мир раз в Check Interval, пока подписано: взгляд, расстояние.
     /// - опрос идёт на общем раннере корутин, без выделения памяти в каждой проверке
     /// - проверки идут от запуска-«щупа» сценария: «This Object» и переменные графа есть, «Caller» — нет
+    /// - на паузе игры (Time.timeScale = 0) проверок нет: Hold Time и пересечения не копятся, пока игра стоит
     /// </summary>
     [Serializable]
     public abstract class ScenarioPolledEvent : ScenarioEvent
@@ -45,6 +46,7 @@ namespace FeatherKit.Scenarios
         }
 
         // Первая проверка — после первого интервала: на включении объекта мир ещё может расставляться.
+        // На паузе WaitForSeconds стоит сам, а «каждый кадр» — нет: паузу пропускаем явно.
         private IEnumerator Poll()
         {
             var wait = checkInterval > 0f ? new WaitForSeconds(checkInterval) : null;
@@ -53,7 +55,7 @@ namespace FeatherKit.Scenarios
             {
                 yield return wait;
 
-                if (probeRun != null)
+                if (probeRun != null && Time.timeScale > 0f)
                     CheckNow(probeRun);
             }
         }

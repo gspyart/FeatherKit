@@ -76,6 +76,9 @@ namespace FeatherKit.Scenarios
         /// <summary>Зону выключили, пока внутри были гости: блоки забывают их без выхода — при включении придёт новый вход.</summary>
         internal event Action TriggerGuestsForgotten;
 
+        /// <summary>Объект сценария уничтожается: блоки убирают за собой то, что завели, — копии материалов.</summary>
+        internal event Action Destroying;
+
 
         public bool IsRunning => (listRunner != null && listRunner.IsRunning) || (runs != null && runs.HasRunningRuns);
 
@@ -222,6 +225,19 @@ namespace FeatherKit.Scenarios
                 heldEffects?.ReleaseAll();
             }
         }
+
+        /// <summary>Забыть память нод: ворота, Once, Do N, Toggle, Cooldown — как в начале уровня. Stop её не трогает.</summary>
+        public void ResetNodeMemory()
+        {
+            var usedGraph = runningGraph ?? SourceGraph;
+
+            if (usedGraph == null)
+                return;
+
+            foreach (var node in usedGraph.Nodes)
+                (node as IScenarioNodeMemory)?.ForgetMemory();
+        }
+
 
         // Запуски уже оборваны; то, что ноды держат сверх них, — подписки и списки ожиданий — сбрасываем тоже.
         private void ResetLiveNodes()
@@ -392,6 +408,7 @@ namespace FeatherKit.Scenarios
 
         private void OnDestroy()
         {
+            Destroying?.Invoke();
             Stop();
 
             if (graphAssetCopy != null)

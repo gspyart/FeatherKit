@@ -94,16 +94,28 @@ namespace FeatherKit.Scenarios
         }
 
 
-        /// <summary>Пусто: объекта нет, список пуст, текст пуст. У чисел, флагов, векторов и цветов пустоты нет.</summary>
+        /// <summary>Пусто: объекта нет, в списке нет живых, текст пуст. У чисел, флагов, векторов и цветов пустоты нет.</summary>
         public static bool IsEmpty(ScenarioVariableKind kind, ScenarioVariableValue value)
         {
             return kind switch
             {
                 ScenarioVariableKind.Object => value.ObjectValue == null,
-                ScenarioVariableKind.ObjectList => value.ObjectListValue.Count == 0,
+                ScenarioVariableKind.ObjectList => !HasLiveObjects(value.ObjectListValue),
                 ScenarioVariableKind.Text => string.IsNullOrEmpty(value.TextValue),
                 _ => false
             };
+        }
+
+
+        private static bool HasLiveObjects(List<Object> objects)
+        {
+            foreach (var listed in objects)
+            {
+                if (listed != null)
+                    return true;
+            }
+
+            return false;
         }
 
 

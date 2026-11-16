@@ -5,12 +5,14 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>
     /// Поставить объект в точку сразу — например, туда, что запомнил «Remember Position».
-    /// Character Controller и Rigidbody переносятся честно, без отката физикой на старое место.
+    /// Агент навигации, Character Controller и Rigidbody переносятся честно, без отката на старое место.
+    /// Для игрока — «Teleport Player» игры: он заодно обновляет камеру и состояние движения.
     /// </summary>
     [Serializable]
     [ScenarioBlock("Transform/Set Position", Description = "Put an object at a point at once")]
     public class SetPositionAction : ScenarioInstantAction
     {
+        [Tooltip("Which object to move. For the player use the game's “Teleport Player”")]
         [ScenarioLabel("What to Move")]
         [SerializeField] private ScenarioTarget target = new ScenarioTarget();
 
@@ -20,6 +22,10 @@ namespace FeatherKit.Scenarios
         [Tooltip("Also turn the object the same way as the point's object")]
         [ScenarioLabel("Match Point Rotation")]
         [SerializeField] private bool copiesRotation;
+
+        [Tooltip("Stop a Rigidbody after the move: it does not keep flying the way it went")]
+        [ScenarioLabel("Reset Velocity")]
+        [SerializeField] private bool resetsVelocity = true;
 
 
         public ScenarioTarget Target => target;
@@ -39,32 +45,7 @@ namespace FeatherKit.Scenarios
             var pointTransform = copiesRotation ? point.ResolveTransform(run) : null;
             var rotation = pointTransform != null ? pointTransform.rotation : moved.transform.rotation;
 
-            ScenarioTeleport.Place(moved, position, rotation);
-        }
-    }
-
-
-    /// <summary>Перенос объекта, который не откатывает физика: Character Controller выключается на перенос, Rigidbody — следом.</summary>
-    public static class ScenarioTeleport
-    {
-        public static void Place(GameObject moved, Vector3 position, Quaternion rotation)
-        {
-            var controller = moved.GetComponent<CharacterController>();
-            var wasControllerEnabled = controller != null && controller.enabled;
-
-            if (wasControllerEnabled)
-                controller.enabled = false;
-
-            moved.transform.SetPositionAndRotation(position, rotation);
-
-            if (moved.TryGetComponent<Rigidbody>(out var body))
-            {
-                body.position = position;
-                body.rotation = rotation;
-            }
-
-            if (wasControllerEnabled)
-                controller.enabled = true;
+            ScenarioTeleport.Place(moved, position, rotation, resetsVelocity);
         }
     }
 }

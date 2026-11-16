@@ -6,7 +6,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>
     /// Изменить число в переменной Counter или Number: прибавить, отнять, умножить, поделить или взять случайное.
-    /// Counter округляется до целого; деление на ноль — ошибка.
+    /// Counter — в целых: величина целая, деление отбрасывает дробь к нулю, случайное — от и до включительно.
     /// </summary>
     [Serializable]
     [ScenarioBlock("Variables/Change Number", Description = "Add, subtract, multiply, divide or roll a graph Counter or Number")]
@@ -19,11 +19,11 @@ namespace FeatherKit.Scenarios
         [ScenarioLabel("Operation")]
         [SerializeField] private ScenarioNumberOperation operation;
 
-        [Tooltip("By how much. For “Random Range” — the smallest value")]
+        [Tooltip("By how much. For “Random Range” — the smallest value. A Counter takes whole numbers only: 7 / 2 = 3, −7 / 2 = −3")]
         [ScenarioLabel("Amount")]
         [SerializeField] private ScenarioValue<float> amount = new ScenarioValue<float>(1f);
 
-        [Tooltip("For “Random Range” — the largest value")]
+        [Tooltip("For “Random Range” — the largest value; a Counter can get it too")]
         [ScenarioLabel("Max")]
         [SerializeField] private ScenarioValue<float> maxAmount = new ScenarioValue<float>(1f);
 
@@ -61,15 +61,40 @@ namespace FeatherKit.Scenarios
             if (!ScenarioVariableValues.TryGetNumber(definition.Kind, current, out var number))
                 throw new InvalidOperationException($"“{definition.Name}” is a {definition.Kind}, not a number");
 
-            var result = Calculate(number, amount.Get(run), run);
-
             if (definition.Kind == ScenarioVariableKind.Counter)
-                variables.SetCounter(variable.VariableId, Mathf.RoundToInt(result));
+                variables.SetCounter(variable.VariableId, CalculateCounter(current.CounterValue, run));
             else
-                variables.SetNumber(variable.VariableId, result);
+                variables.SetNumber(variable.VariableId, CalculateNumber(number, amount.Get(run), run));
         }
 
-        private float Calculate(float number, float by, ScenarioRun run)
+        // В long, затем в пределы int: большой счётчик не теряет единицы, как в float, и не переполняется.
+        private int CalculateCounter(int counter, ScenarioRun run)
+        {
+            var by = WholeNumberOf(amount.Get(run));
+
+            long result = operation switch
+            {
+                ScenarioNumberOperation.Add => (long)counter + by,
+                ScenarioNumberOperation.Subtract => (long)counter - by,
+                ScenarioNumberOperation.Multiply => (long)counter * by,
+                ScenarioNumberOperation.Divide => by != 0 ? counter / by : throw new InvalidOperationException("Division by zero"),
+                _ => Random.Range(by, WholeNumberOf(maxAmount.Get(run)) + 1)
+            };
+
+            return (int)Math.Clamp(result, int.MinValue, int.MaxValue);
+        }
+
+        private static int WholeNumberOf(float value)
+        {
+            var rounded = Mathf.Round(value);
+
+            if (!Mathf.Approximately(value, rounded) || rounded > int.MaxValue || rounded < int.MinValue)
+                throw new InvalidOperationException($"Counter changes by whole numbers, not by {value}");
+
+            return (int)rounded;
+        }
+
+        private float CalculateNumber(float number, float by, ScenarioRun run)
         {
             switch (operation)
             {

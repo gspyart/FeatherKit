@@ -8,11 +8,11 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>
     /// Разовый звук через AudioPlayer: в точке или без места, «в голове».
-    /// Старые поля «clip» и «source» переносятся в новые при загрузке.
+    /// Старые поля «clip» и «source» переносятся в новые перед работой и кнопкой «Upgrade Fields».
     /// </summary>
     [Serializable]
     [ScenarioBlock("Sound/Play Sound", Description = "Play a sound once — at a point or everywhere equally loud")]
-    public class PlaySoundAction : ScenarioLongAction, ISerializationCallbackReceiver
+    public class PlaySoundAction : ScenarioLongAction, IScenarioUpgradableBlock
     {
         [SerializeField, HideInInspector] private AudioClip clip;
         [SerializeField, HideInInspector] private ScenarioTarget source;
@@ -33,15 +33,30 @@ namespace FeatherKit.Scenarios
         [SerializeField] private ScenarioPoint soundPoint = new ScenarioPoint(ScenarioPointKind.ThisObject);
 
 
-        public ScenarioValue<AudioClip> Sound => sound;
+        public ScenarioValue<AudioClip> Sound
+        {
+            get
+            {
+                TryUpgradeLegacyFields();
+                return sound;
+            }
+        }
 
-        public ScenarioPoint SoundPoint => soundPoint;
+        public ScenarioPoint SoundPoint
+        {
+            get
+            {
+                TryUpgradeLegacyFields();
+                return soundPoint;
+            }
+        }
 
         public override string Summary => sound.UsesVariable ? "graph variable" : sound.Value != null ? sound.Value.name : "no sound selected";
 
 
         public override IEnumerator Perform(ScenarioRun run)
         {
+            TryUpgradeLegacyFields();
             var playedClip = sound.Get(run);
 
             // Не обрыв, а предупреждение: в заготовке звук часто ещё не подобран, а остальное уже работает.
@@ -71,24 +86,31 @@ namespace FeatherKit.Scenarios
         }
 
 
-        // ISerializationCallbackReceiver
-        public void OnBeforeSerialize()
+        // IScenarioUpgradableBlock
+        // Новое поле главнее: задано — старое просто очищается, не затирая его.
+        public bool TryUpgradeLegacyFields()
         {
-        }
+            var hasChanged = false;
 
-        // ISerializationCallbackReceiver
-        public void OnAfterDeserialize()
-        {
-            sound ??= new ScenarioValue<AudioClip>();
+            if (ScenarioFieldMigration.IsAssigned(clip))
+            {
+                if (!ScenarioFieldMigration.IsAssigned(sound.Value) && !sound.UsesVariable)
+                    sound.Value = clip;
 
-            if (ScenarioFieldMigration.IsAssigned(clip) && !ScenarioFieldMigration.IsAssigned(sound.Value) && !sound.UsesVariable)
-                sound.Value = clip;
+                clip = null;
+                hasChanged = true;
+            }
 
             if (source != null && !source.IsDefault)
-                soundPoint = source.ToPoint();
+            {
+                if (soundPoint.IsDefault)
+                    soundPoint = source.ToPoint();
 
-            clip = null;
-            source = null;
+                source = new ScenarioTarget();
+                hasChanged = true;
+            }
+
+            return hasChanged;
         }
     }
 }

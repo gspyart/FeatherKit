@@ -7,14 +7,13 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>
     /// Плавно разжечь или погасить свечение рендереров — глаза в темноте, тлеющая проводка.
-    /// Цвет кладётся через MaterialPropertyBlock; у материала без включённой эмиссии она включается на его копии.
+    /// Цвет — через MaterialPropertyBlock. Эмиссия выключена в материале — рендерер получает копию с ней, одну на всё время;
+    /// копии убираются, а исходные материалы возвращаются, когда объект сценария уничтожается.
     /// </summary>
     [Serializable]
     [ScenarioBlock("Rendering/Fade Emission", Description = "Fade the glow of renderers to a color and brightness")]
     public class FadeEmissionAction : ScenarioLongAction
     {
-        private const string EmissionKeyword = "_EMISSION";
-
         private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
 
         [ScenarioLabel("Renderers")]
@@ -33,6 +32,8 @@ namespace FeatherKit.Scenarios
         [ScenarioLabel("Seconds")]
         [SerializeField] private float duration = 1f;
 
+        [NonSerialized] private EmissionMaterialCopies materialCopies;
+
 
         public ScenarioObjectList<Renderer> Renderers => renderers;
 
@@ -44,12 +45,18 @@ namespace FeatherKit.Scenarios
         public override IEnumerator Perform(ScenarioRun run)
         {
             var targets = renderers.Get(run);
+            materialCopies ??= new EmissionMaterialCopies(run.Scenario);
             var endColor = color.Get(run) * intensity;
             var startColors = new List<Color>(targets.Count);
             var block = new MaterialPropertyBlock();
 
             foreach (var renderer in targets)
+            {
+                if (renderer != null)
+                    materialCopies.EnsureEmission(renderer);
+
                 startColors.Add(renderer != null ? CurrentEmissionOf(renderer, block) : default);
+            }
 
             for (var elapsed = 0f; elapsed < duration; elapsed += Time.deltaTime)
             {
@@ -62,7 +69,6 @@ namespace FeatherKit.Scenarios
 
         private static Color CurrentEmissionOf(Renderer renderer, MaterialPropertyBlock block)
         {
-            EnsureEmissionKeyword(renderer);
             renderer.GetPropertyBlock(block);
 
             if (block.HasColor(EmissionColorId))
@@ -71,15 +77,6 @@ namespace FeatherKit.Scenarios
             var material = renderer.sharedMaterial;
 
             return material != null && material.HasProperty(EmissionColorId) ? material.GetColor(EmissionColorId) : Color.black;
-        }
-
-        // Ключевое слово блоком не включить; копия материала — чтобы не поменять сам ассет.
-        private static void EnsureEmissionKeyword(Renderer renderer)
-        {
-            var material = renderer.sharedMaterial;
-
-            if (material != null && !material.IsKeywordEnabled(EmissionKeyword))
-                renderer.material.EnableKeyword(EmissionKeyword);
         }
 
         // Рендерер мог исчезнуть посреди перехода вместе с объектом — такие пропускаем.
@@ -95,6 +92,90 @@ namespace FeatherKit.Scenarios
                 block.SetColor(EmissionColorId, Color.Lerp(startColors[index], endColor, progress));
                 targets[index].SetPropertyBlock(block);
             }
+        }
+    }
+
+
+    /// <summary>
+    /// Копии материалов с включённой эмиссией — по одной на рендерер, на всё время жизни сценария.
+    /// Ассет не меняется; при уничтожении сценария рендерерам возвращаются исходные материалы, копии удаляются.
+    /// </summary>
+    internal class EmissionMaterialCopies
+    {
+        private const string EmissionKeyword = "_EMISSION";
+
+        private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
+
+        private readonly Dictionary<Renderer, Material[]> originalsByRenderer = new Dictionary<Renderer, Material[]>();
+        private readonly List<Material> copies = new List<Material>();
+
+
+        public EmissionMaterialCopies(Scenario owner)
+        {
+            owner.Destroying += RestoreAndDestroy;
+        }
+
+
+        /// <summary>Эмиссия у рендерера включена: уже была — ничего, нет — своя копия материала с ней, один раз.</summary>
+        public void EnsureEmission(Renderer renderer)
+        {
+            if (originalsByRenderer.ContainsKey(renderer))
+                return;
+
+            var originals = renderer.sharedMaterials;
+
+            if (!NeedsCopy(originals))
+                return;
+
+            var replaced = new Material[originals.Length];
+
+            for (var index = 0; index < originals.Length; index++)
+                replaced[index] = CopyWithEmission(originals[index]);
+
+            originalsByRenderer[renderer] = originals;
+            renderer.sharedMaterials = replaced;
+        }
+
+        private static bool NeedsCopy(Material[] materials)
+        {
+            foreach (var material in materials)
+            {
+                if (material != null && material.HasProperty(EmissionColorId) && !material.IsKeywordEnabled(EmissionKeyword))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private Material CopyWithEmission(Material original)
+        {
+            if (original == null || !original.HasProperty(EmissionColorId) || original.IsKeywordEnabled(EmissionKeyword))
+                return original;
+
+            var copy = new Material(original) { name = original.name + " (Emission)" };
+            copy.EnableKeyword(EmissionKeyword);
+            copies.Add(copy);
+
+            return copy;
+        }
+
+
+        private void RestoreAndDestroy()
+        {
+            foreach (var pair in originalsByRenderer)
+            {
+                if (pair.Key != null)
+                    pair.Key.sharedMaterials = pair.Value;
+            }
+
+            foreach (var copy in copies)
+            {
+                if (copy != null)
+                    UnityEngine.Object.Destroy(copy);
+            }
+
+            originalsByRenderer.Clear();
+            copies.Clear();
         }
     }
 }

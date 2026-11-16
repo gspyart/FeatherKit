@@ -28,7 +28,7 @@ namespace FeatherKit.Tests.Scenarios
         }
 
         [Test]
-        public void Toggle_Alternates_AndStopStartsOver()
+        public void Toggle_Alternates_StopKeepsMemory_ResetNodeMemoryStartsOver()
         {
             var graph = new ScenarioGraph();
             var when = AddWhen(graph);
@@ -43,8 +43,10 @@ namespace FeatherKit.Tests.Scenarios
             RaiseWhen(scenario);
             scenario.Stop();
             RaiseWhen(scenario);
+            scenario.ResetNodeMemory();
+            RaiseWhen(scenario);
 
-            Assert.That(Marks, Is.EqualTo(new[] { "A", "B", "A", "A" }));
+            Assert.That(Marks, Is.EqualTo(new[] { "A", "B", "A", "B", "A" }));
         }
 
         [Test]
@@ -89,6 +91,38 @@ namespace FeatherKit.Tests.Scenarios
         }
 
         [Test]
+        public void Random_RollAtTotal_PicksLastPositiveWeight()
+        {
+            Assert.That(ScenarioRandomNode.PickOutputNumber(new[] { 1f, 0f }, 1f), Is.EqualTo(1), "{1, 0} with roll = total");
+            Assert.That(ScenarioRandomNode.PickOutputNumber(new[] { 0f, 2f, 0f }, 0f), Is.EqualTo(2));
+            Assert.That(ScenarioRandomNode.PickOutputNumber(new[] { 1f, 1f }, 1f), Is.EqualTo(2));
+            Assert.That(ScenarioRandomNode.PickOutputNumber(new[] { 0f, 0f }, 0f), Is.Zero);
+        }
+
+        [Test]
+        public void StopScenarioNode_ResetNodeMemory_ForgetsOnce()
+        {
+            var graph = new ScenarioGraph();
+            var when = AddWhen(graph);
+            var once = graph.AddNode(new ScenarioOnceNode());
+            ConnectToIn(graph, when, ScenarioWhenNode.Then, once);
+            ConnectToIn(graph, once, ScenarioOnceNode.Out, AddSteps(graph, "Scream"));
+            var resetWhen = AddWhen(graph, "Reset When");
+            ConnectToIn(graph, resetWhen, ScenarioWhenNode.Then, graph.AddNode(new ScenarioStopScenarioNode { ResetsNodeMemory = true }));
+            var plainStopWhen = AddWhen(graph, "Stop When");
+            ConnectToIn(graph, plainStopWhen, ScenarioWhenNode.Then, graph.AddNode(new ScenarioStopScenarioNode()));
+            var scenario = CreateScenario(graph);
+
+            RaiseWhen(scenario);
+            RaiseWhen(scenario, "Stop When");
+            RaiseWhen(scenario);
+            RaiseWhen(scenario, "Reset When");
+            RaiseWhen(scenario);
+
+            Assert.That(Marks, Is.EqualTo(new[] { "Scream", "Scream" }), "Plain Stop keeps Once passed; Reset Node Memory forgets it");
+        }
+
+        [Test]
         public void SwitchOnCounter_GoesToValueOrDefault()
         {
             var graph = new ScenarioGraph();
@@ -97,11 +131,13 @@ namespace FeatherKit.Tests.Scenarios
             when.RerunRule = ScenarioRerunRule.RunAlongside;
             var switchNode = graph.AddNode(new ScenarioSwitchOnCounterNode());
             SetField(switchNode, "counter", ScenarioCounterReference.FromVariable(levers.Id));
+            var one = switchNode.AddCase(1);
+            var two = switchNode.AddCase(2);
             var pull = AddSteps(graph, "Pull", new ScenarioTestCountAction("levers", ScenarioCounterReference.FromVariable(levers.Id)));
             ConnectToIn(graph, when, ScenarioWhenNode.Then, pull);
             ConnectToIn(graph, pull, ScenarioStepsNode.Done, switchNode);
-            ConnectToIn(graph, switchNode, ScenarioSwitchOnCounterNode.ValueOutput(1), AddSteps(graph, "One"));
-            ConnectToIn(graph, switchNode, ScenarioSwitchOnCounterNode.ValueOutput(2), AddSteps(graph, "Two"));
+            ConnectToIn(graph, switchNode, one.Output, AddSteps(graph, "One"));
+            ConnectToIn(graph, switchNode, two.Output, AddSteps(graph, "Two"));
             ConnectToIn(graph, switchNode, ScenarioSwitchOnCounterNode.Default, AddSteps(graph, "Default"));
             var scenario = CreateScenario(graph);
 

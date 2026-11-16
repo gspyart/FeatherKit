@@ -97,6 +97,13 @@ namespace FeatherKit.Scenarios
         };
 
 
+        /// <summary>Точка не задана: «этот объект» или объект без выбора, без смещения и прочего. Главный поток.</summary>
+        internal bool IsDefault => (kind == ScenarioPointKind.ThisObject || kind == ScenarioPointKind.Object)
+                                   && !ScenarioFieldMigration.IsAssigned(targetTransform)
+                                   && string.IsNullOrEmpty(variableId)
+                                   && worldPosition == Vector3.zero && offset == Vector3.zero && !usesRenderersCenter;
+
+
         public static ScenarioPoint FromVariable(string graphVariableId)
         {
             return new ScenarioPoint(ScenarioPointKind.Variable) { variableId = graphVariableId };

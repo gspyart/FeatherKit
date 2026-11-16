@@ -35,7 +35,7 @@ namespace FeatherKit.Scenarios
 
         protected override IEnumerator Perform(ScenarioRun run, ScenarioInput input)
         {
-            var chosenNumber = ChooseOutputNumber();
+            var chosenNumber = PickOutputNumber(weights, Random.value * TotalWeight(weights));
 
             if (chosenNumber > 0)
                 Fire(run, OutOutput(chosenNumber));
@@ -43,27 +43,39 @@ namespace FeatherKit.Scenarios
             yield break;
         }
 
-        private int ChooseOutputNumber()
+
+        /// <summary>
+        /// Номер выхода по броску от 0 до суммы весов: первый с положительным весом, где накопленная сумма больше броска;
+        /// бросок ровно на сумме — последний с положительным весом. 0 — все веса нулевые.
+        /// </summary>
+        public static int PickOutputNumber(IReadOnlyList<float> outputWeights, float roll)
+        {
+            var accumulated = 0f;
+            var lastPositiveNumber = 0;
+
+            for (var index = 0; index < outputWeights.Count; index++)
+            {
+                if (outputWeights[index] <= 0f)
+                    continue;
+
+                accumulated += outputWeights[index];
+                lastPositiveNumber = index + 1;
+
+                if (accumulated > roll)
+                    return lastPositiveNumber;
+            }
+
+            return lastPositiveNumber;
+        }
+
+        private static float TotalWeight(IReadOnlyList<float> outputWeights)
         {
             var total = 0f;
 
-            foreach (var weight in weights)
+            foreach (var weight in outputWeights)
                 total += Mathf.Max(0f, weight);
 
-            if (total <= 0f)
-                return 0;
-
-            var roll = Random.value * total;
-
-            for (var index = 0; index < weights.Count; index++)
-            {
-                roll -= Mathf.Max(0f, weights[index]);
-
-                if (roll < 0f)
-                    return index + 1;
-            }
-
-            return weights.Count;
+            return total;
         }
     }
 }

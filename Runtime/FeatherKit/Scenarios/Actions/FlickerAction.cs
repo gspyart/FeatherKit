@@ -9,11 +9,11 @@ namespace FeatherKit.Scenarios
     /// <summary>
     /// Неисправная лампа: компоненты рывками гаснут и загораются, потом остаются как задано.
     /// Все мигают вместе — свет, луч и светящийся плафон одной лампы не расходятся.
-    /// Старое поле «components» переносится в новое при загрузке.
+    /// Старое поле «components» переносится в новое перед работой и кнопкой «Upgrade Fields».
     /// </summary>
     [Serializable]
     [ScenarioBlock("Light/Flicker", Description = "Make lights and lamp parts flicker like a faulty lamp")]
-    public class FlickerAction : ScenarioLongAction, ISerializationCallbackReceiver
+    public class FlickerAction : ScenarioLongAction, IScenarioUpgradableBlock
     {
         [SerializeField, HideInInspector] private List<Component> components = new List<Component>();
 
@@ -53,11 +53,19 @@ namespace FeatherKit.Scenarios
         }
 
 
-        public ScenarioObjectList<Component> FlickeringComponents => flickeringComponents;
+        public ScenarioObjectList<Component> FlickeringComponents
+        {
+            get
+            {
+                TryUpgradeLegacyFields();
+                return flickeringComponents;
+            }
+        }
 
 
         public override IEnumerator Perform(ScenarioRun run)
         {
+            TryUpgradeLegacyFields();
             var components = flickeringComponents.Get(run);
             var initialStates = new bool[components.Count];
 
@@ -94,20 +102,19 @@ namespace FeatherKit.Scenarios
         }
 
 
-        // ISerializationCallbackReceiver
-        public void OnBeforeSerialize()
+        // IScenarioUpgradableBlock
+        // Новое поле главнее: задано — старое просто очищается, не затирая его.
+        public bool TryUpgradeLegacyFields()
         {
-        }
+            if (components == null || components.Count == 0)
+                return false;
 
-        // ISerializationCallbackReceiver
-        public void OnAfterDeserialize()
-        {
-            flickeringComponents ??= new ScenarioObjectList<Component>();
-
-            if (components != null && components.Count > 0 && flickeringComponents.Items.Count == 0 && !flickeringComponents.UsesVariable)
+            if (flickeringComponents.Items.Count == 0 && !flickeringComponents.UsesVariable)
                 flickeringComponents.Items.AddRange(components);
 
-            components?.Clear();
+            components.Clear();
+
+            return true;
         }
     }
 

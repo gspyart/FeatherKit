@@ -3,10 +3,10 @@ using UnityEngine;
 
 namespace FeatherKit.Scenarios
 {
-    /// <summary>Дёрнуть триггер аниматора: дверь открывается, люк падает. Старое поле «animator» переносится в новое при загрузке.</summary>
+    /// <summary>Дёрнуть триггер аниматора: дверь открывается, люк падает. Старое поле «animator» переносится в новое перед работой и кнопкой «Upgrade Fields».</summary>
     [Serializable]
     [ScenarioBlock("Animation/Animator Trigger", Description = "Fire a Trigger parameter of an Animator")]
-    public class AnimatorTriggerAction : ScenarioInstantAction, ISerializationCallbackReceiver
+    public class AnimatorTriggerAction : ScenarioInstantAction, IScenarioUpgradableBlock
     {
         [SerializeField, HideInInspector] private Animator animator;
 
@@ -19,31 +19,38 @@ namespace FeatherKit.Scenarios
         [SerializeField] private string triggerName;
 
 
-        public ScenarioValue<Animator> TargetAnimator => targetAnimator;
+        public ScenarioValue<Animator> TargetAnimator
+        {
+            get
+            {
+                TryUpgradeLegacyFields();
+                return targetAnimator;
+            }
+        }
 
         public override string Summary => string.IsNullOrEmpty(triggerName) ? "no trigger set" : triggerName;
 
 
         protected override void Apply(ScenarioRun run)
         {
+            TryUpgradeLegacyFields();
             ScenarioAnimators.Require(run, targetAnimator).SetTrigger(triggerName);
         }
 
 
-        // ISerializationCallbackReceiver
-        public void OnBeforeSerialize()
+        // IScenarioUpgradableBlock
+        // Новое поле главнее: задано — старое просто очищается, не затирая его.
+        public bool TryUpgradeLegacyFields()
         {
-        }
+            if (!ScenarioFieldMigration.IsAssigned(animator))
+                return false;
 
-        // ISerializationCallbackReceiver
-        public void OnAfterDeserialize()
-        {
-            targetAnimator ??= new ScenarioValue<Animator>();
-
-            if (ScenarioFieldMigration.IsAssigned(animator) && !ScenarioFieldMigration.IsAssigned(targetAnimator.Value) && !targetAnimator.UsesVariable)
+            if (!ScenarioFieldMigration.IsAssigned(targetAnimator.Value) && !targetAnimator.UsesVariable)
                 targetAnimator.Value = animator;
 
             animator = null;
+
+            return true;
         }
     }
 }

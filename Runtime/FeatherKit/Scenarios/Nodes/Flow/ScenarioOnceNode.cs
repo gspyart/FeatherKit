@@ -5,11 +5,11 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>
     /// Нода «Once»: пропускает в Out только первый вход; Reset открывает снова.
-    /// Пройдена ли — общее для ноды, а не для запуска. Stop возвращает начальное.
+    /// Пройдена ли — память ноды, общая для всех запусков; Stop её не трогает, забывает Reset и Scenario.ResetNodeMemory.
     /// </summary>
     [Serializable]
     [ScenarioBlock("Flow/Once", Description = "Let the flow through only the first time")]
-    public class ScenarioOnceNode : ScenarioFlowNode, IScenarioLiveNode
+    public class ScenarioOnceNode : ScenarioFlowNode, IScenarioNodeMemory
     {
         public static readonly ScenarioInput Reset = new ScenarioInput("reset", "Reset");
         public static readonly ScenarioOutput Out = new ScenarioOutput("out", "Out");
@@ -36,8 +36,8 @@ namespace FeatherKit.Scenarios
         }
 
 
-        // IScenarioLiveNode
-        void IScenarioLiveNode.ResetLiveState()
+        // IScenarioNodeMemory
+        public void ForgetMemory()
         {
             hasPassed = false;
         }

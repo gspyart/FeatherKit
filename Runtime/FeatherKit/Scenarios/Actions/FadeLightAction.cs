@@ -8,11 +8,11 @@ namespace FeatherKit.Scenarios
     /// <summary>
     /// Плавно изменить яркость ламп до заданной — погасить свет за пару секунд или разжечь.
     /// Работает с Realtime- и Mixed-светом: запечённый в карту света от этого не изменится.
-    /// Старое поле «lights» переносится в новое при загрузке.
+    /// Старое поле «lights» переносится в новое перед работой и кнопкой «Upgrade Fields».
     /// </summary>
     [Serializable]
     [ScenarioBlock("Light/Fade Intensity", Description = "Smoothly change the brightness of lights")]
-    public class FadeLightAction : ScenarioLongAction, ISerializationCallbackReceiver
+    public class FadeLightAction : ScenarioLongAction, IScenarioUpgradableBlock
     {
         [SerializeField, HideInInspector] private List<Light> lights = new List<Light>();
 
@@ -31,7 +31,14 @@ namespace FeatherKit.Scenarios
         [SerializeField] private float duration = 1f;
 
 
-        public ScenarioObjectList<Light> LightList => lightList;
+        public ScenarioObjectList<Light> LightList
+        {
+            get
+            {
+                TryUpgradeLegacyFields();
+                return lightList;
+            }
+        }
 
         public override string Summary => (lightList.UsesVariable ? "graph variable" : $"{lightList.Items.Count} pcs")
                                           + $" → {intensity:0.##} over {duration:0.##} s";
@@ -39,6 +46,7 @@ namespace FeatherKit.Scenarios
 
         public override IEnumerator Perform(ScenarioRun run)
         {
+            TryUpgradeLegacyFields();
             var lights = lightList.Get(run);
             var startIntensities = new float[lights.Count];
 
@@ -65,20 +73,19 @@ namespace FeatherKit.Scenarios
         }
 
 
-        // ISerializationCallbackReceiver
-        public void OnBeforeSerialize()
+        // IScenarioUpgradableBlock
+        // Новое поле главнее: задано — старое просто очищается, не затирая его.
+        public bool TryUpgradeLegacyFields()
         {
-        }
+            if (lights == null || lights.Count == 0)
+                return false;
 
-        // ISerializationCallbackReceiver
-        public void OnAfterDeserialize()
-        {
-            lightList ??= new ScenarioObjectList<Light>();
-
-            if (lights != null && lights.Count > 0 && lightList.Items.Count == 0 && !lightList.UsesVariable)
+            if (lightList.Items.Count == 0 && !lightList.UsesVariable)
                 lightList.Items.AddRange(lights);
 
-            lights?.Clear();
+            lights.Clear();
+
+            return true;
         }
     }
 }

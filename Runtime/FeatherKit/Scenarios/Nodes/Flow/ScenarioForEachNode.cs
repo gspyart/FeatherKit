@@ -34,6 +34,10 @@ namespace FeatherKit.Scenarios
             // Get отдаёт новый список: правка переменной посреди обхода этот обход не меняет.
             foreach (var listItem in list.Get(run))
             {
+                // Пока тело шло, объект могли уничтожить: мёртвому Each не нужен.
+                if (listItem == null)
+                    continue;
+
                 if (item.IsChosen)
                     item.Set(run, listItem);
 
