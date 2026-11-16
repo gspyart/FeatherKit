@@ -46,6 +46,8 @@ namespace FeatherKit.Tests.Scenarios
 
             Assert.That(playSound.SoundPoint.Kind, Is.EqualTo(ScenarioPointKind.Object));
             Assert.That(playSound.SoundPoint.TargetTransform, Is.SameAs(speaker));
+            Assert.That(playSound.TryUpgradeLegacyFields(), Is.True, "Reading did not move the data — the upgrade does");
+            Assert.That(playSound.SoundPoint.TargetTransform, Is.SameAs(speaker));
             Assert.That(playSound.TryUpgradeLegacyFields(), Is.False, "Upgrading twice changes nothing");
         }
 

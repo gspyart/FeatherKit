@@ -33,25 +33,27 @@ namespace FeatherKit.Scenarios
         [SerializeField] private ScenarioPoint soundPoint = new ScenarioPoint(ScenarioPointKind.ThisObject);
 
 
-        public ScenarioValue<AudioClip> Sound
+        /// <summary>Звук, как он сработает: новое поле или, пока оно пустое, старое. Чтение данных не меняет.</summary>
+        public ScenarioValue<AudioClip> Sound => ShouldReadOldClip ? new ScenarioValue<AudioClip>(clip) : sound;
+
+        /// <summary>Точка, как она сработает: новое поле или, пока оно не задано, старый источник. Чтение данных не меняет.</summary>
+        public ScenarioPoint SoundPoint => ShouldReadOldSource ? source.ToPoint() : soundPoint;
+
+        public override string Summary
         {
             get
             {
-                TryUpgradeLegacyFields();
-                return sound;
+                var effectiveSound = Sound;
+
+                return effectiveSound.UsesVariable ? "graph variable"
+                    : effectiveSound.Value != null ? effectiveSound.Value.name : "no sound selected";
             }
         }
 
-        public ScenarioPoint SoundPoint
-        {
-            get
-            {
-                TryUpgradeLegacyFields();
-                return soundPoint;
-            }
-        }
+        private bool ShouldReadOldClip => ScenarioFieldMigration.IsAssigned(clip)
+                                          && !ScenarioFieldMigration.IsAssigned(sound.Value) && !sound.UsesVariable;
 
-        public override string Summary => sound.UsesVariable ? "graph variable" : sound.Value != null ? sound.Value.name : "no sound selected";
+        private bool ShouldReadOldSource => source != null && !source.IsDefault && soundPoint.IsDefault;
 
 
         public override IEnumerator Perform(ScenarioRun run)

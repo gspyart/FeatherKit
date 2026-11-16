@@ -31,16 +31,13 @@ namespace FeatherKit.Scenarios
         [SerializeField] private float duration = 1f;
 
 
-        public ScenarioObjectList<Light> LightList
-        {
-            get
-            {
-                TryUpgradeLegacyFields();
-                return lightList;
-            }
-        }
+        /// <summary>Как сработает: новый список или, пока он пуст, старый. Чтение данных не меняет.</summary>
+        public ScenarioObjectList<Light> LightList =>
+            lights != null && lights.Count > 0 && lightList.Items.Count == 0 && !lightList.UsesVariable
+                ? new ScenarioObjectList<Light>(lights)
+                : lightList;
 
-        public override string Summary => (lightList.UsesVariable ? "graph variable" : $"{lightList.Items.Count} pcs")
+        public override string Summary => (LightList.UsesVariable ? "graph variable" : $"{LightList.Items.Count} pcs")
                                           + $" → {intensity:0.##} over {duration:0.##} s";
 
 

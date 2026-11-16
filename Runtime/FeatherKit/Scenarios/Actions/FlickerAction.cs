@@ -46,21 +46,19 @@ namespace FeatherKit.Scenarios
                     _ => "as before"
                 };
 
-                var what = flickeringComponents.UsesVariable ? "graph variable" : $"{flickeringComponents.Items.Count} pcs";
+                var effectiveComponents = FlickeringComponents;
+                var what = effectiveComponents.UsesVariable ? "graph variable" : $"{effectiveComponents.Items.Count} pcs";
 
                 return $"{what} · {duration:0.##} s → {end}";
             }
         }
 
 
-        public ScenarioObjectList<Component> FlickeringComponents
-        {
-            get
-            {
-                TryUpgradeLegacyFields();
-                return flickeringComponents;
-            }
-        }
+        /// <summary>Как сработает: новый список или, пока он пуст, старый. Чтение данных не меняет.</summary>
+        public ScenarioObjectList<Component> FlickeringComponents =>
+            components != null && components.Count > 0 && flickeringComponents.Items.Count == 0 && !flickeringComponents.UsesVariable
+                ? new ScenarioObjectList<Component>(components)
+                : flickeringComponents;
 
 
         public override IEnumerator Perform(ScenarioRun run)

@@ -17,17 +17,14 @@ namespace FeatherKit.Scenarios
         [SerializeField] private ScenarioValue<PlayableDirector> timeline = new ScenarioValue<PlayableDirector>();
 
 
-        public ScenarioValue<PlayableDirector> Timeline
-        {
-            get
-            {
-                TryUpgradeLegacyFields();
-                return timeline;
-            }
-        }
+        /// <summary>Как сработает: новое поле или, пока оно пустое, старое. Чтение данных не меняет.</summary>
+        public ScenarioValue<PlayableDirector> Timeline => ScenarioFieldMigration.IsAssigned(director)
+                                                    && !ScenarioFieldMigration.IsAssigned(timeline.Value) && !timeline.UsesVariable
+            ? new ScenarioValue<PlayableDirector>(director)
+            : timeline;
 
-        public override string Summary => timeline.UsesVariable ? "graph variable"
-            : timeline.Value != null ? timeline.Value.name : "this object";
+        public override string Summary => Timeline.UsesVariable ? "graph variable"
+            : Timeline.Value != null ? Timeline.Value.name : "this object";
 
 
         public override IEnumerator Perform(ScenarioRun run)

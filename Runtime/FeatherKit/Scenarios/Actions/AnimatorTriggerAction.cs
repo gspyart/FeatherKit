@@ -19,14 +19,11 @@ namespace FeatherKit.Scenarios
         [SerializeField] private string triggerName;
 
 
-        public ScenarioValue<Animator> TargetAnimator
-        {
-            get
-            {
-                TryUpgradeLegacyFields();
-                return targetAnimator;
-            }
-        }
+        /// <summary>Как сработает: новое поле или, пока оно пустое, старое. Чтение данных не меняет.</summary>
+        public ScenarioValue<Animator> TargetAnimator => ScenarioFieldMigration.IsAssigned(animator)
+                                                    && !ScenarioFieldMigration.IsAssigned(targetAnimator.Value) && !targetAnimator.UsesVariable
+            ? new ScenarioValue<Animator>(animator)
+            : targetAnimator;
 
         public override string Summary => string.IsNullOrEmpty(triggerName) ? "no trigger set" : triggerName;
 

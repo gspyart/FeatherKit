@@ -38,16 +38,12 @@ namespace FeatherKit.Scenarios
 
         public ScenarioTarget Target => target;
 
-        public ScenarioPoint Destination
-        {
-            get
-            {
-                TryUpgradeLegacyFields();
-                return destination;
-            }
-        }
+        /// <summary>Точка, как она сработает: новое поле или, пока оно не задано, старое. Чтение данных не меняет.</summary>
+        public ScenarioPoint Destination => ScenarioFieldMigration.IsAssigned(point) && destination.IsDefault
+            ? new ScenarioPoint(ScenarioPointKind.Object) { TargetTransform = point }
+            : destination;
 
-        public override string Summary => $"{target.Summary} → {destination.Summary}" + (duration > 0f ? $" · {duration:0.##} s" : "");
+        public override string Summary => $"{target.Summary} → {Destination.Summary}" + (duration > 0f ? $" · {duration:0.##} s" : "");
 
 
         public override IEnumerator Perform(ScenarioRun run)

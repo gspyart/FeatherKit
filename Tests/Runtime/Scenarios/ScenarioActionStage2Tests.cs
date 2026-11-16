@@ -273,13 +273,64 @@ namespace FeatherKit.Tests.Scenarios
                 Assert.That(((PlaySoundAction)loaded[5]).SoundPoint.Kind, Is.EqualTo(ScenarioPointKind.Player));
 
                 serializedScenario.Update();
+                Assert.That(actions.GetArrayElementAtIndex(2).FindPropertyRelative("point").objectReferenceValue, Is.SameAs(lampObject.transform),
+                    "Reading the properties does not touch the saved old field");
+
+                foreach (var block in loaded)
+                    ((IScenarioUpgradableBlock)block).TryUpgradeLegacyFields();
+
+                serializedScenario.Update();
                 Assert.That(actions.GetArrayElementAtIndex(2).FindPropertyRelative("point").objectReferenceValue, Is.Null,
-                    "The old field is emptied and does not overwrite the new one again");
+                    "The upgrade empties the old field");
+                Assert.That(((MoveToPointAction)loaded[2]).Destination.TargetTransform, Is.SameAs(lampObject.transform));
             }
             finally
             {
                 Object.DestroyImmediate(scenario.gameObject);
                 Object.DestroyImmediate(lampObject);
+                Object.DestroyImmediate(clip);
+            }
+        }
+
+        [Test]
+        public void ReadingPropertiesAndSummary_DoesNotChangeOldFields()
+        {
+            var speaker = new GameObject("Speaker");
+            var clip = AudioClip.Create("Scream", 100, 1, 44100, false);
+            var stepsNode = new ScenarioStepsNode { CustomTitle = "Old Steps" };
+            stepsNode.AddStep(new PlaySoundAction());
+            var graph = new ScenarioGraph();
+            graph.AddNode(stepsNode);
+            var scenario = CreateScenario(graph);
+
+            try
+            {
+                var serializedScenario = new UnityEditor.SerializedObject(scenario);
+                var action = serializedScenario.FindProperty("graph.nodes.Array.data[0].steps.actions.Array.data[0]");
+                action.FindPropertyRelative("clip").objectReferenceValue = clip;
+                action.FindPropertyRelative("source.kind").enumValueIndex = (int)ScenarioTargetKind.Specific;
+                action.FindPropertyRelative("source.specificObject").objectReferenceValue = speaker;
+                serializedScenario.ApplyModifiedPropertiesWithoutUndo();
+
+                var steps = ScenarioTestGraphs.FindNode<ScenarioStepsNode>(scenario.Graph, "Old Steps").Steps;
+                var loaded = (List<ScenarioAction>)typeof(ScenarioActionList)
+                    .GetField("actions", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                    .GetValue(steps);
+                var playSound = (PlaySoundAction)loaded[0];
+
+                Assert.That(playSound.Summary, Is.EqualTo("Scream"), "The summary shows the old clip");
+                Assert.That(playSound.Sound.Value, Is.SameAs(clip));
+                Assert.That(playSound.SoundPoint.TargetTransform, Is.SameAs(speaker.transform));
+
+                serializedScenario.Update();
+                Assert.That(action.FindPropertyRelative("clip").objectReferenceValue, Is.SameAs(clip));
+                Assert.That(action.FindPropertyRelative("source.specificObject").objectReferenceValue, Is.SameAs(speaker));
+                Assert.That(action.FindPropertyRelative("sound.value").objectReferenceValue, Is.Null);
+            }
+            finally
+            {
+                Object.DestroyImmediate(scenario.gameObject);
+                Object.DestroyImmediate(speaker);
                 Object.DestroyImmediate(clip);
             }
         }
