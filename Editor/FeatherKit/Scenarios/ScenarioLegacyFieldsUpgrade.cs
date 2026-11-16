@@ -126,9 +126,11 @@ namespace FeatherKit.EditorTools
                 return;
             }
 
-            var names = string.Join("\n", owners.Take(15).Select(owner => "• " + owner.name));
+            var names = string.Join("\n", owners.Take(15).Select(owner => $"• {owner.name} — {PlaceOf(owner)}"));
+            var sceneNames = owners.OfType<Component>().Select(component => component.gameObject.scene.name).Distinct().ToList();
+            var scenesLine = sceneNames.Count > 1 ? $"\n\nScenes: {string.Join(", ", sceneNames)}" : "";
             var isConfirmed = EditorUtility.DisplayDialog(ButtonText,
-                $"Move old fields to new ones in {owners.Count} scenarios and graph files?\n\n{names}\n\nOne undo step brings them all back. "
+                $"Move old fields to new ones in {owners.Count} scenarios and graph files?\n\n{names}{scenesLine}\n\nOne undo step brings them all back. "
                 + "Save the scenes, prefab and files yourself.", ButtonText, "Cancel");
 
             if (!isConfirmed)
@@ -142,6 +144,12 @@ namespace FeatherKit.EditorTools
 
             Undo.SetCurrentGroupName(UndoName);
             Undo.CollapseUndoOperations(undoGroup);
+        }
+
+        // Где лежит: сцена у объекта, путь у граф-файла — два одноимённых объекта в разных сценах иначе не различить.
+        private static string PlaceOf(Object owner)
+        {
+            return owner is Component component ? component.gameObject.scene.name : AssetDatabase.GetAssetPath(owner);
         }
 
         // Открыт префаб — только его содержимое; иначе все загруженные сцены. Плюс граф-файлы, которые они используют.

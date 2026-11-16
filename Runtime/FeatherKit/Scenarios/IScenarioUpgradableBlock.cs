@@ -3,6 +3,7 @@ namespace FeatherKit.Scenarios
     /// <summary>
     /// Блок со старыми полями прежних версий: умеет перенести их в новые. Только в главном потоке.
     /// Редактор зовёт перенос кнопкой «Upgrade Fields»; в игре блок зовёт его сам перед работой.
+    /// Старые поля — [SerializeField, HideInInspector]; других скрытых полей у такого блока не заводить.
     /// </summary>
     public interface IScenarioUpgradableBlock
     {

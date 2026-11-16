@@ -506,15 +506,18 @@ var progress = SaveStorage.Load<ProgressData>("progress");
 2. Нода **Do** — «Activate or Deactivate Object»: включить силуэт. Шаги внутри Do идут сверху
    вниз, как список дел.
 3. Нода **Wait For** — ждёт первое из двух, у каждого свой выход:
-   - условие «игрок смотрит на силуэт» → провод к ноде Do: «Wait» 1 с, «Play Sound»,
-     «Activate or Deactivate Object» — выключить силуэт. Такое условие игра пишет сама:
-     в FeatherKit не знают, где у игрока глаза; как написать свой блок — ниже, «Свой блок»;
+   - условие «Looks At»: смотрит «Player Eyes» (глаза игрока), цель — силуэт → провод к ноде Do:
+     «Wait» 1 с, «Play Sound», «Activate or Deactivate Object» — выключить силуэт. Где у игрока
+     глаза, FeatherKit не знает — игра сообщает это одной строкой (`ScenarioPoint.PlayerEyesFinder`);
    - событие «Tagged Object in Trigger: Exit» (игрок вышел из зоны) → провод к ноде Do:
      выключить силуэт.
 4. Пока игра идёт, в окне графа подсвечивается нода, на которой сейчас стоит запуск, а провод,
    по которому он только что прошёл, вспыхивает.
 
-**Ещё идеи:** собрал все 10 монет — «Counter Changed» и «Compare Counter», затем «Animator Trigger»
+**Ещё идеи:** игрок отвернулся на полсекунды — «Looked At: Stops Looking» с задержкой 0,5 с — и
+фигура уже стоит в другом углу («Set Position» в точку, запомненную «Remember Position»); в коридоре
+четыре лампы — «For Each» гасит их по одной; на третье касание колокол замолкает — нода «Do N»;
+собрал все 10 монет — «Counter Changed» и «Compare Counter», затем «Animator Trigger»
 открывает сундук; сработал рычаг — «Signal Received», затем «Move to Point» опускает мост; пока
 игрок в тёмной комнате (Guard While с условием «Flag Is On»: `Свет выключен`), за спиной скрипят шаги —
 «Repeat»: «Play Sound» с шагом, «Wait» 2 с; свет включили, флаг погас, и шаги обрываются (одиночный
@@ -545,9 +548,45 @@ var progress = SaveStorage.Load<ProgressData>("progress");
 «On ‹объект›» с его значениями.
 
 **Переменные графа** — в панели слева на холсте: Flag (да/нет), Counter (целое), Number
-(дробное), Object. У каждого объекта, исполняющего граф, свои значения. Почти в любом поле блока
-кнопка слева переключает «своё значение» ↔ «переменная графа». Общие на всю игру флаги и счётчики —
-по-прежнему ассеты Create → FeatherKit → Scenarios.
+(дробное), Object, Vector3 (точка), Text, Color, Object List (список объектов одного типа).
+У каждого объекта, исполняющего граф, свои значения. Почти в любом поле блока кнопка слева
+переключает «своё значение» ↔ «переменная графа»; там же «New Variable…» и «New Variable from Field» —
+переменная сразу нужного вида, во втором случае со значением, которое уже стояло в поле. Строку
+переменной можно перетащить из панели прямо на поле: подходящие поля подсвечиваются, остальные тускнеют.
+Общие на всю игру флаги и счётчики — по-прежнему ассеты Create → FeatherKit → Scenarios.
+
+**Списки и «куда записать».** Блок может не только читать переменную, но и класть в неё результат:
+«Random Item» выбирает случайную лампу из списка и пишет её в переменную, «Remember Position» запоминает
+точку, «List Count» — число. Такое поле показывает имя переменной; пока её не выбрали, оно красное.
+Нода **For Each** проходит список по одному элементу: на каждом — выход Each, в конце — Done.
+
+**Пространство.** «Looks At» — смотрит ли кто-то (игрок, монстр, прожектор) на точку, вдоль
+направления или оси объекта: в конусе, отдельно по горизонтали и вертикали или «в кадре камеры»,
+по желанию — ничем не загорожено («Clear View»). «Looked At» — то же событием: начал смотреть,
+отвернулся, смотрит, с задержкой. «Distance» и «Distance Crossed» — ближе или дальше чем, по желанию
+без высоты; «Inside Zone» — точка внутри коллайдера. Точка в этих блоках — объект, вызвавший сценарий,
+игрок, его глаза, переменная или координата.
+
+**Память нод.** Gate, Once, Do N, Toggle и Cooldown помнят своё между запусками: «Once» пропустит
+поток один раз, пока жив объект сценария (до перезагрузки сцены или Reset Node Memory), «Do N» — N раз. Нода Stop Scenario обрывает запуски, но память оставляет;
+с галкой «Reset Node Memory» — сбрасывает, как в начале уровня.
+
+**Удобства холста.**
+
+- Cmd/Ctrl+C, V, D — копировать, вставить, дублировать: ноды с проводами между ними, заметки и рамки.
+  Вставлять можно в другое окно, другой граф и другую сцену; недостающие переменные создаются,
+  а переменная с тем же именем и видом в целевом графе берётся готовая. Объект сцены, которого
+  целевой граф не удержит (граф-файл, другая сцена), сбрасывается — об этом плашка в окне.
+- Cmd/Ctrl+G — рамка вокруг выделенных нод: подпись двойным кликом, цвет в меню, тащишь рамку —
+  едут ноды. Рамка уходит вместе с последней нодой.
+- Кнопка ▾ в шапке ноды сворачивает её до портов; двойной клик по шапке — своя подпись ноды;
+  кнопка в шапке окна включает миникарту.
+- **Make Graph File** — встроенный граф в файл: объекты сцены из полей уходят в переменные
+  «Set on Object» и привязки этого объекта; объект сцены в обычном поле блока — отказ со списком полей.
+  **Embed in Object** — обратно: копия файла в объект, его привязки становятся начальными значениями.
+- Ноды пропавших классов (класс удалили или переименовали без `[MovedFrom]`) Unity скопировать
+  не умеет: Make Graph File и Embed in Object называют их и предлагают «Delete Anyway…»,
+  копипаст их пропускает с плашкой.
 
 **Ждать и сторожить.**
 
@@ -555,6 +594,12 @@ var progress = SaveStorage.Load<ProgressData>("progress");
   («вышел из зоны») или условие («смотрит на окно»); у тайм-аута свой выход Timed Out.
 - **Guard While** пускает выход Body и держит его, пока верно условие. Нарушилось — всё, что
   выросло из Body, обрывается, долгие эффекты плавно уходят, и запуск идёт в Broken.
+
+**Старые поля блоков.** Flicker, Fade Intensity, Play Sound, Move to Point, Play Timeline и Animator Trigger
+получили новые поля (переменные, точки, списки). Старые данные продолжают работать, но окно графа
+и инспектор `Scenario` показывают «Old fields in N blocks» с кнопкой **Upgrade Fields** — она переносит
+их одной записью undo; для всех открытых сцен — меню `FeatherKit → Scenarios → Upgrade Old Fields in Open Scenes`.
+Сам по себе просмотр ничего не переносит.
 
 **Старые сценарии** — списки «When → If → Do» в инспекторе — работают как раньше, пока
 граф пуст. Кнопка **Convert to Graph** в инспекторе (или меню
@@ -564,7 +609,8 @@ var progress = SaveStorage.Load<ProgressData>("progress");
 только через «Called». Окно со списком всех сценариев сцены
 и журналом запусков — `FeatherKit → Scenarios → Scenario List`.
 
-**Свой блок** — маленький класс. Он сам появится в поиске и в меню «+».
+**Свой блок** — маленький класс. Он сам появится в поиске и в меню «+»; `Description` в атрибуте —
+подсказка в поиске и на шапке ноды.
 
 ```csharp
 [Serializable, ScenarioBlock("Light/Blink")]
@@ -620,15 +666,37 @@ public class CoinFlipNode : ScenarioFlowNode
   далеко, — получает Exit на ближайшем шаге физики. Телепорт внутрь габаритов той же зоны выходом
   не считается. Выключили саму зону — гости забываются без Exit; при включении Unity снова пришлёт вход.
 - У каждого условия есть галка «NOT»; сложная логика — вложенными группами «Condition Group».
-- На кого действует блок: «This Object», «Caller», «Player», «Object». Кто такой игрок, игра задаёт
-  через `ScenarioTarget.PlayerFinder`.
+- На кого действует блок: «This Object», «Caller», «Player», «Object» или переменная графа. Кто такой
+  игрок и где его глаза, игра задаёт через `ScenarioTarget.PlayerFinder` и `ScenarioPoint.PlayerEyesFinder`.
 - Блоки старых списков «If — Else», «In Parallel», «Random One Of», «Repeat», «Wait Until»,
   «Wait for Background Steps» в графе заменяют ноды потока; конвертер оставляет их блоками в Do
   и предупреждает в консоли.
 - Переименовали класс блока или ноды — пометьте его `[MovedFrom]`. Нода пропавшего класса видна
   красной и данные не теряет; удалить её можно через меню «Delete Anyway…».
 - Цвет и иконку категории задаёт `ScenarioBlockStyle`; игра добавляет свои категории через
-  `ScenarioBlockStyle.RegisterCategory`.
+  `ScenarioBlockStyle.RegisterCategory`. Блок с `[Obsolete]` по-прежнему читается, но новым не предлагается.
+- Поля своего блока: `ScenarioValue<T>` — своё значение или переменная; `ScenarioPoint` — точка в мире;
+  `ScenarioObjectList<T>` — свой список или переменная Object List; `ScenarioVariableSlot<T>` — куда
+  записать результат; `ScenarioVariableChoice` + `[ScenarioAllowedVariableKinds]` — переменная любого
+  (или указанного) вида; `[ScenarioValueKindFrom]` — поле значения или сравнения того вида, какая
+  переменная выбрана рядом.
+- Блок со старыми полями переносит их сам: `IScenarioUpgradableBlock.TryUpgradeLegacyFields()` —
+  старые поля `[SerializeField, HideInInspector]`, перенос перед работой и по Upgrade Fields.
+- Нода с памятью между запусками реализует `IScenarioNodeMemory`; память сбрасывает Stop Scenario
+  с «Reset Node Memory» или `Scenario.ResetNodeMemory()`.
+- Counter — целое: деление округляет к нулю, Random Range включает оба края, дробь в Counter — ошибка.
+- Set Position: у `NavMeshAgent` — Warp, у `CharacterController` — с выключением на перенос, у Rigidbody —
+  по желанию со сбросом скорости («Reset Velocity»). Игрока переносит блок игры «Teleport Player».
+- Списки пропускают уничтоженные объекты. `ScenarioObjectList.Get` каждый раз отдаёт новый список,
+  `GetInto` — заполняет ваш без выделения памяти.
+- События игры через `FireAsOwnOccurrence`: одинаковые блоки с одним Caller в одном кадре — один случай;
+  Wait For, начатый от такого события, его же не засчитает.
+- «Collision» слушает объект сценария: на нём должен быть Rigidbody или коллайдер, и столкновение
+  должно давать Unity-событие (у `CharacterController` его нет).
+- «Looked At» и «Distance Crossed» опрашивают раз в Check Interval (0,1 с); на паузе опрос не идёт.
+  Условия считают только в момент вопроса.
+- «In Camera Frame»: камера из поля Frame Camera; пусто — камера на смотрящем, иначе `Camera.main`.
+- «Inside Zone» с невыпуклым мешем считает по габаритам и один раз предупреждает.
 
 **Ноды потока**
 
@@ -641,7 +709,15 @@ public class CoinFlipNode : ScenarioFlowNode
 | Sequence | Then 1..N по очереди, каждый — когда кончилось всё из прошлого |
 | Repeat | Each Time N раз, пока сходятся условия или бесконечно; вход Stop |
 | Run Scenario | Позвать другой сценарий, по желанию дождаться его |
-| Stop This Run, Stop Scenario | Оборвать свой запуск или весь сценарий |
+| Stop This Run, Stop Scenario | Оборвать свой запуск или весь сценарий; Stop Scenario с «Reset Node Memory» — и память нод |
+| For Each | Each на каждый элемент списка (элемент — в переменную), в конце Done |
+| Random | Один из выходов Out 1..N, у каждого свой вес |
+| Once | Пропускает поток только в первый раз; вход Reset |
+| Gate | Пропускает, пока открыта; входы Open, Close, Toggle, галка Starts Open |
+| Toggle | По очереди то A, то B |
+| Do N | Пропускает N раз, потом — в Exhausted; вход Reset |
+| Cooldown | Пропускает не чаще раза в N секунд, лишнее — в Blocked |
+| Switch on Counter | Выход по значению счётчика: случаи с числами на ноде, иначе Default |
 
 **Готовые блоки** — по категориям, как в поиске
 
@@ -649,22 +725,31 @@ public class CoinFlipNode : ScenarioFlowNode
 |---|---|---|
 | События (When, Wait For) | Object | Start, Every Frame (каждый кадр или раз в N секунд) |
 | | Trigger | Tagged Object in Trigger: Enter, Exit, «Stay — Every Frame» |
-| | Variables | Flag Changed, Counter Changed |
+| | Physics | Collision: Enter, Exit, по желанию с тегом гостя |
+| | Space | Looked At, Distance Crossed |
+| | Variables | Flag Changed, Counter Changed, Variable Changed |
 | | Signals | Signal Received |
 | | Scenario | Called |
 | Условия | Logic | Condition Group, Chance |
-| | Variables | Flag Is On, Compare Counter |
-| | Object | Object Is Active |
+| | Variables | Flag Is On, Compare Counter, Compare Number, Compare Variable |
+| | Lists | List Contains |
+| | Space | Looks At, Distance, Inside Zone |
+| | Object | Object Is Active, Component Enabled |
+| | Scenario | Scenario Is Running |
 | Шаги (Do) | Control | Wait; старые блоки списков — If — Else, Random One Of, In Parallel, Repeat, Wait Until, Wait for Background Steps |
 | | Scenario | Run Scenario, Stop Scenario |
-| | Object | Activate or Deactivate Object, Enable or Disable Component |
-| | Transform | Move to Point — сразу или плавно |
+| | Object | Activate or Deactivate Object, Enable or Disable Component, Spawn Prefab, Destroy |
+| | Transform | Move to Point — сразу или плавно; Set Position; Rotate To |
+| | Space | Remember Position |
+| | Physics | Add Impulse, Set Kinematic |
+| | Rendering | Swap Material, Fade Emission |
 | | Light | Flicker, Fade Intensity |
 | | Sound | Play Sound |
-| | Animation | Animator Trigger, Play Timeline |
-| | Variables | Change Flag, Change Counter |
+| | Animation | Animator Trigger, Animator Set Bool, Animator Set Float, Play Timeline |
+| | Variables | Change Flag, Change Counter, Change Number, Set Variable |
+| | Lists | Add to List, Remove from List, Clear List, List Count, Random Item |
 | | Signals | Send Signal |
-| | Code, Debug | Call Methods (UnityEvent), Write to Log |
+| | Code, Debug | Call Methods (UnityEvent), Write to Log, Pause Editor |
 
 | Класс | Назначение |
 |---|---|
@@ -678,14 +763,19 @@ public class CoinFlipNode : ScenarioFlowNode
 | `ScenarioEvent`, `ScenarioCondition`, `ScenarioAction` | Базы блоков-событий, условий и шагов |
 | `ScenarioInstantAction`, `ScenarioLongAction` | Шаг без ожидания; долгий шаг с галкой «Wait Until Done» |
 | `ScenarioValue<T>`, `ScenarioFlagReference`, `ScenarioCounterReference` | Поле «своё значение или переменная графа» |
+| `ScenarioObjectList<T>`, `ScenarioVariableSlot<T>`, `ScenarioVariableChoice` | Список или переменная Object List; куда записать результат; переменная любого вида |
+| `ScenarioPoint`, `ScenarioGazeCheck` | Точка в мире; «смотрит ли» — общее для Looks At и Looked At |
+| `IScenarioUpgradableBlock`, `IScenarioNodeMemory` | Блок со старыми полями; нода с памятью между запусками |
 | `ScenarioVariableDefinition`, `ScenarioVariableBinding` | Переменная графа; её значение на объекте |
 | `IScenarioHeldEffect` | Долгий эффект, который граф отпускает плавно |
 | `ScenarioTarget` | На какой объект действует блок |
-| `ScenarioBlockAttribute`, `ScenarioLabelAttribute`, `ScenarioInspectorOnlyAttribute` | Путь в поиске; подпись поля; поле только в инспекторе ноды |
+| `ScenarioBlockAttribute`, `ScenarioLabelAttribute`, `ScenarioInspectorOnlyAttribute` | Путь в поиске и описание; подпись поля; поле только в инспекторе ноды |
+| `ScenarioAllowedVariableKindsAttribute`, `ScenarioValueKindFromAttribute` | Какие виды переменных предлагать; вид поля — от соседней выбранной переменной |
 | `ScenarioFlag`, `ScenarioCounter`, `ScenarioSignal` | Общие флаг, счётчик и сигнал как ассеты |
 | `TriggerEvent` | База «вошёл в триггер или вышел»: игра решает, кто считается гостем |
 | `ScenarioRunRecord` | Чем кончилась попытка запуска — для журнала |
-| Редактор: `ScenarioGraphWindow` и папка `Editor/FeatherKit/Scenarios/Graph` | Окно графа, холст, поиск нод, панель переменных, конвертер, подсветка в игре |
+| Редактор: `ScenarioGraphWindow` и папка `Editor/FeatherKit/Scenarios/Graph` | Окно графа, холст, поиск нод, панель переменных, копипаст, рамки, граф ↔ файл, конвертер, подсветка в игре |
+| Редактор: `ScenarioLegacyFieldsUpgrade` | Upgrade Fields: перенос старых полей блоков по команде |
 
 </details>
 
