@@ -6,7 +6,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Развилка: условия сошлись — шаги «Then», нет — шаги «Else». Условия проверяются в момент развилки.</summary>
     [Serializable]
-    [ScenarioBlock("Control/If — Else")]
+    [ScenarioBlock("Control/If — Else", Description = "Run Then or Else by the conditions (old lists)")]
     public class IfAction : ScenarioLongAction
     {
         [ScenarioLabel("If")]

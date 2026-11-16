@@ -46,7 +46,7 @@ namespace FeatherKit.Scenarios
         }
 
 
-        /// <summary>Список для запуска: свой или переменной графа, объекты переведены в T. Новый список на каждый вызов — можно держать через ожидания.</summary>
+        /// <summary>Живые объекты для запуска: свои или переменной графа, переведённые в T; уничтоженные пропускаются. Новый список на каждый вызов — можно держать через ожидания.</summary>
         public IReadOnlyList<T> Get(ScenarioRun run)
         {
             var list = new List<T>();
@@ -62,7 +62,12 @@ namespace FeatherKit.Scenarios
 
             if (!UsesVariable)
             {
-                target.AddRange(items);
+                foreach (var item in items)
+                {
+                    if (item != null)
+                        target.Add(item);
+                }
+
                 return;
             }
 

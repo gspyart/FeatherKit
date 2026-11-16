@@ -5,7 +5,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Флаг — общий или переменная графа — стал нужным значением, кем бы он ни был поставлен.</summary>
     [Serializable]
-    [ScenarioBlock("Variables/Flag Changed")]
+    [ScenarioBlock("Variables/Flag Changed", Description = "Fires when a flag turns on or off")]
     public class FlagChangedEvent : ScenarioEvent
     {
         [ScenarioLabel("Flag")]

@@ -5,7 +5,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Включить или выключить объект целиком, со всеми детьми.</summary>
     [Serializable]
-    [ScenarioBlock("Object/Activate or Deactivate Object")]
+    [ScenarioBlock("Object/Activate or Deactivate Object", Description = "Turn an object on, off or toggle it")]
     public class SetObjectActiveAction : ScenarioInstantAction
     {
         [Tooltip("Which object to activate or deactivate")]

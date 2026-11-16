@@ -5,7 +5,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Поставить флаг — общий или переменную графа: включить, выключить или переключить.</summary>
     [Serializable]
-    [ScenarioBlock("Variables/Change Flag")]
+    [ScenarioBlock("Variables/Change Flag", Description = "Turn a flag on, off or toggle it")]
     public class SetFlagAction : ScenarioInstantAction
     {
         [ScenarioLabel("Flag")]

@@ -5,7 +5,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Счётчик — общий или переменная графа — изменился и теперь подходит под сравнение: «рычагов стало ≥ 3».</summary>
     [Serializable]
-    [ScenarioBlock("Variables/Counter Changed")]
+    [ScenarioBlock("Variables/Counter Changed", Description = "Fires when a counter changes and matches the comparison")]
     public class CounterChangedEvent : ScenarioEvent
     {
         [ScenarioLabel("Counter")]

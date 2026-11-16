@@ -8,7 +8,7 @@ namespace FeatherKit.Scenarios
     /// Объект остаётся включённым.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Object/Enable or Disable Component")]
+    [ScenarioBlock("Object/Enable or Disable Component", Description = "Switch components on, off or toggle them")]
     public class SetComponentEnabledAction : ScenarioInstantAction
     {
         [Tooltip("A component that can be enabled and disabled: a light, collider, renderer, script. " +

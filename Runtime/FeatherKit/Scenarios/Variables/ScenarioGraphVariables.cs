@@ -14,6 +14,9 @@ namespace FeatherKit.Scenarios
     /// </summary>
     public class ScenarioGraphVariables
     {
+        // Уничтоженный объект из списка выпадает при первом же обращении: лампу разбили — её в коридоре больше нет.
+        private static readonly Predicate<Object> IsDestroyed = listed => listed == null;
+
         private readonly Dictionary<string, LiveGraphVariable> variablesById =
             new Dictionary<string, LiveGraphVariable>(StringComparer.Ordinal);
 
@@ -31,7 +34,7 @@ namespace FeatherKit.Scenarios
                 var startValue = definition.IsExposed ? BoundValueOf(definition, bindings) ?? definition.InitialValue
                     : definition.InitialValue;
 
-                variablesById[definition.Id] = new LiveGraphVariable(definition, CopyOf(startValue));
+                variablesById[definition.Id] = new LiveGraphVariable(definition, ScenarioVariableValues.Clone(startValue));
             }
         }
 
@@ -119,15 +122,40 @@ namespace FeatherKit.Scenarios
         private void ReplaceObjectList(string variableId, IEnumerable objects)
         {
             var liveList = GetObjectListLive(variableId);
+
+            if (ReferenceEquals(objects, liveList))
+            {
+                MarkChanged(variableId);
+                return;
+            }
+
             liveList.Clear();
 
             if (objects != null)
             {
+                var definition = variablesById[variableId].Definition;
+
                 foreach (var item in objects)
-                    liveList.Add(item as Object);
+                    liveList.Add(ConvertForStorage(definition, item as Object));
             }
 
             MarkChanged(variableId);
+        }
+
+
+        /// <summary>Объект — в тип переменной Object или элемента Object List. Нет нужного компонента — ошибка, а не «пусто».</summary>
+        internal static Object ConvertForStorage(ScenarioVariableDefinition definition, Object value)
+        {
+            if (value == null)
+                return null;
+
+            var converted = ScenarioVariableKinds.ConvertObject(value, definition.ObjectType);
+
+            if (converted == null)
+                throw new InvalidOperationException(
+                    $"Graph variable “{definition.Name}” takes {definition.ObjectType.Name}: “{value.name}” has none");
+
+            return converted;
         }
 
 
@@ -202,14 +230,16 @@ namespace FeatherKit.Scenarios
             return Require(variableId, ScenarioVariableKind.Object).Value.ObjectValue;
         }
 
+        /// <summary>Объект хранится в типе переменной: GameObject для переменной Light — его Light.</summary>
         public void SetObject(string variableId, Object value)
         {
             var variable = Require(variableId, ScenarioVariableKind.Object);
+            var stored = ConvertForStorage(variable.Definition, value);
 
-            if (variable.Value.ObjectValue == value)
+            if (variable.Value.ObjectValue == stored)
                 return;
 
-            variable.Value.ObjectValue = value;
+            variable.Value.ObjectValue = stored;
             RaiseChanged(variable.Definition);
         }
 
@@ -268,8 +298,46 @@ namespace FeatherKit.Scenarios
         /// <summary>Сам живой список переменной: блоки списков меняют его на месте и зовут MarkChanged.</summary>
         public List<Object> GetObjectListLive(string variableId)
         {
-            return Require(variableId, ScenarioVariableKind.ObjectList).Value.ObjectListValue;
+            var liveList = Require(variableId, ScenarioVariableKind.ObjectList).Value.ObjectListValue;
+            liveList.RemoveAll(IsDestroyed);
+
+            return liveList;
         }
+
+        // ── Значение целиком ─────────────────────────────────────────────
+
+        /// <summary>Живое значение переменной любого вида — для сравнения; менять только через Assign.</summary>
+        internal ScenarioVariableValue GetLiveValue(string variableId, out ScenarioVariableDefinition definition)
+        {
+            if (variableId == null || !variablesById.TryGetValue(variableId, out var variable))
+                throw new InvalidOperationException($"Graph variable “{variableId}” not found — it was removed from the graph");
+
+            definition = variable.Definition;
+
+            return variable.Value;
+        }
+
+        /// <summary>Записать поле её вида из готового значения — Set Variable. Объект переводится в тип переменной.</summary>
+        internal void Assign(string variableId, ScenarioVariableValue source)
+        {
+            var value = GetLiveValue(variableId, out var definition);
+
+            if (definition.Kind == ScenarioVariableKind.Object)
+            {
+                SetObject(variableId, source.ObjectValue);
+                return;
+            }
+
+            if (definition.Kind == ScenarioVariableKind.ObjectList)
+            {
+                ReplaceObjectList(variableId, source.ObjectListValue);
+                return;
+            }
+
+            if (ScenarioVariableValues.CopyKind(definition.Kind, source, value))
+                RaiseChanged(definition);
+        }
+
 
         /// <summary>Значение поменяли на месте, мимо Set: сообщить слушателям «Variable Changed».</summary>
         public void MarkChanged(string variableId)
@@ -316,23 +384,6 @@ namespace FeatherKit.Scenarios
 
             return null;
         }
-
-        // Своя копия: запись в переменную не должна менять начальное значение в графе или привязку на объекте.
-        private static ScenarioVariableValue CopyOf(ScenarioVariableValue value)
-        {
-            return new ScenarioVariableValue
-            {
-                FlagValue = value.FlagValue,
-                CounterValue = value.CounterValue,
-                NumberValue = value.NumberValue,
-                ObjectValue = value.ObjectValue,
-                VectorValue = value.VectorValue,
-                TextValue = value.TextValue,
-                ColorValue = value.ColorValue,
-                ObjectListValue = new List<Object>(value.ObjectListValue)
-            };
-        }
-
 
         // ── Общие помощники ──────────────────────────────────────────────
 

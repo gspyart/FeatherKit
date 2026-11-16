@@ -1,5 +1,4 @@
 using System;
-using FeatherKit.Logging;
 using UnityEngine;
 
 namespace FeatherKit.Scenarios
@@ -13,7 +12,11 @@ namespace FeatherKit.Scenarios
     [Serializable]
     public class ScenarioGazeCheck
     {
-        private static bool hasWarnedNotImplemented;
+        // Ближе к цели, чем это, луч упирается в то, на чём она стоит, а не в преграду.
+        private const float NearTargetDistance = 0.3f;
+
+        // Общие на все проверки: взгляд опрашивается часто, а выделять память в опросе нельзя.
+        private static readonly Plane[] FrustumPlanes = new Plane[6];
 
         [Tooltip("Who looks: player eyes, a monster, a searchlight")]
         [ScenarioLabel("Looker")]
@@ -175,26 +178,124 @@ namespace FeatherKit.Scenarios
         /// <summary>Смотрит ли смотрящий на цель прямо сейчас. Смотрящего или цели нет — не смотрит.</summary>
         public bool IsLooking(ScenarioRun run)
         {
-            WarnNotImplementedOnce();
-            return false; // TODO этап 2, рантайм: углы, кадр камеры, дистанция, Clear View.
+            var lookerTransform = looker.ResolveTransform(run);
+
+            if (lookerTransform == null || !looker.TryGetPosition(run, out var eyePosition))
+                return false;
+
+            switch (targetMode)
+            {
+                case ScenarioLookTargetMode.Point:
+                    return IsLookingAtPoint(run, lookerTransform, eyePosition);
+
+                case ScenarioLookTargetMode.WorldDirection:
+                    return IsWithinAngle(lookerTransform, worldDirection);
+
+                default:
+                    var axisObject = target.ResolveTransform(run);
+                    return axisObject != null && IsWithinAngle(lookerTransform, AxisOf(axisObject));
+            }
         }
 
-        // Заглушка до рантайма этапа 2: молча «не смотрит» — и уровень ломается непонятно почему.
-        private static void WarnNotImplementedOnce()
+        private bool IsLookingAtPoint(ScenarioRun run, Transform lookerTransform, Vector3 eyePosition)
         {
-            if (hasWarnedNotImplemented)
-                return;
+            if (!target.TryGetPosition(run, out var targetPosition))
+                return false;
 
-            hasWarnedNotImplemented = true;
-            FLog.Warning(("Looks At is not implemented yet — it always answers “not looking”", FLogColor.Bad));
+            var toTarget = targetPosition - eyePosition;
+
+            if (maxDistance > 0f && toTarget.sqrMagnitude > maxDistance * maxDistance)
+                return false;
+
+            var targetTransform = target.ResolveTransform(run);
+            var isInView = angleMode == ScenarioLookAngleMode.InCameraFrame
+                ? IsInCameraFrame(run, lookerTransform, targetPosition, targetTransform)
+                : IsWithinAngle(lookerTransform, toTarget);
+
+            return isInView && (!requiresClearView || IsViewClear(eyePosition, targetPosition, targetTransform, lookerTransform));
         }
 
 
-        // Флаг статический: без перезагрузки домена предупреждение не повторилось бы в следующей игре.
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetOnEnterPlayMode()
+        // «В кадре» для направления смысла не имеет — там считаем конусом.
+        private bool IsWithinAngle(Transform lookerTransform, Vector3 direction)
         {
-            hasWarnedNotImplemented = false;
+            if (angleMode != ScenarioLookAngleMode.HorizontalAndVertical)
+                return Vector3.Angle(lookerTransform.forward, direction) <= maxAngle;
+
+            var local = lookerTransform.InverseTransformDirection(direction);
+            var yaw = Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg;
+            var pitch = Mathf.Atan2(local.y, new Vector2(local.x, local.z).magnitude) * Mathf.Rad2Deg;
+
+            return Mathf.Abs(yaw) <= maxYaw && Mathf.Abs(pitch) <= maxPitch;
+        }
+
+        private Vector3 AxisOf(Transform axisObject)
+        {
+            return objectAxis switch
+            {
+                ScenarioObjectAxis.Forward => axisObject.forward,
+                ScenarioObjectAxis.Back => -axisObject.forward,
+                ScenarioObjectAxis.Up => axisObject.up,
+                ScenarioObjectAxis.Down => -axisObject.up,
+                ScenarioObjectAxis.Right => axisObject.right,
+                _ => -axisObject.right
+            };
+        }
+
+
+        // По габаритам рендереров, если цель — их центр: силуэт виден и краем. Иначе — сама точка.
+        private bool IsInCameraFrame(ScenarioRun run, Transform lookerTransform, Vector3 targetPosition, Transform targetTransform)
+        {
+            var camera = FrameCameraOf(run, lookerTransform);
+
+            if (camera == null)
+                return false;
+
+            if (target.UsesRenderersCenter && targetTransform != null
+                                           && ScenarioPoint.TryGetRenderersBounds(targetTransform, out var bounds))
+            {
+                GeometryUtility.CalculateFrustumPlanes(camera, FrustumPlanes);
+
+                return GeometryUtility.TestPlanesAABB(FrustumPlanes, bounds)
+                       && (frameMarginPercent <= 0f || IsInsideFrameMargin(camera, bounds.center));
+            }
+
+            return IsInsideFrameMargin(camera, targetPosition);
+        }
+
+        private Camera FrameCameraOf(ScenarioRun run, Transform lookerTransform)
+        {
+            var chosen = frameCamera.Get(run);
+
+            if (chosen != null)
+                return chosen;
+
+            return lookerTransform.TryGetComponent<Camera>(out var lookerCamera) ? lookerCamera : Camera.main;
+        }
+
+        private bool IsInsideFrameMargin(Camera camera, Vector3 position)
+        {
+            var viewport = camera.WorldToViewportPoint(position);
+            var margin = frameMarginPercent / 100f;
+
+            return viewport.z > 0f
+                   && viewport.x >= margin && viewport.x <= 1f - margin
+                   && viewport.y >= margin && viewport.y <= 1f - margin;
+        }
+
+
+        // Упор у самой цели или в саму цель — не помеха: точка на полу или у стены иначе была бы закрыта всегда.
+        private bool IsViewClear(Vector3 eyePosition, Vector3 targetPosition, Transform targetTransform, Transform lookerTransform)
+        {
+            if (!Physics.Linecast(eyePosition, targetPosition, out var hit, clearViewLayers, QueryTriggerInteraction.Ignore))
+                return true;
+
+            // Коллайдер, а не hit.transform: тот отдаёт объект с Rigidbody, а не с коллайдером — голова монстра «закрыла» бы саму себя.
+            var hitTransform = hit.collider.transform;
+
+            return (targetTransform != null && hitTransform.IsChildOf(targetTransform))
+                   || hitTransform.IsChildOf(lookerTransform)
+                   || (targetPosition - hit.point).sqrMagnitude < NearTargetDistance * NearTargetDistance;
         }
     }
 

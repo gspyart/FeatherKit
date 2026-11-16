@@ -6,7 +6,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Строка в консоль — проверить, что сценарий дошёл до этого места. В релизе молчит.</summary>
     [Serializable]
-    [ScenarioBlock("Debug/Write to Log")]
+    [ScenarioBlock("Debug/Write to Log", Description = "Write a line to the console")]
     public class LogAction : ScenarioInstantAction
     {
         [ScenarioLabel("Text")]

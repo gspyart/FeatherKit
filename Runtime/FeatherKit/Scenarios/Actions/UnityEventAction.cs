@@ -8,7 +8,7 @@ namespace FeatherKit.Scenarios
     /// когда готового блока нет. Переименованный метод тут теряется молча: частое — в свой блок.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Code/Call Methods (UnityEvent)")]
+    [ScenarioBlock("Code/Call Methods (UnityEvent)", Description = "Call methods set up as a UnityEvent")]
     public class UnityEventAction : ScenarioInstantAction
     {
         [ScenarioLabel("Calls")]

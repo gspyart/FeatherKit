@@ -8,7 +8,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Случайно одна из веток — с весами: ветка с весом 2 выпадает вдвое чаще ветки с весом 1.</summary>
     [Serializable]
-    [ScenarioBlock("Control/Random One Of")]
+    [ScenarioBlock("Control/Random One Of", Description = "Run one of the branches at random (old lists)")]
     public class RandomBranchAction : ScenarioLongAction
     {
         [ScenarioLabel("Branches")]

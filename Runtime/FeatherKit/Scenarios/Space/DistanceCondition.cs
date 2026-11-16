@@ -72,15 +72,8 @@ namespace FeatherKit.Scenarios
         // Точки нет — сравнивать нечего: условие не выполнено, а не ошибка.
         protected override bool Check(ScenarioRun run)
         {
-            if (!from.TryGetPosition(run, out var fromPosition) || !to.TryGetPosition(run, out var toPosition))
+            if (!ScenarioDistanceMeasure.TryMeasure(run, from, to, isHorizontalOnly, out var measured))
                 return false;
-
-            var offset = toPosition - fromPosition;
-
-            if (isHorizontalOnly)
-                offset.y = 0f;
-
-            var measured = offset.magnitude;
 
             return comparison switch
             {
@@ -89,6 +82,29 @@ namespace FeatherKit.Scenarios
                 ScenarioDistanceComparison.Between => measured >= distance && measured <= maxDistance,
                 _ => measured < distance || measured > maxDistance
             };
+        }
+    }
+
+
+    /// <summary>Расстояние между двумя точками — общее для условия Distance и события Distance Crossed.</summary>
+    public static class ScenarioDistanceMeasure
+    {
+        /// <summary>False — какой-то точки нет: объект не найден или не задан.</summary>
+        public static bool TryMeasure(ScenarioRun run, ScenarioPoint from, ScenarioPoint to, bool isHorizontalOnly, out float distance)
+        {
+            distance = 0f;
+
+            if (!from.TryGetPosition(run, out var fromPosition) || !to.TryGetPosition(run, out var toPosition))
+                return false;
+
+            var offset = toPosition - fromPosition;
+
+            if (isHorizontalOnly)
+                offset.y = 0f;
+
+            distance = offset.magnitude;
+
+            return true;
         }
     }
 

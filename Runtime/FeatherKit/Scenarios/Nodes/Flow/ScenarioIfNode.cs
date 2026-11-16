@@ -6,7 +6,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Нода «Branch»: условия сошлись — выход True, нет — False. Проверка разовая, в момент входа.</summary>
     [Serializable]
-    [ScenarioBlock("Flow/Branch")]
+    [ScenarioBlock("Flow/Branch", Description = "Go to True or False by the conditions")]
     public class ScenarioIfNode : ScenarioFlowNode
     {
         public static readonly ScenarioOutput True = new ScenarioOutput("true", "True");

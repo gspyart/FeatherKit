@@ -8,14 +8,17 @@ namespace FeatherKit.Scenarios
     /// <summary>
     /// Плавно изменить яркость ламп до заданной — погасить свет за пару секунд или разжечь.
     /// Работает с Realtime- и Mixed-светом: запечённый в карту света от этого не изменится.
+    /// Старое поле «lights» переносится в новое перед работой и кнопкой «Upgrade Fields».
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Light/Fade Intensity")]
-    public class FadeLightAction : ScenarioLongAction
+    [ScenarioBlock("Light/Fade Intensity", Description = "Smoothly change the brightness of lights")]
+    public class FadeLightAction : ScenarioLongAction, IScenarioUpgradableBlock
     {
+        [SerializeField, HideInInspector] private List<Light> lights = new List<Light>();
+
         [Tooltip("Which lights")]
         [ScenarioLabel("Lights")]
-        [SerializeField] private List<Light> lights = new List<Light>();
+        [SerializeField] private ScenarioObjectList<Light> lightList = new ScenarioObjectList<Light>();
 
         [Tooltip("Target brightness (Intensity). 0 — turn off")]
         [Min(0f)]
@@ -28,11 +31,20 @@ namespace FeatherKit.Scenarios
         [SerializeField] private float duration = 1f;
 
 
-        public override string Summary => $"{lights.Count} pcs → {intensity:0.##} over {duration:0.##} s";
+        /// <summary>Как сработает: новый список или, пока он пуст, старый. Чтение данных не меняет.</summary>
+        public ScenarioObjectList<Light> LightList =>
+            lights != null && lights.Count > 0 && lightList.Items.Count == 0 && !lightList.UsesVariable
+                ? new ScenarioObjectList<Light>(lights)
+                : lightList;
+
+        public override string Summary => (LightList.UsesVariable ? "graph variable" : $"{LightList.Items.Count} pcs")
+                                          + $" → {intensity:0.##} over {duration:0.##} s";
 
 
         public override IEnumerator Perform(ScenarioRun run)
         {
+            TryUpgradeLegacyFields();
+            var lights = lightList.Get(run);
             var startIntensities = new float[lights.Count];
 
             for (var index = 0; index < lights.Count; index++)
@@ -40,21 +52,37 @@ namespace FeatherKit.Scenarios
 
             for (var elapsed = 0f; elapsed < duration; elapsed += Time.deltaTime)
             {
-                SetAll(startIntensities, elapsed / duration);
+                SetAll(lights, startIntensities, elapsed / duration);
                 yield return null;
             }
 
-            SetAll(startIntensities, 1f);
+            SetAll(lights, startIntensities, 1f);
         }
 
         // Лампа могла исчезнуть посреди перехода вместе с объектом — такие пропускаем.
-        private void SetAll(float[] startIntensities, float progress)
+        private void SetAll(IReadOnlyList<Light> lights, float[] startIntensities, float progress)
         {
             for (var index = 0; index < lights.Count; index++)
             {
                 if (lights[index] != null)
                     lights[index].intensity = Mathf.Lerp(startIntensities[index], intensity, progress);
             }
+        }
+
+
+        // IScenarioUpgradableBlock
+        // Новое поле главнее: задано — старое просто очищается, не затирая его.
+        public bool TryUpgradeLegacyFields()
+        {
+            if (lights == null || lights.Count == 0)
+                return false;
+
+            if (lightList.Items.Count == 0 && !lightList.UsesVariable)
+                lightList.Items.AddRange(lights);
+
+            lights.Clear();
+
+            return true;
         }
     }
 }

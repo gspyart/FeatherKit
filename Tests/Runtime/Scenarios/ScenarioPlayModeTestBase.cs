@@ -156,6 +156,23 @@ namespace FeatherKit.Tests.Scenarios
         }
 
 
+        /// <summary>Граф «When → Do „Steps“ с этими шагами», плюс переменные, уже добавленные в graph.</summary>
+        protected Scenario CreateStepsScenario(ScenarioGraph graph, params ScenarioAction[] steps)
+        {
+            var when = AddWhen(graph);
+            ConnectToIn(graph, when, ScenarioWhenNode.Then, AddSteps(graph, "Steps", steps));
+
+            return CreateScenario(graph);
+        }
+
+        protected static T WithField<T>(T target, string fieldName, object value)
+        {
+            SetField(target, fieldName, value);
+
+            return target;
+        }
+
+
         // ── Ноды и события ───────────────────────────────────────────────
 
         /// <summary>Нода из графа, который исполняет сценарий: у граф-файла это своя копия, а не ассет.</summary>

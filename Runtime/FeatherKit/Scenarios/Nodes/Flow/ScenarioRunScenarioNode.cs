@@ -10,7 +10,7 @@ namespace FeatherKit.Scenarios
     /// «Caller» передаётся дальше; с «Wait Until Done» Done — когда кончились запуски, начатые этим вызовом.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Flow/Run Scenario")]
+    [ScenarioBlock("Flow/Run Scenario", Description = "Call another scenario and wait for its runs")]
     public class ScenarioRunScenarioNode : ScenarioFlowNode
     {
         public static readonly ScenarioOutput Done = new ScenarioOutput("done", "Done");

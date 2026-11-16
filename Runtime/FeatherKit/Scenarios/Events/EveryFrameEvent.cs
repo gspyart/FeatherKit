@@ -11,7 +11,7 @@ namespace FeatherKit.Scenarios
     /// Обычно в паре с условиями: сработает в тот кадр, когда они сойдутся. Идущий сценарий не перезапускается.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Object/Every Frame")]
+    [ScenarioBlock("Object/Every Frame", Description = "Fires every frame or every few seconds while the object is on")]
     public class EveryFrameEvent : ScenarioEvent
     {
         [Tooltip("How often, in seconds of game time. 0 — every frame")]

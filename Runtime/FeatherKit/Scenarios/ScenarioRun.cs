@@ -17,21 +17,16 @@ namespace FeatherKit.Scenarios
         // На все запуски разом: петля может идти и через несколько запусков, зовущих друг друга.
         private const int MaxInstantTransitionsPerFrame = 10000;
 
-        // Ожидание внутри ожидания начинает ветки само, но не глубже — дальше их начнёт внешний обход очереди.
-        private const int MaxNestedEagerStarts = 8;
-
         private static int transitionsFrame = -1;
         private static int transitionsInFrame;
 
         private readonly List<ScenarioBranch> branches = new List<ScenarioBranch>();
-        private readonly List<PendingBranchStart> pendingBranchStarts = new List<PendingBranchStart>();
-
-        private bool isStartingPendingBranches;
-        private int eagerStartDepth;
+        private readonly ScenarioBranchStarts branchStarts;
 
 
         public ScenarioRun(Scenario scenario, GameObject instigator)
         {
+            branchStarts = new ScenarioBranchStarts(this);
             Scenario = scenario;
             Instigator = instigator;
         }
@@ -186,78 +181,16 @@ namespace FeatherKit.Scenarios
         }
 
 
-        /// <summary>
-        /// Начать ветки проводов, чья нода уже доделала ход. Обход один на запуск и идёт по очереди,
-        /// а не вглубь: цепочка мгновенных нод не растит стек.
-        /// </summary>
+        /// <summary>Начать ветки проводов, чья нода уже доделала ход.</summary>
         internal void StartPendingBranches()
         {
-            if (isStartingPendingBranches)
-                return;
-
-            isStartingPendingBranches = true;
-
-            try
-            {
-                StartSettledBranches(eagerFiring: null);
-            }
-            finally
-            {
-                isStartingPendingBranches = false;
-            }
+            branchStarts.StartSettled();
         }
 
         /// <summary>Кусок ждут прямо в ходе ноды: начать его ветки сейчас, чтобы мгновенные кончились в этом же кадре.</summary>
         internal void StartPendingBranchesEagerly(ScenarioFiring firing)
         {
-            if (eagerStartDepth >= MaxNestedEagerStarts)
-                return;
-
-            var wasStarting = isStartingPendingBranches;
-            isStartingPendingBranches = true;
-            eagerStartDepth++;
-
-            try
-            {
-                StartSettledBranches(firing);
-            }
-            finally
-            {
-                eagerStartDepth--;
-                isStartingPendingBranches = wasStarting;
-            }
-        }
-
-        // Ветка ждёт, пока пустившая её нода в ходе; при раннем старте — только ветки ожидаемого куска.
-        private void StartSettledBranches(ScenarioFiring eagerFiring)
-        {
-            var index = 0;
-
-            while (index < pendingBranchStarts.Count)
-            {
-                var start = pendingBranchStarts[index];
-
-                if (IsStopped || start.Branch.IsFinished)
-                {
-                    pendingBranchStarts.RemoveAt(index);
-                    start.Branch.Stop();
-                    continue;
-                }
-
-                var isSettled = start.FiringBranch == null || !start.FiringBranch.IsTakingStep;
-                var canStart = eagerFiring == null
-                    ? isSettled
-                    : start.Branch.IsInside(eagerFiring) && (isSettled || start.Branch.Firing == eagerFiring);
-
-                if (!canStart)
-                {
-                    index++;
-                    continue;
-                }
-
-                pendingBranchStarts.RemoveAt(index);
-                start.Branch.Begin(start.Steps);
-            }
+            branchStarts.StartEagerly(firing);
         }
 
 
@@ -284,7 +217,7 @@ namespace FeatherKit.Scenarios
                 var branch = new ScenarioBranch(this, null, isBackground: false, firing) { Node = target.Node };
                 AddBranch(branch);
                 firing.CountRootBranch();
-                pendingBranchStarts.Add(new PendingBranchStart(branch, ActiveBranch, EnterNode(target)));
+                branchStarts.Add(branch, ActiveBranch, EnterNode(target));
             }
 
             if (ActiveBranch == null)
@@ -353,7 +286,7 @@ namespace FeatherKit.Scenarios
             foreach (var branch in branches.ToArray())
                 branch.Stop();
 
-            pendingBranchStarts.Clear();
+            branchStarts.Clear();
         }
 
         /// <summary>Шаг упал: запомнить первую ошибку. Ветки заканчивают сами, сценарий оборвёт остальное.</summary>
@@ -412,26 +345,6 @@ namespace FeatherKit.Scenarios
         {
             transitionsFrame = -1;
             transitionsInFrame = 0;
-        }
-
-
-        /// <summary>Ветка провода ждёт начала: кто её пустил и с чего она начнётся.</summary>
-        private readonly struct PendingBranchStart
-        {
-            public PendingBranchStart(ScenarioBranch branch, ScenarioBranch firingBranch, IEnumerator steps)
-            {
-                Branch = branch;
-                FiringBranch = firingBranch;
-                Steps = steps;
-            }
-
-
-            public ScenarioBranch Branch { get; }
-
-            /// <summary>Ветка, чья нода сработала; null — сработала When, вне веток.</summary>
-            public ScenarioBranch FiringBranch { get; }
-
-            public IEnumerator Steps { get; }
         }
     }
 }

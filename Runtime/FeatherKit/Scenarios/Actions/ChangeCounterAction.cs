@@ -5,7 +5,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Изменить счётчик — общий или переменную графа: прибавить (отрицательное — отнять) или задать значение.</summary>
     [Serializable]
-    [ScenarioBlock("Variables/Change Counter")]
+    [ScenarioBlock("Variables/Change Counter", Description = "Add to a counter or set its value")]
     public class ChangeCounterAction : ScenarioInstantAction
     {
         [ScenarioLabel("Counter")]

@@ -97,6 +97,13 @@ namespace FeatherKit.Scenarios
         };
 
 
+        /// <summary>Точка не задана: «этот объект» или объект без выбора, без смещения и прочего. Главный поток.</summary>
+        internal bool IsDefault => (kind == ScenarioPointKind.ThisObject || kind == ScenarioPointKind.Object)
+                                   && !ScenarioFieldMigration.IsAssigned(targetTransform)
+                                   && string.IsNullOrEmpty(variableId)
+                                   && worldPosition == Vector3.zero && offset == Vector3.zero && !usesRenderersCenter;
+
+
         public static ScenarioPoint FromVariable(string graphVariableId)
         {
             return new ScenarioPoint(ScenarioPointKind.Variable) { variableId = graphVariableId };
@@ -197,22 +204,36 @@ namespace FeatherKit.Scenarios
             return true;
         }
 
-        // Без рендереров — опорная точка объекта: пустой объект тоже бывает целью.
+        // Без видимых рендереров — опорная точка объекта: пустой объект тоже бывает целью.
         private static Vector3 RenderersCenterOf(Transform target)
         {
+            return TryGetRenderersBounds(target, out var bounds) ? bounds.center : target.position;
+        }
+
+
+        /// <summary>Общие габариты включённых рендереров объекта и его детей. False — таких нет.</summary>
+        internal static bool TryGetRenderersBounds(Transform target, out Bounds bounds)
+        {
             target.GetComponentsInChildren(RenderersBuffer);
+            bounds = default;
+            var hasBounds = false;
 
-            if (RenderersBuffer.Count == 0)
-                return target.position;
+            foreach (var renderer in RenderersBuffer)
+            {
+                if (!renderer.enabled || !renderer.gameObject.activeInHierarchy)
+                    continue;
 
-            var bounds = RenderersBuffer[0].bounds;
+                if (hasBounds)
+                    bounds.Encapsulate(renderer.bounds);
+                else
+                    bounds = renderer.bounds;
 
-            for (var index = 1; index < RenderersBuffer.Count; index++)
-                bounds.Encapsulate(RenderersBuffer[index].bounds);
+                hasBounds = true;
+            }
 
             RenderersBuffer.Clear();
 
-            return bounds.center;
+            return hasBounds;
         }
 
 

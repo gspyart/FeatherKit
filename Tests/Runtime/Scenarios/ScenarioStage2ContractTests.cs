@@ -57,7 +57,7 @@ namespace FeatherKit.Tests.Scenarios
         // ── Gate и Once ──────────────────────────────────────────────────
 
         [Test]
-        public void Gate_ClosedAtStart_OpensOnInput_OnceLetsThroughOnlyFirst()
+        public void Gate_ClosedAtStart_OpensOnInput_OnceLetsThroughOnlyFirst_MemorySurvivesStop()
         {
             var scenario = CreateScenario(ScenarioTestGraphs.GateAndOnce());
 
@@ -74,7 +74,17 @@ namespace FeatherKit.Tests.Scenarios
             scenario.Stop();
             RaiseWhen(scenario);
 
-            Assert.That(Marks, Is.EqualTo(new[] { ScenarioTestGraphs.PassedTitle }), "Stop puts the gate back to closed");
+            Assert.That(Marks, Is.EqualTo(new[] { ScenarioTestGraphs.PassedTitle }), "Stop keeps the node memory: Once stays passed");
+
+            scenario.ResetNodeMemory();
+            RaiseWhen(scenario);
+
+            Assert.That(Marks, Is.EqualTo(new[] { ScenarioTestGraphs.PassedTitle }), "Memory forgotten: the gate is closed again");
+
+            RaiseWhen(scenario, ScenarioTestGraphs.OpenWhenTitle);
+            RaiseWhen(scenario);
+
+            Assert.That(Marks, Is.EqualTo(new[] { ScenarioTestGraphs.PassedTitle, ScenarioTestGraphs.PassedTitle }));
         }
 
 

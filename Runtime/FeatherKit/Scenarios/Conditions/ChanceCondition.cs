@@ -5,7 +5,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Случайно, с заданным шансом: при каждой проверке бросок заново.</summary>
     [Serializable]
-    [ScenarioBlock("Logic/Chance")]
+    [ScenarioBlock("Logic/Chance", Description = "Holds with the given chance")]
     public class ChanceCondition : ScenarioCondition
     {
         [Tooltip("Chance in percent: 0 — never, 100 — always")]

@@ -5,7 +5,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Кто-то послал сигнал. «Caller» — тот же, что у пославшего сценария.</summary>
     [Serializable]
-    [ScenarioBlock("Signals/Signal Received")]
+    [ScenarioBlock("Signals/Signal Received", Description = "Fires when someone sends the signal")]
     public class SignalReceivedEvent : ScenarioEvent
     {
         [ScenarioLabel("Signal")]

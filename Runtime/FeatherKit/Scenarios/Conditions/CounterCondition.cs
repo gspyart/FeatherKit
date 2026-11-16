@@ -5,7 +5,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Сравнить счётчик — общий или переменную графа — с числом: «рычагов ≥ 3».</summary>
     [Serializable]
-    [ScenarioBlock("Variables/Compare Counter")]
+    [ScenarioBlock("Variables/Compare Counter", Description = "Compare a counter with a number")]
     public class CounterCondition : ScenarioCondition
     {
         [ScenarioLabel("Counter")]

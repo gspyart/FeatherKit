@@ -6,13 +6,13 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>
     /// Нода «Gate»: пропускает вход Enter в Out, пока открыта; Open, Close и Toggle её открывают и закрывают.
-    /// Открыта ли — общее для ноды, а не для запуска: все запуски видят одни ворота. Stop возвращает начальное.
+    /// Открыта ли — память ноды, общая для всех запусков; Stop её не трогает, забывает Scenario.ResetNodeMemory.
     /// </summary>
     [Serializable]
     [ScenarioBlock("Flow/Gate", Description = "Let the flow through only while the gate is open")]
-    public class ScenarioGateNode : ScenarioFlowNode, IScenarioLiveNode
+    public class ScenarioGateNode : ScenarioFlowNode, IScenarioNodeMemory
     {
-        public static readonly ScenarioInput Enter = new ScenarioInput("in", "Enter");
+        public static new readonly ScenarioInput Enter = new ScenarioInput("in", "Enter");
         public static readonly ScenarioInput Open = new ScenarioInput("open", "Open");
         public static readonly ScenarioInput Close = new ScenarioInput("close", "Close");
         public static readonly ScenarioInput Toggle = new ScenarioInput("toggle", "Toggle");
@@ -66,8 +66,8 @@ namespace FeatherKit.Scenarios
         }
 
 
-        // IScenarioLiveNode
-        void IScenarioLiveNode.ResetLiveState()
+        // IScenarioNodeMemory
+        public void ForgetMemory()
         {
             hasLiveState = false;
         }

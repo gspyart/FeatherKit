@@ -9,7 +9,7 @@ namespace FeatherKit.Scenarios
     /// «Caller» передаётся дальше: тот, кто вошёл в триггер здесь, будет им и там.
     /// </summary>
     [Serializable]
-    [ScenarioBlock("Scenario/Run Scenario")]
+    [ScenarioBlock("Scenario/Run Scenario", Description = "Call another scenario and wait for it")]
     public class RunScenarioAction : ScenarioLongAction
     {
         [ScenarioLabel("Scenario")]

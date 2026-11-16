@@ -6,7 +6,7 @@ namespace FeatherKit.Scenarios
 {
     /// <summary>Ждать, пока условия сойдутся: игрок посмотрел, флаг включился. Проверка каждый кадр.</summary>
     [Serializable]
-    [ScenarioBlock("Control/Wait Until")]
+    [ScenarioBlock("Control/Wait Until", Description = "Wait until the conditions hold (old lists)")]
     public class WaitUntilAction : ScenarioAction
     {
         [ScenarioLabel("Conditions")]
