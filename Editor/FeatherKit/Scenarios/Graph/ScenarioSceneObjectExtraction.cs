@@ -87,10 +87,13 @@ namespace FeatherKit.EditorTools
             if (!isRead)
                 return;
 
-            if (!variablesByObject.TryGetValue(sceneObject, out var variable))
+            // Один объект сцены — одна переменная, хоть поле и ждёт его GameObject, хоть Transform: переменная переводит сама.
+            var key = sceneObject is UnityEngine.Component component ? component.gameObject : sceneObject;
+
+            if (!variablesByObject.TryGetValue(key, out var variable))
             {
                 variable = AddVariable(sceneObject.name, ScenarioVariableKind.Object, objectType);
-                variablesByObject[sceneObject] = variable;
+                variablesByObject[key] = variable;
                 BoundValues[variable.Id] = new ScenarioVariableValue { ObjectValue = sceneObject };
             }
 
