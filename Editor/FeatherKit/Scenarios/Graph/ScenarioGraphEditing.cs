@@ -10,7 +10,7 @@ namespace FeatherKit.EditorTools
     /// <summary>
     /// Все правки графа из редактора — через API графа, с undo и пометкой «изменено».
     /// - ноды: создать (в том числе по блоку из поиска), сдвинуть, удалить; провода; исходы Wait For
-    /// - переменные графа и заметки на холсте
+    /// - переменные графа и заметки на холсте; рамки — частью ScenarioGroupEditing, вставка — ScenarioGraphClipboard
     /// - экземпляр префаба получает свои overrides
     /// Без UI: холст и панели только зовут его, он же под EditMode-тестами.
     /// </summary>
@@ -26,8 +26,13 @@ namespace FeatherKit.EditorTools
         public ScenarioGraphEditing(ScenarioGraphHost host)
         {
             this.host = host;
+            Groups = new ScenarioGroupEditing(this);
         }
 
+
+        public ScenarioGroupEditing Groups { get; }
+
+        public ScenarioGraphHost Host => host;
 
         private ScenarioGraph Graph => host.Graph;
 
@@ -75,9 +80,20 @@ namespace FeatherKit.EditorTools
                 Record("Move Scenario Node", () => node.Position = rounded);
         }
 
-        private static Vector2 RoundPosition(Vector2 position)
+        public static Vector2 RoundPosition(Vector2 position)
         {
             return new Vector2(Mathf.Round(position.x), Mathf.Round(position.y));
+        }
+
+
+        /// <summary>Своя подпись ноды поверх названия; пустая — снова название блока.</summary>
+        public void SetNodeTitle(int nodeId, string title)
+        {
+            var node = Graph.FindNode(nodeId);
+            var trimmed = title?.Trim() ?? "";
+
+            if (node != null && (node.CustomTitle ?? "") != trimmed)
+                Record("Rename Scenario Node", () => node.CustomTitle = trimmed);
         }
 
 
@@ -177,7 +193,7 @@ namespace FeatherKit.EditorTools
 
         public ScenarioVariableDefinition AddVariable(ScenarioVariableKind kind)
         {
-            var variable = new ScenarioVariableDefinition(UniqueVariableName(NewVariableName), kind);
+            var variable = new ScenarioVariableDefinition(UniqueVariableName(Graph, NewVariableName), kind);
 
             return Record("Add Scenario Variable", () => Graph.AddVariable(variable));
         }
@@ -189,14 +205,14 @@ namespace FeatherKit.EditorTools
             if (variable == null || string.IsNullOrWhiteSpace(newName) || variable.Name == newName.Trim())
                 return;
 
-            var uniqueName = UniqueVariableName(newName.Trim(), variable);
+            var uniqueName = UniqueVariableName(Graph, newName.Trim(), variable);
             Record("Rename Scenario Variable", () => variable.Name = uniqueName);
         }
 
-        // Имя — то, что видит человек в списках выбора: два одинаковых там не различить.
-        private string UniqueVariableName(string wantedName, ScenarioVariableDefinition renamed = null)
+        /// <summary>Имя — то, что видит человек в списках выбора: два одинаковых там не различить.</summary>
+        public static string UniqueVariableName(ScenarioGraph graph, string wantedName, ScenarioVariableDefinition renamed = null)
         {
-            var takenNames = new HashSet<string>(Graph.Variables.Where(variable => variable != null && variable != renamed)
+            var takenNames = new HashSet<string>(graph.Variables.Where(variable => variable != null && variable != renamed)
                 .Select(variable => variable.Name));
 
             var name = wantedName;
@@ -280,7 +296,8 @@ namespace FeatherKit.EditorTools
 
         // ── Запись правки ────────────────────────────────────────────────
 
-        private void Record(string undoName, Action change)
+        /// <summary>Правка графа одной записью undo — и для частей: рамок, вставки.</summary>
+        public void Record(string undoName, Action change)
         {
             Record(undoName, () =>
             {
@@ -289,7 +306,7 @@ namespace FeatherKit.EditorTools
             });
         }
 
-        private T Record<T>(string undoName, Func<T> change)
+        public T Record<T>(string undoName, Func<T> change)
         {
             Undo.RecordObject(host.Owner, undoName);
 

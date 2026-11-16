@@ -11,7 +11,7 @@ namespace FeatherKit.EditorTools
     /// <summary>
     /// Шапка ноды на холсте — часть ScenarioNodeView: иконка, заголовок, под ним сводка мелким, цвет категории.
     /// - стопка из одного блока подписана самим блоком («Flicker»), из нескольких — «3 steps»
-    /// - вид ноды и сводка — в подсказке; проблемы графа — значком справа
+    /// - вид ноды, описание блока и сводка — в подсказке; проблемы графа — значком справа
     /// </summary>
     internal class ScenarioNodeHeader
     {
@@ -83,7 +83,10 @@ namespace FeatherKit.EditorTools
             nodeView.mainContainer.style.borderLeftWidth = StripeWidth;
             nodeView.titleContainer.style.borderBottomColor = color;
 
-            nodeView.titleContainer.tooltip = KindHintOf(node) + (string.IsNullOrEmpty(summaryLabel.text) ? "" : $"\n{summaryLabel.text}");
+            var description = ScenarioBlockCatalog.DescriptionOf(styleType);
+            nodeView.titleContainer.tooltip = KindHintOf(node)
+                                              + (string.IsNullOrEmpty(description) || description == KindHintOf(node) ? "" : $"\n{description}")
+                                              + (string.IsNullOrEmpty(summaryLabel.text) ? "" : $"\n{summaryLabel.text}");
         }
 
         private string SummaryOf(List<object> blocks, object singleBlock, bool hasCustomTitle)

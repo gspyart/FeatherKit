@@ -46,7 +46,7 @@ namespace FeatherKit.EditorTools
             savedText = note.Text ?? "";
 
             capabilities |= Capabilities.Selectable | Capabilities.Movable | Capabilities.Deletable
-                            | Capabilities.Resizable | Capabilities.Ascendable;
+                            | Capabilities.Resizable | Capabilities.Ascendable | Capabilities.Copiable;
 
             AddToClassList("scenario-note");
             style.backgroundColor = note.Color.a > 0f ? note.Color : DefaultColor;

@@ -377,3 +377,36 @@
     --edge-color: rgb(110, 255, 140);
     --edge-width: 4;
 }
+
+/* Свернуть ноду и своя подпись */
+.scenario-node__collapse {
+    width: 18px;
+    height: 18px;
+    margin: 0 2px 0 0;
+    padding: 0;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+    -unity-font-style: bold;
+    flex-shrink: 0;
+}
+
+.scenario-node__title-field {
+    margin: 0;
+    flex-grow: 1;
+}
+
+/* Рамки */
+.scenario-group {
+    border-width: 1px;
+    border-radius: 6px;
+}
+
+.scenario-group #titleLabel {
+    font-size: 16px;
+    -unity-font-style: bold;
+}
+
+/* Миникарта */
+.scenario-minimap {
+    border-radius: 4px;
+}

@@ -11,8 +11,8 @@ namespace FeatherKit.EditorTools
 {
     /// <summary>
     /// Что в графе не так — без UI: для значков на нодах, счётчика в строке состояния и инспектора.
-    /// - на нодах: блок пропал или пуст, переменная не найдена или не того вида, не выбран объект, флаг или счётчик;
-    ///   провод к порту, которого у ноды нет
+    /// - на нодах: блок пропал или пуст, переменная не найдена или не того вида, не выбран объект, флаг или счётчик,
+    ///   некуда записать результат; провод к порту, которого у ноды нет
     /// - на переменных граф-файла: объект сцены без «Set on Object», открытая Object без значения на объекте
     /// </summary>
     internal static class ScenarioGraphValidation
@@ -55,7 +55,8 @@ namespace FeatherKit.EditorTools
 
             foreach (var variable in graph.Variables)
             {
-                if (variable is { Kind: ScenarioVariableKind.Object, IsExposed: false } && ScenarioBindingsEditing.IsSceneType(variable.ObjectType))
+                if (variable is { IsExposed: false, Kind: ScenarioVariableKind.Object or ScenarioVariableKind.ObjectList }
+                    && ScenarioBindingsEditing.IsSceneType(variable.ObjectType))
                     problems.Add(new ScenarioGraphProblem(variable.Id,
                         $"“{variable.Name}” holds scene objects, but a graph file can't keep them — turn on Set on Object", true));
             }
@@ -93,7 +94,19 @@ namespace FeatherKit.EditorTools
                         break;
 
                     case ScenarioTarget target:
-                        CheckTarget(target, nodeId, label, problems);
+                        CheckTarget(target, graph, nodeId, label, problems);
+                        break;
+
+                    case ScenarioPoint point:
+                        CheckPoint(point, graph, nodeId, label, problems);
+                        break;
+
+                    case not null when IsGeneric(value.GetType(), typeof(ScenarioObjectList<>)):
+                        CheckObjectList(value, graph, nodeId, label, problems);
+                        break;
+
+                    case not null when IsGeneric(value.GetType(), typeof(ScenarioVariableSlot<>)):
+                        CheckSlot(value, graph, nodeId, label, problems);
                         break;
 
                     case IList list:
@@ -132,7 +145,7 @@ namespace FeatherKit.EditorTools
 
         private static bool IsValueField(Type type)
         {
-            return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ScenarioValue<>);
+            return IsGeneric(type, typeof(ScenarioValue<>));
         }
 
         private static void CheckValueField(object valueField, ScenarioGraph graph, int nodeId, string label, List<ScenarioGraphProblem> problems)
@@ -187,15 +200,59 @@ namespace FeatherKit.EditorTools
         }
 
 
-        // ── Цель и провода ───────────────────────────────────────────────
+        // ── Списки и «куда записать» ─────────────────────────────────────
 
-        private static void CheckTarget(ScenarioTarget target, int nodeId, string label, List<ScenarioGraphProblem> problems)
+        private static void CheckObjectList(object listField, ScenarioGraph graph, int nodeId, string label, List<ScenarioGraphProblem> problems)
+        {
+            var type = listField.GetType();
+            var variableId = (string)type.GetProperty(nameof(ScenarioObjectList<Object>.VariableId))?.GetValue(listField);
+
+            if (!string.IsNullOrEmpty(variableId))
+                CheckVariable(graph, nodeId, label, variableId, typeof(List<>).MakeGenericType(type.GetGenericArguments()[0]), problems);
+            else if (type.GetProperty(nameof(ScenarioObjectList<Object>.Items))?.GetValue(listField) is IList { Count: 0 })
+                problems.Add(new ScenarioGraphProblem(nodeId, $"“{label}” is empty", false));
+        }
+
+        private static void CheckSlot(object slot, ScenarioGraph graph, int nodeId, string label, List<ScenarioGraphProblem> problems)
+        {
+            var type = slot.GetType();
+            var variableId = (string)type.GetProperty(nameof(ScenarioVariableSlot<int>.VariableId))?.GetValue(slot);
+
+            if (string.IsNullOrEmpty(variableId))
+                problems.Add(new ScenarioGraphProblem(nodeId, $"“{label}”: nowhere to write — choose a variable", true));
+            else
+                CheckVariable(graph, nodeId, label, variableId, type.GetGenericArguments()[0], problems);
+        }
+
+
+        // ── Цель, точка и провода ────────────────────────────────────────
+
+        private static void CheckTarget(ScenarioTarget target, ScenarioGraph graph, int nodeId, string label, List<ScenarioGraphProblem> problems)
         {
             var kind = (ScenarioTargetKind)ScenarioBlockStyle.FindField(typeof(ScenarioTarget), "kind").GetValue(target);
             var specificObject = ScenarioBlockStyle.FindField(typeof(ScenarioTarget), "specificObject").GetValue(target) as Object;
 
             if (kind == ScenarioTargetKind.Specific && specificObject == null)
                 problems.Add(new ScenarioGraphProblem(nodeId, $"“{label}”: no object selected", false));
+            else if (kind == ScenarioTargetKind.Variable)
+                CheckVariable(graph, nodeId, label, target.VariableId, typeof(GameObject), problems);
+        }
+
+        // Точке подходит и переменная-позиция, и объект с Transform: проверяем обе.
+        private static void CheckPoint(ScenarioPoint point, ScenarioGraph graph, int nodeId, string label, List<ScenarioGraphProblem> problems)
+        {
+            if (point.Kind == ScenarioPointKind.Object && point.TargetTransform == null)
+                problems.Add(new ScenarioGraphProblem(nodeId, $"“{label}”: no object selected", false));
+
+            if (point.Kind != ScenarioPointKind.Variable)
+                return;
+
+            var variable = graph.FindVariable(point.VariableId);
+
+            if (variable == null)
+                problems.Add(new ScenarioGraphProblem(nodeId, $"“{label}”: variable not found", true));
+            else if (!ScenarioVariableKinds.Fits(variable, typeof(Vector3)) && !ScenarioVariableKinds.Fits(variable, typeof(Transform)))
+                problems.Add(new ScenarioGraphProblem(nodeId, $"“{label}”: “{variable.Name}” is a {variable.Kind}, a point needs an Object or a Vector3", true));
         }
 
         private static void CheckWires(ScenarioGraph graph, List<ScenarioGraphProblem> problems)
@@ -239,6 +296,11 @@ namespace FeatherKit.EditorTools
             SerializedFieldsByType[type] = fields;
 
             return fields;
+        }
+
+        private static bool IsGeneric(Type type, Type genericDefinition)
+        {
+            return type.IsGenericType && type.GetGenericTypeDefinition() == genericDefinition;
         }
 
         private static bool IsNestedData(Type type)

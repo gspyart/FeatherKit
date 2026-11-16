@@ -10,11 +10,10 @@ using UnityEngine.UIElements;
 namespace FeatherKit.EditorTools
 {
     /// <summary>
-    /// Холст графа сценария: ноды, провода, заметки и панель переменных поверх, на еле заметной сетке.
+    /// Холст графа сценария: ноды, провода, заметки, рамки и панель переменных поверх, на еле заметной сетке.
     /// - любая правка — через ScenarioGraphEditing; после неё, после undo и после правки в обход холста — пересборка из данных
-    /// - части: движение (ScenarioCanvasNavigator), создание нод и заметок (ScenarioNodeCreation),
-    ///   строка состояния (ScenarioCanvasOverlay), пропуск невидимых стопок (ScenarioCanvasDetailCulling),
-    ///   подсветка в игре (ScenarioRunHighlighter)
+    /// - части: движение, создание, правки мышью, буфер обмена, строка состояния, миникарта, пропуск стопок, подсветка в игре —
+    ///   каждая своим классом ScenarioCanvas… / ScenarioNodeCreation / ScenarioGraphClipboard / ScenarioRunHighlighter
     /// - проблемы графа (ScenarioGraphValidation) — значками на нодах
     /// </summary>
     internal class ScenarioGraphView : GraphView
@@ -27,8 +26,7 @@ namespace FeatherKit.EditorTools
         private readonly Dictionary<(int nodeId, Direction direction, string portId), ScenarioPortView> portsByKey =
             new Dictionary<(int, Direction, string), ScenarioPortView>();
 
-        private bool isRebuilding;
-        private int nodeIdToSelectAfterRebuild;
+        private readonly HashSet<int> nodeIdsToSelectAfterRebuild = new HashSet<int>();
         private long shownFingerprint;
 
 
@@ -49,15 +47,17 @@ namespace FeatherKit.EditorTools
             grid.StretchToParentSize();
 
             NodeCreation = new ScenarioNodeCreation(this, window);
+            Clipboard = new ScenarioGraphClipboard(this);
 
             Blackboard = new ScenarioGraphBlackboard(this);
             Add(Blackboard);
 
             Overlay = new ScenarioCanvasOverlay(this);
+            MiniMap = new ScenarioCanvasMiniMap(this);
             DetailCulling = new ScenarioCanvasDetailCulling(this);
             RunHighlighter = new ScenarioRunHighlighter(this);
 
-            graphViewChanged = HandleGraphViewChanged;
+            CanvasChanges = new ScenarioCanvasChanges(this);
         }
 
 
@@ -76,6 +76,12 @@ namespace FeatherKit.EditorTools
 
         public ScenarioNodeCreation NodeCreation { get; }
 
+        public ScenarioGraphClipboard Clipboard { get; }
+
+        public ScenarioCanvasChanges CanvasChanges { get; }
+
+        public ScenarioCanvasMiniMap MiniMap { get; }
+
         public ScenarioCanvasOverlay Overlay { get; }
 
         public ScenarioGraphBlackboard Blackboard { get; }
@@ -83,6 +89,9 @@ namespace FeatherKit.EditorTools
         public ScenarioCanvasDetailCulling DetailCulling { get; }
 
         public ScenarioRunHighlighter RunHighlighter { get; }
+
+        /// <summary>Холст сейчас пересобирается: события элементов о добавлении и выделении — не правки человека.</summary>
+        public bool IsRebuilding { get; private set; }
 
         /// <summary>Проблемы графа на момент последней пересборки.</summary>
         public IReadOnlyList<ScenarioGraphProblem> Problems { get; private set; } = new List<ScenarioGraphProblem>();
@@ -98,8 +107,18 @@ namespace FeatherKit.EditorTools
         }
 
         // Удалять выделенное, пока набираешь текст в поле ноды, нельзя: Delete там стирает букву.
-        protected override bool canDeleteSelection =>
-            base.canDeleteSelection && !ScenarioCanvasNavigator.IsTypingText(panel?.focusController?.focusedElement);
+        protected override bool canDeleteSelection => base.canDeleteSelection && !IsTypingText;
+
+        // Cmd+C в поле ноды копирует текст, а не ноды.
+        protected override bool canCopySelection => base.canCopySelection && !IsTypingText;
+
+        protected override bool canCutSelection => base.canCutSelection && !IsTypingText;
+
+        protected override bool canDuplicateSelection => base.canDuplicateSelection && !IsTypingText;
+
+        protected override bool canPaste => base.canPaste && !IsTypingText;
+
+        private bool IsTypingText => ScenarioCanvasNavigator.IsTypingText(panel?.focusController?.focusedElement);
 
 
         /// <summary>Таблица стилей окна графа и класс темы редактора — холсту и всему окну.</summary>
@@ -166,19 +185,20 @@ namespace FeatherKit.EditorTools
 
         public void Rebuild()
         {
-            var selectedNodeIds = nodeIdToSelectAfterRebuild != 0
-                ? new HashSet<int> { nodeIdToSelectAfterRebuild }
+            var selectedNodeIds = nodeIdsToSelectAfterRebuild.Count > 0
+                ? new HashSet<int>(nodeIdsToSelectAfterRebuild)
                 : new HashSet<int>(selection.OfType<ScenarioNodeView>().Select(nodeView => nodeView.NodeId));
 
-            nodeIdToSelectAfterRebuild = 0;
+            nodeIdsToSelectAfterRebuild.Clear();
             SaveEditedNotes();
 
-            isRebuilding = true;
+            IsRebuilding = true;
             ClearSelection();
 
+            // Панель переменных и миникарта лежат поверх холста, а не на нём: их не трогаем.
             foreach (var element in graphElements.ToList())
             {
-                if (element != Blackboard && !Blackboard.Contains(element))
+                if (contentViewContainer.Contains(element))
                     RemoveElement(element);
             }
 
@@ -192,12 +212,16 @@ namespace FeatherKit.EditorTools
                 Problems = ScenarioGraphValidation.Check(Host.Graph, Host.IsGraphFile, Host.Bindings);
                 AddNoteViews();
                 AddNodeViews(selectedNodeIds);
+                AddGroupViews();
                 AddWireViews();
+
+                foreach (var nodeView in nodes.ToList().OfType<ScenarioNodeView>())
+                    nodeView.ApplyRememberedCollapse();
             }
 
             shownFingerprint = FingerprintOf(Host);
             Blackboard.Rebuild();
-            isRebuilding = false;
+            IsRebuilding = false;
 
             SelectedNodeChanged?.Invoke(SelectedNodeView);
             Rebuilt?.Invoke();
@@ -261,6 +285,21 @@ namespace FeatherKit.EditorTools
             nodeView.Query<ScenarioPortView>().ForEach(port => portsByKey[(port.NodeId, port.direction, port.PortId)] = port);
         }
 
+        private void AddGroupViews()
+        {
+            var nodeViewsById = nodes.OfType<ScenarioNodeView>().ToDictionary(nodeView => nodeView.NodeId);
+
+            foreach (var group in Host.Graph.Groups)
+            {
+                if (group == null)
+                    continue;
+
+                var groupView = new ScenarioGroupView(this, group);
+                AddElement(groupView);
+                groupView.Fill(group.NodeIds.Where(nodeViewsById.ContainsKey).Select(nodeId => (GraphElement)nodeViewsById[nodeId]));
+            }
+        }
+
         // Провод к порту, которого у ноды нет, не рисуется, но и не удаляется: значок на ноде говорит о нём.
         private void AddWireViews()
         {
@@ -277,87 +316,20 @@ namespace FeatherKit.EditorTools
         }
 
 
-        /// <summary>Выделить эту ноду после ближайшей пересборки — например, только что созданную.</summary>
-        public void SelectAfterRebuild(int nodeId)
+        /// <summary>Выделить эти ноды после ближайшей пересборки — например, только что созданную или вставленные.</summary>
+        public void SelectAfterRebuild(params int[] nodeIds)
         {
-            nodeIdToSelectAfterRebuild = nodeId;
+            SelectAfterRebuild((IEnumerable<int>)nodeIds);
+        }
+
+        public void SelectAfterRebuild(IEnumerable<int> nodeIds)
+        {
+            nodeIdsToSelectAfterRebuild.Clear();
+            nodeIdsToSelectAfterRebuild.UnionWith(nodeIds);
         }
 
 
-        // ── Правки с холста ──────────────────────────────────────────────
-
-        private GraphViewChange HandleGraphViewChanged(GraphViewChange change)
-        {
-            if (isRebuilding || Editing == null)
-                return change;
-
-            if (change.movedElements != null)
-                SaveMovedElements(change.movedElements);
-
-            if (change.edgesToCreate != null && change.edgesToCreate.Count > 0)
-            {
-                var createdEdges = change.edgesToCreate.ToList();
-                change.edgesToCreate.Clear();
-                ApplyEdit(editing => createdEdges.ForEach(edge => ConnectInData(editing, edge.output, edge.input, null)));
-            }
-
-            if (change.elementsToRemove != null && change.elementsToRemove.Count > 0)
-            {
-                // Сдёрнутый с порта провод ждёт выбора в поиске нод — его данные не трогаем.
-                var removedElements = change.elementsToRemove.Where(element => element is not Edge edge || !ScenarioNodeCreation.IsDraggedOff(edge)).ToList();
-                change.elementsToRemove.Clear();
-                ApplyEdit(editing => RemoveInData(editing, removedElements));
-            }
-
-            return change;
-        }
-
-        private void SaveMovedElements(List<GraphElement> movedElements)
-        {
-            foreach (var nodeView in movedElements.OfType<ScenarioNodeView>())
-                Editing.MoveNode(nodeView.NodeId, AreaFromStyle(nodeView).position);
-
-            foreach (var noteView in movedElements.OfType<ScenarioNoteView>())
-                Editing.SetNoteArea(noteView.NoteId, AreaFromStyle(noteView));
-
-            RememberShownData();
-        }
-
-        // Провода — первыми: удалённая нода и так снимет свои, а оставшиеся найдутся по ссылке.
-        private static void RemoveInData(ScenarioGraphEditing editing, List<GraphElement> removedElements)
-        {
-            editing.Disconnect(removedElements.OfType<Edge>().Select(edge => edge.userData).OfType<ScenarioWire>());
-            editing.RemoveNodes(removedElements.OfType<ScenarioNodeView>().Select(nodeView => nodeView.NodeId));
-            editing.RemoveNotes(removedElements.OfType<ScenarioNoteView>().Select(noteView => noteView.NoteId));
-
-            foreach (var variableField in removedElements.OfType<BlackboardField>())
-            {
-                if (variableField.userData is string variableId)
-                    editing.RemoveVariable(variableId);
-            }
-        }
-
-
-        /// <summary>Провод отпустили на порт. Старый провод, если его перетащили с другого порта, переезжает.</summary>
-        public void ConnectPorts(Port output, Port input, ScenarioWire movedWire)
-        {
-            ApplyEdit(editing => ConnectInData(editing, output, input, movedWire));
-        }
-
-        private static void ConnectInData(ScenarioGraphEditing editing, Port output, Port input, ScenarioWire movedWire)
-        {
-            if (output is not ScenarioPortView from || input is not ScenarioPortView to)
-                return;
-
-            if (movedWire != null && movedWire.Connects(from.NodeId, from.PortId, to.NodeId, to.PortId))
-                return;
-
-            if (movedWire != null)
-                editing.Disconnect(new[] { movedWire });
-
-            editing.Connect(from.NodeId, from.PortId, to.NodeId, to.PortId);
-        }
-
+        // ── Связь портов и меню ──────────────────────────────────────────
 
         public override List<Port> GetCompatiblePorts(Port startPort, NodeAdapter nodeAdapter)
         {
@@ -374,6 +346,9 @@ namespace FeatherKit.EditorTools
                 var graphPosition = contentViewContainer.WorldToLocal(menuEvent.mousePosition);
                 menuEvent.menu.AppendAction("Create Comment", _ => NodeCreation.CreateComment(graphPosition));
             }
+
+            if (menuEvent.target is GraphView or ScenarioNodeView && NodeCreation.CanGroupSelection)
+                menuEvent.menu.AppendAction("Group Selection", _ => NodeCreation.GroupSelection());
 
             base.BuildContextualMenu(menuEvent);
         }
@@ -414,7 +389,7 @@ namespace FeatherKit.EditorTools
 
         private void ReportSelection()
         {
-            if (!isRebuilding)
+            if (!IsRebuilding)
                 SelectedNodeChanged?.Invoke(SelectedNodeView);
         }
 

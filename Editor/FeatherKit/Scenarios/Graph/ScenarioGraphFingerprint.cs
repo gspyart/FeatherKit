@@ -3,7 +3,7 @@ using FeatherKit.Scenarios;
 namespace FeatherKit.EditorTools
 {
     /// <summary>
-    /// Отпечаток того, что холст рисует сам, а не через привязанные поля: ноды, порты, провода, переменные, заметки.
+    /// Отпечаток того, что холст рисует сам, а не через привязанные поля: ноды, порты, провода, переменные, заметки, рамки.
     /// Отпечаток другой — граф поменяли в обход холста (откат префаба, второе окно, инспектор): пора пересобрать.
     /// </summary>
     internal static class ScenarioGraphFingerprint
@@ -39,6 +39,17 @@ namespace FeatherKit.EditorTools
                 hash = Add(hash, note?.Text);
                 hash = Add(hash, note?.Color.GetHashCode() ?? 0);
                 hash = Add(hash, note?.Area.GetHashCode() ?? 0);
+            }
+
+            foreach (var group in graph.Groups)
+            {
+                hash = Add(hash, group?.Id);
+                hash = Add(hash, group?.Title);
+                hash = Add(hash, group?.Color.GetHashCode() ?? 0);
+
+                if (group != null)
+                    foreach (var nodeId in group.NodeIds)
+                        hash = Add(hash, nodeId);
             }
 
             return hash;
@@ -78,6 +89,7 @@ namespace FeatherKit.EditorTools
             hash = Add(hash, (int)variable.Kind);
             hash = Add(hash, variable.ObjectType.FullName);
             hash = Add(hash, variable.IsExposed ? 1 : 0);
+            hash = Add(hash, variable.IsSaved ? 1 : 0);
 
             return hash;
         }

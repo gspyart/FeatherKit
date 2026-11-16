@@ -73,10 +73,7 @@ namespace FeatherKit.EditorTools
             binding.FindPropertyRelative(VariableIdPropertyName).stringValue = variableId;
 
             var value = binding.FindPropertyRelative(ValuePropertyName);
-            value.FindPropertyRelative("flagValue").boolValue = false;
-            value.FindPropertyRelative("counterValue").intValue = 0;
-            value.FindPropertyRelative("numberValue").floatValue = 0f;
-            value.FindPropertyRelative("objectValue").objectReferenceValue = null;
+            value.boxedValue = new ScenarioVariableValue();
 
             return value;
         }

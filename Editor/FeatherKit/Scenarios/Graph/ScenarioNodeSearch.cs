@@ -89,7 +89,7 @@ namespace FeatherKit.EditorTools
                         tree.Add(new SearchTreeGroupEntry(new GUIContent(option.Path[depth], FolderIconOf(option.Path[depth])), depth + 1));
                 }
 
-                tree.Add(new SearchTreeEntry(new GUIContent(option.Title, IconOf(option.CreatedType)))
+                tree.Add(new SearchTreeEntry(new GUIContent(option.Title, IconOf(option.CreatedType), option.Description))
                 {
                     level = option.Path.Length,
                     userData = option.CreatedType
@@ -145,5 +145,8 @@ namespace FeatherKit.EditorTools
         public Type CreatedType { get; }
 
         public string Title => Path[Path.Length - 1];
+
+        /// <summary>Описание блока или ноды для подсказки; null — нет.</summary>
+        public string Description => ScenarioBlockCatalog.DescriptionOf(CreatedType);
     }
 }

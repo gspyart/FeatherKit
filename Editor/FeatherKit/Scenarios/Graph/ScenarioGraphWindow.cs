@@ -84,6 +84,12 @@ namespace FeatherKit.EditorTools
                 ShowHost(ScenarioGraphHost.For(openedObject));
         }
 
+        /// <summary>Граф объекта переехал (в файл или обратно) — показать, где он теперь, не дожидаясь проверки.</summary>
+        internal void ShowCurrentGraph()
+        {
+            ShowHost(ScenarioGraphHost.For(openedObject));
+        }
+
         private void ShowHost(ScenarioGraphHost host)
         {
             graphView.Show(host);

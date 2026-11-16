@@ -10,10 +10,11 @@ using Object = UnityEngine.Object;
 namespace FeatherKit.EditorTools
 {
     /// <summary>
-    /// Создание нод и заметок на холсте — часть ScenarioGraphView.
+    /// Создание нод, заметок и рамок на холсте — часть ScenarioGraphView.
     /// - поиск нод по пробелу, меню и брошенному проводу; новая нода встаёт под курсор
     /// - брошенный в пустоту провод цел, пока в поиске ничего не выбрали
     /// - заметка по C (без модификаторов) или из меню — на свободное место у курсора, сразу в правке
+    /// - рамка вокруг выделенных нод по Cmd/Ctrl+G или из меню
     /// </summary>
     internal class ScenarioNodeCreation
     {
@@ -37,6 +38,7 @@ namespace FeatherKit.EditorTools
 
             graphView.nodeCreationRequest = context => OpenSearch(context.screenMousePosition, null);
             graphView.RegisterCallback<KeyDownEvent>(HandleCommentKey);
+            graphView.RegisterCallback<KeyDownEvent>(HandleGroupKey);
         }
 
 
@@ -172,6 +174,31 @@ namespace FeatherKit.EditorTools
                 area.y += FreePlaceStep;
 
             return area;
+        }
+
+
+        // ── Рамки ────────────────────────────────────────────────────────
+
+        private void HandleGroupKey(KeyDownEvent keyEvent)
+        {
+            if (keyEvent.keyCode != KeyCode.G || !keyEvent.actionKey || keyEvent.shiftKey || keyEvent.altKey
+                || ScenarioCanvasNavigator.IsTypingText(keyEvent.target as Focusable))
+                return;
+
+            GroupSelection();
+            keyEvent.StopPropagation();
+        }
+
+        public bool CanGroupSelection => graphView.Editing != null && graphView.selection.OfType<ScenarioNodeView>().Any();
+
+        /// <summary>Рамка вокруг выделенных нод; ноды из других рамок переезжают в новую.</summary>
+        public void GroupSelection()
+        {
+            if (!CanGroupSelection)
+                return;
+
+            var nodeIds = graphView.selection.OfType<ScenarioNodeView>().Select(nodeView => nodeView.NodeId).ToList();
+            graphView.ApplyEdit(editing => editing.Groups.Add(nodeIds));
         }
 
 

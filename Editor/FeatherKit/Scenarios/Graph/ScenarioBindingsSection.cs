@@ -16,6 +16,7 @@ namespace FeatherKit.EditorTools
         private const float ResetButtonWidth = 22f;
 
         private readonly ScenarioBindingsEditing bindings;
+        private SerializedObject serializedGraphFile;
 
 
         public ScenarioBindingsSection(SerializedObject serializedObject)
@@ -73,61 +74,38 @@ namespace FeatherKit.EditorTools
 
         private static void DrawBoundValue(GUIContent label, ScenarioVariableDefinition variable, SerializedProperty value)
         {
-            switch (variable.Kind)
-            {
-                case ScenarioVariableKind.Flag:
-                    EditorGUILayout.PropertyField(value.FindPropertyRelative("flagValue"), label);
-                    break;
-
-                case ScenarioVariableKind.Counter:
-                    EditorGUILayout.PropertyField(value.FindPropertyRelative("counterValue"), label);
-                    break;
-
-                case ScenarioVariableKind.Number:
-                    EditorGUILayout.PropertyField(value.FindPropertyRelative("numberValue"), label);
-                    break;
-
-                default:
-                    var objectValue = value.FindPropertyRelative("objectValue");
-                    objectValue.objectReferenceValue = EditorGUILayout.ObjectField(label, objectValue.objectReferenceValue,
-                        variable.ObjectType, allowSceneObjects: true);
-                    break;
-            }
+            var rect = EditorGUILayout.GetControlRect(true, ScenarioVariableValueGUI.HeightOf(value, variable.Kind));
+            ScenarioVariableValueGUI.Draw(rect, value, label, variable);
         }
 
         // Своего значения ещё нет: показываем начальное из файла, правка заводит привязку с новым значением.
         private void DrawDefaultValue(GUIContent label, ScenarioVariableDefinition variable)
         {
-            var initial = variable.InitialValue;
+            var graphAsset = bindings.Scenario.GraphAsset;
 
-            EditorGUI.BeginChangeCheck();
+            if (serializedGraphFile == null || serializedGraphFile.targetObject != graphAsset)
+                serializedGraphFile = new SerializedObject(graphAsset);
 
-            switch (variable.Kind)
+            var fileValue = FileValueOf(variable);
+
+            if (fileValue == null)
+                return;
+
+            var rect = EditorGUILayout.GetControlRect(true, ScenarioVariableValueGUI.HeightOf(fileValue, variable.Kind));
+            ScenarioVariableValueGUI.DrawUnboundValue(rect, label, variable, fileValue, bindings);
+        }
+
+        private SerializedProperty FileValueOf(ScenarioVariableDefinition variable)
+        {
+            var variables = bindings.Scenario.GraphAsset.Graph.Variables;
+
+            for (var index = 0; index < variables.Count; index++)
             {
-                case ScenarioVariableKind.Flag:
-                    var flag = EditorGUILayout.Toggle(label, initial.FlagValue);
-                    if (EditorGUI.EndChangeCheck())
-                        bindings.AddBinding(variable.Id).FindPropertyRelative("flagValue").boolValue = flag;
-                    break;
-
-                case ScenarioVariableKind.Counter:
-                    var counter = EditorGUILayout.IntField(label, initial.CounterValue);
-                    if (EditorGUI.EndChangeCheck())
-                        bindings.AddBinding(variable.Id).FindPropertyRelative("counterValue").intValue = counter;
-                    break;
-
-                case ScenarioVariableKind.Number:
-                    var number = EditorGUILayout.FloatField(label, initial.NumberValue);
-                    if (EditorGUI.EndChangeCheck())
-                        bindings.AddBinding(variable.Id).FindPropertyRelative("numberValue").floatValue = number;
-                    break;
-
-                default:
-                    var objectValue = EditorGUILayout.ObjectField(label, initial.ObjectValue, variable.ObjectType, allowSceneObjects: true);
-                    if (EditorGUI.EndChangeCheck())
-                        bindings.AddBinding(variable.Id).FindPropertyRelative("objectValue").objectReferenceValue = objectValue;
-                    break;
+                if (variables[index] == variable)
+                    return serializedGraphFile.FindProperty($"{ScenarioGraphHost.GraphPropertyPath}.variables.Array.data[{index}].initialValue");
             }
+
+            return null;
         }
 
 

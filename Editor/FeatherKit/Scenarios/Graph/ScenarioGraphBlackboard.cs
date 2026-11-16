@@ -12,9 +12,10 @@ namespace FeatherKit.EditorTools
     /// <summary>
     /// Панель переменных поверх холста: «Graph» — внутренние, «Set on Object» — открытые (у граф-файла).
     /// - «+» добавляет, двойной клик по имени переименовывает, Delete или меню удаляет
-    /// - у переменной: вид, тип объекта, значение по умолчанию, Set on Object, Saved
+    /// - у переменной: вид, тип объекта или элемента списка, значение по умолчанию, Set on Object, Saved
     /// - граф-файл, открытый через объект, — колонка «On …» с живой привязкой этого объекта и предупреждения
     /// - раскрытые строки помнит по id переменной: пересборка и перезагрузка домена их не сворачивают
+    /// - строку можно бросить на поле ноды: пока тащишь, подходящие поля подсвечены (ScenarioVariablePicking)
     /// </summary>
     internal class ScenarioGraphBlackboard : Blackboard
     {
@@ -24,12 +25,15 @@ namespace FeatherKit.EditorTools
         private const string InitialValuePropertyName = "initialValue";
         private const string ExposedHintForEmbedded = "Only for graph files — here, put scene objects straight into the variable";
         private const string ExposedHintForFile = "Each Scenario using this file sets its own value in Scenario → Set on Object";
+        private const string SavedHint = "Kept in checkpoints and saves";
+        private const string NotSavedObjectsHint = "Objects can't be saved: after loading they are found anew, so keep only numbers, flags and text";
         private static readonly Rect DefaultArea = new Rect(10f, 30f, 300f, 340f);
 
         private readonly ScenarioGraphView scenarioGraphView;
         private readonly BlackboardSection graphSection;
         private readonly BlackboardSection exposedSection;
         private readonly HashSet<string> expandedVariableIds;
+        private bool isVariableDragShown;
 
 
         public ScenarioGraphBlackboard(ScenarioGraphView graphView) : base(graphView)
@@ -52,6 +56,10 @@ namespace FeatherKit.EditorTools
             exposedSection = new BlackboardSection { title = "Set on Object" };
             Add(graphSection);
             Add(exposedSection);
+
+            graphView.RegisterCallback<DragUpdatedEvent>(_ => ShowVariableDrag(ScenarioVariablePicking.DraggedVariableId() != null));
+            graphView.RegisterCallback<DragExitedEvent>(_ => ShowVariableDrag(false));
+            graphView.RegisterCallback<DragPerformEvent>(_ => ShowVariableDrag(false), TrickleDown.TrickleDown);
 
             addItemRequested = _ => ShowAddMenu();
             editTextRequested = (_, element, newName) => Rename(element, newName);
@@ -96,7 +104,8 @@ namespace FeatherKit.EditorTools
         private VisualElement CreateRow(ScenarioVariableDefinition variable, SerializedProperty variableProperty)
         {
             var warning = WarningOf(variable);
-            var field = new BlackboardField(ScenarioIcons.IconOf(variable), variable.Name, warning != null ? $"⚠ {KindTextOf(variable)}" : KindTextOf(variable))
+            var kindText = ScenarioVariablePicking.KindTextOf(variable);
+            var field = new BlackboardField(ScenarioIcons.IconOf(variable), variable.Name, warning != null ? $"⚠ {kindText}" : kindText)
             {
                 userData = variable.Id,
                 tooltip = warning != null ? $"{variable.Name}\n{warning}" : $"{variable.Name} — {variable.Kind} variable"
@@ -114,14 +123,6 @@ namespace FeatherKit.EditorTools
             {
                 expanded = expandedVariableIds.Contains(variable.Id)
             };
-        }
-
-        private static string KindTextOf(ScenarioVariableDefinition variable)
-        {
-            if (variable.Kind != ScenarioVariableKind.Object)
-                return variable.Kind.ToString();
-
-            return variable.ObjectType == typeof(Object) ? "Object" : variable.ObjectType.Name;
         }
 
         // Тот же список, что у строки состояния и инспектора Scenario: одно правило — один текст.
@@ -165,6 +166,17 @@ namespace FeatherKit.EditorTools
         }
 
 
+        // Поля нод рисует IMGUI: без перерисовки подсветка появится только там, где курсор.
+        private void ShowVariableDrag(bool isShown)
+        {
+            if (isShown == isVariableDragShown)
+                return;
+
+            isVariableDragShown = isShown;
+            scenarioGraphView.Query<IMGUIContainer>().ForEach(container => container.MarkDirtyRepaint());
+        }
+
+
         // ── Настройки переменной ─────────────────────────────────────────
 
         private VisualElement CreateSettings(ScenarioVariableDefinition variable, SerializedProperty variableProperty, string warning)
@@ -181,18 +193,17 @@ namespace FeatherKit.EditorTools
             // Вид поменялся — поле значения другое: пересобрать панель, когда правка уже записана.
             settings.TrackPropertyValue(kindProperty, _ => schedule.Execute(Rebuild));
 
-            if (variable.Kind == ScenarioVariableKind.Object)
+            if (variable.Kind is ScenarioVariableKind.Object or ScenarioVariableKind.ObjectList)
                 settings.Add(CreateObjectTypeButton(variable));
 
             var defaultLabel = Host.IsGraphFile && variable.IsExposed ? "Default" : "Initial Value";
-            settings.Add(CreateValueField(variable, variableProperty.FindPropertyRelative(InitialValuePropertyName), defaultLabel,
-                Host.CanReferenceSceneObjects));
+            settings.Add(BoundField(variableProperty.FindPropertyRelative(InitialValuePropertyName), defaultLabel));
 
             if (Host.Bindings != null && variable.IsExposed)
                 settings.Add(CreateBindingField(variable));
 
             settings.Add(CreateExposedToggle(variable, variableProperty));
-            settings.Add(BoundField(variableProperty.FindPropertyRelative("isSaved"), "Saved"));
+            settings.Add(CreateSavedToggle(variable, variableProperty));
 
             return settings;
         }
@@ -224,6 +235,17 @@ namespace FeatherKit.EditorTools
             return toggle;
         }
 
+        // Объект сцены после загрузки — уже другой объект: сохранять можно только простые значения.
+        private static VisualElement CreateSavedToggle(ScenarioVariableDefinition variable, SerializedProperty variableProperty)
+        {
+            var holdsObjects = variable.Kind is ScenarioVariableKind.Object or ScenarioVariableKind.ObjectList;
+            var toggle = BoundField(variableProperty.FindPropertyRelative("isSaved"), "Saved");
+            toggle.tooltip = holdsObjects ? NotSavedObjectsHint : SavedHint;
+            toggle.SetEnabled(!holdsObjects || variable.IsSaved);
+
+            return toggle;
+        }
+
         private void SetExposed(string variableId, bool isExposed)
         {
             var variableProperty = Host.VariableProperty(variableId);
@@ -241,7 +263,7 @@ namespace FeatherKit.EditorTools
         {
             var row = new VisualElement();
             row.AddToClassList("scenario-variable__type");
-            row.Add(new Label("Type"));
+            row.Add(new Label(variable.Kind == ScenarioVariableKind.ObjectList ? "Item Type" : "Type"));
 
             Button button = null;
             button = new Button(() => new ScenarioObjectTypePicker(objectType =>
@@ -249,35 +271,15 @@ namespace FeatherKit.EditorTools
                 .Show(button.worldBound))
             {
                 text = variable.ObjectType == typeof(Object) ? "Any Object" : variable.ObjectType.Name,
-                tooltip = "Which component or asset fits this variable"
+                tooltip = variable.Kind == ScenarioVariableKind.ObjectList
+                    ? "Which component or asset each item of the list is"
+                    : "Which component or asset fits this variable"
             };
 
             row.Add(button);
 
             return row;
         }
-
-        private static VisualElement CreateValueField(ScenarioVariableDefinition variable, SerializedProperty value, string label,
-            bool allowsSceneObjects)
-        {
-            switch (variable.Kind)
-            {
-                case ScenarioVariableKind.Flag:
-                    return BoundField(value.FindPropertyRelative("flagValue"), label);
-
-                case ScenarioVariableKind.Counter:
-                    return BoundField(value.FindPropertyRelative("counterValue"), label);
-
-                case ScenarioVariableKind.Number:
-                    return BoundField(value.FindPropertyRelative("numberValue"), label);
-
-                default:
-                    var objectField = new ObjectField(label) { objectType = variable.ObjectType, allowSceneObjects = allowsSceneObjects };
-                    objectField.BindProperty(value.FindPropertyRelative("objectValue"));
-                    return objectField;
-            }
-        }
-
 
         // ── Привязка на объекте ──────────────────────────────────────────
 
@@ -293,7 +295,7 @@ namespace FeatherKit.EditorTools
 
             if (boundValue != null)
             {
-                row.Add(CreateValueField(variable, boundValue, label, allowsSceneObjects: true));
+                row.Add(BoundField(boundValue, label));
                 row.Add(new Button(() => EditBindings(edit => edit.RemoveBinding(variable.Id))) { text = "↺", tooltip = "Back to the file's default" });
             }
             else
@@ -304,37 +306,32 @@ namespace FeatherKit.EditorTools
             return row;
         }
 
+        // Своего значения ещё нет — значение файла; правка заводит привязку, файл не меняется.
         private VisualElement CreateUnboundField(ScenarioVariableDefinition variable, string label)
         {
-            var initial = variable.InitialValue;
+            var fileValue = Host.VariableProperty(variable.Id).FindPropertyRelative(InitialValuePropertyName);
+            var labelContent = new GUIContent(label, "The graph file's default — change it to set this object's own value");
 
-            switch (variable.Kind)
+            var field = new IMGUIContainer(() =>
             {
-                case ScenarioVariableKind.Flag:
-                    var toggle = new Toggle(label) { value = initial.FlagValue };
-                    toggle.RegisterValueChangedCallback(change => SetBinding(variable, value => value.FindPropertyRelative("flagValue").boolValue = change.newValue));
-                    return toggle;
+                if (fileValue.serializedObject.targetObject == null)
+                    return;
 
-                case ScenarioVariableKind.Counter:
-                    var counter = new IntegerField(label) { value = initial.CounterValue, isDelayed = true };
-                    counter.RegisterValueChangedCallback(change => SetBinding(variable, value => value.FindPropertyRelative("counterValue").intValue = change.newValue));
-                    return counter;
+                var height = ScenarioVariableValueGUI.HeightOf(fileValue, variable.Kind);
+                var rect = EditorGUILayout.GetControlRect(true, height);
 
-                case ScenarioVariableKind.Number:
-                    var number = new FloatField(label) { value = initial.NumberValue, isDelayed = true };
-                    number.RegisterValueChangedCallback(change => SetBinding(variable, value => value.FindPropertyRelative("numberValue").floatValue = change.newValue));
-                    return number;
+                Host.Bindings.SerializedScenario.Update();
 
-                default:
-                    var objectField = new ObjectField(label) { objectType = variable.ObjectType, allowSceneObjects = true, value = initial.ObjectValue };
-                    objectField.RegisterValueChangedCallback(change => SetBinding(variable, value => value.FindPropertyRelative("objectValue").objectReferenceValue = change.newValue));
-                    return objectField;
-            }
-        }
+                if (!ScenarioVariableValueGUI.DrawUnboundValue(rect, labelContent, variable, fileValue, Host.Bindings))
+                    return;
 
-        private void SetBinding(ScenarioVariableDefinition variable, System.Action<SerializedProperty> setValue)
-        {
-            EditBindings(edit => setValue(edit.AddBinding(variable.Id)));
+                Host.Bindings.SerializedScenario.ApplyModifiedProperties();
+                scenarioGraphView.schedule.Execute(scenarioGraphView.Rebuild);
+            });
+
+            field.AddToClassList("scenario-variable__unbound");
+
+            return field;
         }
 
         // Правка привязки — правка компонента на объекте: своя запись undo и «изменена сцена», граф-файл не трогается.
@@ -378,7 +375,7 @@ namespace FeatherKit.EditorTools
             var menu = new GenericMenu();
 
             foreach (ScenarioVariableKind kind in System.Enum.GetValues(typeof(ScenarioVariableKind)))
-                menu.AddItem(new GUIContent(kind.ToString()), false,
+                menu.AddItem(new GUIContent(ObjectNames.NicifyVariableName(kind.ToString())), false,
                     () => scenarioGraphView.ApplyEdit(editing => expandedVariableIds.Add(editing.AddVariable(kind).Id)));
 
             menu.ShowAsContext();

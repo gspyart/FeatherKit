@@ -68,7 +68,7 @@ namespace FeatherKit.EditorTools
             public void OnDrop(GraphView graphView, Edge edge)
             {
                 if (graphView is ScenarioGraphView scenarioGraphView)
-                    scenarioGraphView.ConnectPorts(edge.output, edge.input, edge.userData as ScenarioWire);
+                    scenarioGraphView.CanvasChanges.ConnectPorts(edge.output, edge.input, edge.userData as ScenarioWire);
             }
 
             // IEdgeConnectorListener

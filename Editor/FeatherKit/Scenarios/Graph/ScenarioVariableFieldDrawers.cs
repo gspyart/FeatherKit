@@ -9,17 +9,15 @@ namespace FeatherKit.EditorTools
 {
     /// <summary>
     /// Поле «своё значение или переменная графа» — одно на ScenarioValue, ScenarioFlagReference и ScenarioCounterReference.
-    /// - слева узкая кнопка: «Own Value» или подходящая переменная графа (ScenarioVariableKinds.Fits); поле — весь остаток
+    /// - слева узкая кнопка: «Own Value», подходящая переменная графа, «New Variable…», «New Variable from Field»
     /// - выбранная переменная — её имя; не найдена или не того вида — красным, причина в подсказке
+    /// - переменную можно бросить на поле из панели переменных
     /// Вне графа (старые списки Scenario) переменных нет — только своё значение.
     /// </summary>
     internal static class ScenarioVariableField
     {
         public const float KindButtonWidth = 20f;
-
-        private const string VariableIdPropertyName = "variableId";
-        private const string GraphPathPrefix = ScenarioGraphHost.GraphPropertyPath + ".";
-        private const float Spacing = 2f;
+        public const float Spacing = 2f;
 
         private static GUIStyle variableNameStyle;
 
@@ -33,7 +31,7 @@ namespace FeatherKit.EditorTools
         // В светлой теме голубой на белом поле не читается — там тёмно-синий.
         private static Color VariableColor => EditorGUIUtility.isProSkin ? new Color(0.55f, 0.8f, 1f) : new Color(0.05f, 0.3f, 0.65f);
 
-        private static Color ProblemColor => EditorGUIUtility.isProSkin ? new Color(1f, 0.4f, 0.4f) : new Color(0.75f, 0.1f, 0.1f);
+        public static Color ProblemColor => EditorGUIUtility.isProSkin ? new Color(1f, 0.4f, 0.4f) : new Color(0.75f, 0.1f, 0.1f);
 
 
         public static float HeightOf(SerializedProperty property, string valuePropertyName)
@@ -49,41 +47,37 @@ namespace FeatherKit.EditorTools
         public static void Draw(Rect position, SerializedProperty property, GUIContent label, string valuePropertyName, Type valueType,
             Type valueObjectType)
         {
-            var variableId = property.FindPropertyRelative(VariableIdPropertyName);
-            var variable = UsesVariable(property) ? GraphOf(property)?.FindVariable(variableId.stringValue) : null;
+            var variableId = property.FindPropertyRelative(ScenarioVariablePicking.VariableIdPropertyName);
+            var variable = UsesVariable(property) ? ScenarioVariablePicking.GraphOf(property)?.FindVariable(variableId.stringValue) : null;
             var problem = UsesVariable(property) ? ScenarioGraphValidation.VariableProblemOf(variable, valueType) : null;
+            var ownValue = property.FindPropertyRelative(valuePropertyName);
 
             using (new EditorGUI.PropertyScope(position, label, property))
             {
-                var previousColor = GUI.contentColor;
-
-                if (problem != null)
-                    GUI.contentColor = ProblemColor;
-
-                var fieldRect = EditorGUI.PrefixLabel(position, label);
-                GUI.contentColor = previousColor;
-
+                var fieldRect = PrefixLabel(position, label, problem != null);
                 var previousIndent = EditorGUI.indentLevel;
                 EditorGUI.indentLevel = 0;
 
-                var kindRect = new Rect(fieldRect.x, fieldRect.y, KindButtonWidth, EditorGUIUtility.singleLineHeight);
-                var contentRect = new Rect(kindRect.xMax + Spacing, fieldRect.y, fieldRect.xMax - kindRect.xMax - Spacing, fieldRect.height);
+                var kindRect = KindButtonRect(fieldRect);
+                var contentRect = ContentRect(fieldRect, kindRect);
 
                 if (EditorGUI.DropdownButton(kindRect, KindButtonContent(variable, problem), FocusType.Passive, EditorStyles.miniButton))
-                    ShowVariableMenu(property, valueType);
+                    ShowVariableMenu(variableId, ownValue, valueType, label.text);
 
                 if (UsesVariable(property))
                     DrawVariableName(contentRect, variable, problem);
                 else
-                    DrawValue(contentRect, property.FindPropertyRelative(valuePropertyName), valueObjectType);
+                    DrawValue(contentRect, ownValue, valueObjectType);
 
                 EditorGUI.indentLevel = previousIndent;
             }
+
+            ScenarioVariablePicking.HandleVariableDrop(position, variableId, candidate => ScenarioVariableKinds.Fits(candidate, valueType));
         }
 
         private static bool UsesVariable(SerializedProperty property)
         {
-            return !string.IsNullOrEmpty(property.FindPropertyRelative(VariableIdPropertyName).stringValue);
+            return !string.IsNullOrEmpty(property.FindPropertyRelative(ScenarioVariablePicking.VariableIdPropertyName).stringValue);
         }
 
         private static GUIContent KindButtonContent(ScenarioVariableDefinition variable, string problem)
@@ -96,17 +90,6 @@ namespace FeatherKit.EditorTools
                 : new GUIContent("=", "Own value — click to use a graph variable instead");
         }
 
-        private static void DrawVariableName(Rect rect, ScenarioVariableDefinition variable, string problem)
-        {
-            var previousColor = GUI.contentColor;
-            GUI.contentColor = problem != null ? ProblemColor : VariableColor;
-
-            var text = variable != null ? variable.Name : "Variable not found";
-            EditorGUI.LabelField(rect, new GUIContent(text, problem ?? $"{variable?.Kind} variable"), VariableNameStyle);
-
-            GUI.contentColor = previousColor;
-        }
-
         private static void DrawValue(Rect rect, SerializedProperty value, Type valueObjectType)
         {
             if (value.propertyType == SerializedPropertyType.ObjectReference && valueObjectType != null)
@@ -116,73 +99,73 @@ namespace FeatherKit.EditorTools
         }
 
 
-        // ── Выбор переменной ─────────────────────────────────────────────
-
-        private static void ShowVariableMenu(SerializedProperty property, Type valueType)
+        private static void ShowVariableMenu(SerializedProperty variableId, SerializedProperty ownValue, Type valueType, string fieldName)
         {
-            var serializedObject = property.serializedObject;
-            var variableIdPath = property.FindPropertyRelative(VariableIdPropertyName).propertyPath;
-            var currentId = property.FindPropertyRelative(VariableIdPropertyName).stringValue;
-            var graph = GraphOf(property);
+            var serializedObject = variableId.serializedObject;
             var menu = new GenericMenu();
 
-            menu.AddItem(new GUIContent("Own Value"), string.IsNullOrEmpty(currentId), () => SetVariableId(serializedObject, variableIdPath, ""));
+            menu.AddItem(new GUIContent("Own Value"), string.IsNullOrEmpty(variableId.stringValue),
+                () => ScenarioVariablePicking.SetVariableId(serializedObject, variableId.propertyPath, ""));
             menu.AddSeparator("");
 
-            var fittingVariables = FittingVariables(graph, valueType);
+            var graph = ScenarioVariablePicking.GraphOf(variableId);
+            ScenarioVariablePicking.AddVariableItems(menu, variableId, ScenarioVariablePicking.FittingVariables(graph, valueType));
 
-            foreach (var variable in fittingVariables)
+            if (graph != null && ScenarioVariableKinds.TryGetKind(valueType, out var kind))
             {
-                var variableId = variable.Id;
-                menu.AddItem(new GUIContent($"{variable.Name}   ({variable.Kind})"), variableId == currentId,
-                    () => SetVariableId(serializedObject, variableIdPath, variableId));
-            }
+                menu.AddSeparator("");
+                ScenarioVariablePicking.AddNewVariableItem(menu, "New Variable…", variableId, valueType, fieldName);
 
-            if (fittingVariables.Count == 0)
-                menu.AddDisabledItem(new GUIContent(graph == null ? "Graph variables work only inside a graph" : "No fitting graph variables"));
+                if (string.IsNullOrEmpty(variableId.stringValue) && ScenarioVariablePicking.CanCopyOwnValue(ownValue, kind))
+                {
+                    var ownValuePath = ownValue.propertyPath;
+                    ScenarioVariablePicking.AddNewVariableItem(menu, "New Variable from Field", variableId, valueType, fieldName,
+                        value => ScenarioVariablePicking.CopyOwnValue(serializedObject.FindProperty(ownValuePath), kind, value));
+                }
+            }
 
             menu.ShowAsContext();
         }
 
-        private static List<ScenarioVariableDefinition> FittingVariables(ScenarioGraph graph, Type valueType)
+
+        // ── Общие помощники ──────────────────────────────────────────────
+
+        /// <summary>Подпись поля: при проблеме — красным.</summary>
+        public static Rect PrefixLabel(Rect position, GUIContent label, bool hasProblem)
         {
-            var fittingVariables = new List<ScenarioVariableDefinition>();
+            var previousColor = GUI.contentColor;
 
-            if (graph == null)
-                return fittingVariables;
+            if (hasProblem)
+                GUI.contentColor = ProblemColor;
 
-            foreach (var variable in graph.Variables)
-            {
-                if (ScenarioVariableKinds.Fits(variable, valueType))
-                    fittingVariables.Add(variable);
-            }
+            var fieldRect = EditorGUI.PrefixLabel(position, label);
+            GUI.contentColor = previousColor;
 
-            return fittingVariables;
+            return fieldRect;
         }
 
-        private static void SetVariableId(SerializedObject serializedObject, string variableIdPath, string variableId)
+        public static Rect KindButtonRect(Rect fieldRect)
         {
-            if (serializedObject.targetObject == null)
-                return;
-
-            serializedObject.Update();
-            serializedObject.FindProperty(variableIdPath).stringValue = variableId;
-            serializedObject.ApplyModifiedProperties();
+            return new Rect(fieldRect.x, fieldRect.y, KindButtonWidth, EditorGUIUtility.singleLineHeight);
         }
 
-
-        /// <summary>Граф, в котором лежит поле: граф-файл или встроенный граф сценария. Null — поле вне графа.</summary>
-        private static ScenarioGraph GraphOf(SerializedProperty property)
+        public static Rect ContentRect(Rect fieldRect, Rect kindRect)
         {
-            if (!property.propertyPath.StartsWith(GraphPathPrefix, StringComparison.Ordinal))
-                return null;
+            return new Rect(kindRect.xMax + Spacing, fieldRect.y, fieldRect.xMax - kindRect.xMax - Spacing, fieldRect.height);
+        }
 
-            return property.serializedObject.targetObject switch
-            {
-                ScenarioGraphAsset asset => asset.Graph,
-                Scenario { GraphSource: ScenarioGraphSource.Embedded } scenario => scenario.Graph,
-                _ => null
-            };
+        /// <summary>Имя выбранной переменной жирным и цветом переменных; не найдена или не подходит — красным, причина в подсказке.</summary>
+        public static void DrawVariableName(Rect rect, ScenarioVariableDefinition variable, string problem)
+        {
+            var previousColor = GUI.contentColor;
+            GUI.contentColor = problem != null ? ProblemColor : VariableColor;
+
+            var text = variable != null ? variable.Name : "Variable not found";
+            var tooltip = problem ?? $"{ScenarioVariablePicking.KindTextOf(variable)} variable";
+            EditorGUI.LabelField(new Rect(rect.x, rect.y, rect.width, EditorGUIUtility.singleLineHeight), new GUIContent(text, tooltip),
+                VariableNameStyle);
+
+            GUI.contentColor = previousColor;
         }
     }
 

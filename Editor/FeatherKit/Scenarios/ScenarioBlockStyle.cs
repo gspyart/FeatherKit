@@ -40,7 +40,12 @@ namespace FeatherKit.EditorTools
             { "Animation", Hex(0x9A63E8) },
             { "Timeline", Hex(0x9A63E8) },
             { "Player", Hex(0x3DBE6A) },
-            { "Scenario", Hex(0xE84B5A) }
+            { "Scenario", Hex(0xE84B5A) },
+            { "Space", Hex(0x7FD6FF) },
+            { "Lists", Hex(0x1E8C7E) },
+            { "Physics", Hex(0xA6744A) },
+            { "Rendering", Hex(0xFF6F91) },
+            { "Debug", Hex(0xE6E6E6) }
         };
 
         // Иконка категории — иконка этого типа Unity: так её не надо рисовать и она совпадает с инспектором.
@@ -56,7 +61,12 @@ namespace FeatherKit.EditorTools
             { "Variables", typeof(ScriptableObject) },
             { "Signals", typeof(ScriptableObject) },
             { "Scenario", typeof(Scenario) },
-            { "Code", typeof(MonoScript) }
+            { "Code", typeof(MonoScript) },
+            { "Space", typeof(Camera) },
+            { "Lists", typeof(UnityEngine.UI.GridLayoutGroup) },
+            { "Physics", typeof(Rigidbody) },
+            { "Rendering", typeof(MeshRenderer) },
+            { "Debug", typeof(DefaultAsset) }
         };
 
         private static readonly Dictionary<(Type, string), GUIContent> LabelsByField = new Dictionary<(Type, string), GUIContent>();
@@ -75,9 +85,12 @@ namespace FeatherKit.EditorTools
         /// <summary>Цвет блока по категории. Нода When из нескольких событий — цвет событий.</summary>
         public static Color ColorOf(Type blockType)
         {
-            var category = blockType == typeof(ScenarioWhenNode) ? WhenCategory : CategoryOf(blockType);
+            return ColorOfCategory(blockType == typeof(ScenarioWhenNode) ? WhenCategory : CategoryOf(blockType));
+        }
 
-            return ColorsByCategory.TryGetValue(category, out var color) ? color : DefaultColor;
+        public static Color ColorOfCategory(string category)
+        {
+            return category != null && ColorsByCategory.TryGetValue(category, out var color) ? color : DefaultColor;
         }
 
         /// <summary>Тип Unity, чья иконка обозначает категорию блока. Null — своей иконки у категории нет.</summary>

@@ -9,7 +9,7 @@ namespace FeatherKit.EditorTools
 {
     /// <summary>
     /// Какие блоки сценария есть в проекте — и в FeatherKit, и в игре.
-    /// Отдаёт их путь в меню «+» и название; ищет один раз за перезагрузку домена.
+    /// Отдаёт их путь в меню «+», название и описание; ищет один раз за перезагрузку домена.
     /// </summary>
     internal static class ScenarioBlockCatalog
     {
@@ -42,6 +42,12 @@ namespace FeatherKit.EditorTools
         public static string TitleOf(Type blockType)
         {
             return ScenarioBlockAttribute.TitleOf(blockType);
+        }
+
+        /// <summary>Что делает блок, одной фразой из [ScenarioBlock(Description = …)]; null — описания нет.</summary>
+        public static string DescriptionOf(Type blockType)
+        {
+            return ScenarioBlockAttribute.DescriptionOf(blockType);
         }
     }
 }

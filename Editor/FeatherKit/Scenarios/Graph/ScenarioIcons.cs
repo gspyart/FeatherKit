@@ -28,6 +28,8 @@ namespace FeatherKit.EditorTools
         private const string SelectName = "UnityEditor.SceneHierarchyWindow";
         private const string CallerName = "Linked";
         private const string PlayerName = "AvatarSelector";
+        private const string WorldPointName = "MoveTool";
+        private const string MiniMapName = "UnityEditor.SceneView";
 
         private const string WhenName = "ScenarioWhen";
         private const string FlowName = "ScenarioFlow";
@@ -40,7 +42,7 @@ namespace FeatherKit.EditorTools
         public static readonly string[] BuiltInNames =
         {
             LockOffName, LockOnName, SaveName, PrefabName, WarningName, ErrorName, HelpName, FrameName, SelectName,
-            CallerName, PlayerName, InfoName
+            CallerName, PlayerName, InfoName, WorldPointName, MiniMapName
         };
 
         public static readonly string[] OwnNames = { WhenName, FlowName, WaitForName, GuardName, RepeatName };
@@ -83,6 +85,11 @@ namespace FeatherKit.EditorTools
         public static Texture Caller => BuiltIn(CallerName);
 
         public static Texture Player => BuiltIn(PlayerName);
+
+        /// <summary>Координата в мире: стрелки перемещения.</summary>
+        public static Texture WorldPoint => BuiltIn(WorldPointName);
+
+        public static Texture MiniMap => BuiltIn(MiniMapName);
 
         public static Texture Scene => TypeIcon(typeof(SceneAsset));
 
@@ -145,6 +152,10 @@ namespace FeatherKit.EditorTools
                 ScenarioVariableKind.Flag => TypeIcon(typeof(UnityEngine.UI.Toggle)),
                 ScenarioVariableKind.Counter => TypeIcon(typeof(UnityEngine.UI.InputField)),
                 ScenarioVariableKind.Number => TypeIcon(typeof(UnityEngine.UI.Slider)),
+                ScenarioVariableKind.Vector3 => WorldPoint,
+                ScenarioVariableKind.Text => TypeIcon(typeof(TextAsset)),
+                ScenarioVariableKind.Color => TypeIcon(typeof(Material)),
+                ScenarioVariableKind.ObjectList => TypeIcon(typeof(UnityEngine.UI.GridLayoutGroup)),
                 _ => TypeIcon(variable.ObjectType)
             };
         }
