@@ -1,3 +1,4 @@
+using System.Linq;
 using FeatherKit.Scenarios;
 using UnityEditor;
 using UnityEngine;
@@ -6,34 +7,38 @@ namespace FeatherKit.EditorTools
 {
     /// <summary>
     /// Значение переменной (ScenarioVariableValue) — поле того вида, какая переменная рядом.
-    /// Переменную ищет у соседей, не зная блоков: поле «variable» (выбор переменной в блоке), «variableId» (привязка)
-    /// или «id» (сама переменная — её начальное значение). Соседний выбор «sourceVariable» / «otherVariable» прячет поле.
+    /// - соседи из [ScenarioValueKindFrom] на поле; без него — «variable» (блок), «variableId» (привязка), «id» (сама переменная)
+    /// - выбрано «взять из другой переменной» или сравнение «пусто» — своё значение не нужно, поле прячется
     /// </summary>
     [CustomPropertyDrawer(typeof(ScenarioVariableValue))]
     internal class ScenarioVariableValueDrawer : PropertyDrawer
     {
         private const string ChooseVariableFirstText = "Choose a variable first";
+        private const string DefaultVariableFieldName = "variable";
 
-        private static readonly string[] ChosenVariableNames = { "variable" };
-        private static readonly string[] ReplacingVariableNames = { "sourceVariable", "otherVariable" };
+        private static readonly string[] DefaultReplacingVariableNames = { "sourceVariable", "otherVariable" };
+
+
+        private ScenarioValueKindFromAttribute KindFrom =>
+            fieldInfo != null ? (ScenarioValueKindFromAttribute)System.Attribute.GetCustomAttribute(fieldInfo, typeof(ScenarioValueKindFromAttribute)) : null;
 
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
-            if (IsReplacedByVariable(property))
+            if (IsNotNeeded(property, KindFrom))
                 return 0f;
 
-            var variable = VariableOf(property);
+            var variable = VariableOf(property, KindFrom);
 
             return variable != null ? ScenarioVariableValueGUI.HeightOf(property, variable.Kind) : EditorGUIUtility.singleLineHeight;
         }
 
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
-            if (IsReplacedByVariable(property))
+            if (IsNotNeeded(property, KindFrom))
                 return;
 
-            var variable = VariableOf(property);
+            var variable = VariableOf(property, KindFrom);
 
             using (new EditorGUI.PropertyScope(position, label, property))
             {
@@ -47,9 +52,11 @@ namespace FeatherKit.EditorTools
 
         // ── Соседи ───────────────────────────────────────────────────────
 
-        private static bool IsReplacedByVariable(SerializedProperty property)
+        private static bool IsNotNeeded(SerializedProperty property, ScenarioValueKindFromAttribute kindFrom)
         {
-            foreach (var name in ReplacingVariableNames)
+            var replacingNames = kindFrom != null ? (System.Collections.Generic.IEnumerable<string>)kindFrom.ReplacingVariableFieldNames : DefaultReplacingVariableNames;
+
+            foreach (var name in replacingNames)
             {
                 var variableId = SiblingOf(property, name)?.FindPropertyRelative(ScenarioVariablePicking.VariableIdPropertyName);
 
@@ -57,24 +64,29 @@ namespace FeatherKit.EditorTools
                     return true;
             }
 
-            return false;
+            var comparison = string.IsNullOrEmpty(kindFrom?.ComparisonFieldName) ? null : SiblingOf(property, kindFrom.ComparisonFieldName);
+
+            return comparison != null && ((ScenarioVariableComparison)comparison.enumValueIndex).IsEmptinessCheck();
         }
 
-        /// <summary>Переменная, чьего вида это значение. Null — переменная не выбрана или не найдена.</summary>
         public static ScenarioVariableDefinition VariableOf(SerializedProperty property)
+        {
+            return VariableOf(property, null);
+        }
+
+        /// <summary>Переменная, чьего вида это поле. Null — переменная не выбрана или не найдена.</summary>
+        public static ScenarioVariableDefinition VariableOf(SerializedProperty property, ScenarioValueKindFromAttribute kindFrom)
         {
             var graph = GraphOf(property.serializedObject.targetObject);
 
             if (graph == null)
                 return null;
 
-            foreach (var name in ChosenVariableNames)
-            {
-                var chosenId = SiblingOf(property, name)?.FindPropertyRelative(ScenarioVariablePicking.VariableIdPropertyName);
+            var chosenId = SiblingOf(property, kindFrom?.VariableFieldName ?? DefaultVariableFieldName)
+                ?.FindPropertyRelative(ScenarioVariablePicking.VariableIdPropertyName);
 
-                if (chosenId != null)
-                    return graph.FindVariable(chosenId.stringValue);
-            }
+            if (chosenId != null)
+                return graph.FindVariable(chosenId.stringValue);
 
             var bindingId = SiblingOf(property, ScenarioVariablePicking.VariableIdPropertyName);
 
@@ -104,6 +116,54 @@ namespace FeatherKit.EditorTools
             var cut = path.LastIndexOf('.');
 
             return property.serializedObject.FindProperty(cut > 0 ? $"{path.Substring(0, cut)}.{name}" : name);
+        }
+    }
+
+
+    /// <summary>
+    /// Сравнение переменной (ScenarioVariableComparison) — только подходящие виду выбранной переменной:
+    /// больше-меньше — у Counter и Number, «пусто» — у Object, Object List и Text. Переменная не выбрана — все.
+    /// </summary>
+    [CustomPropertyDrawer(typeof(ScenarioVariableComparison))]
+    internal class ScenarioVariableComparisonDrawer : PropertyDrawer
+    {
+        public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+        {
+            var kindFrom = fieldInfo != null
+                ? (ScenarioValueKindFromAttribute)System.Attribute.GetCustomAttribute(fieldInfo, typeof(ScenarioValueKindFromAttribute))
+                : null;
+            var variable = ScenarioVariableValueDrawer.VariableOf(property, kindFrom);
+            var fitting = FittingComparisons(variable?.Kind);
+            var current = (ScenarioVariableComparison)property.enumValueIndex;
+            var problem = fitting.Contains(current) ? null : $"“{current.Symbol()}” doesn't fit a {variable?.Kind} variable";
+
+            using (new EditorGUI.PropertyScope(position, label, property))
+            {
+                var fieldRect = ScenarioVariableField.PrefixLabel(position, label, problem != null);
+                var options = fitting.Contains(current) ? fitting : fitting.Prepend(current).ToArray();
+                var names = options.Select(option => new GUIContent(option.Symbol(), problem)).ToArray();
+
+                EditorGUI.BeginChangeCheck();
+                var chosen = EditorGUI.Popup(fieldRect, System.Array.IndexOf(options, current), names);
+
+                if (EditorGUI.EndChangeCheck())
+                    property.enumValueIndex = (int)options[chosen];
+            }
+        }
+
+        public static ScenarioVariableComparison[] FittingComparisons(ScenarioVariableKind? kind)
+        {
+            var all = (ScenarioVariableComparison[])System.Enum.GetValues(typeof(ScenarioVariableComparison));
+
+            return kind switch
+            {
+                null => all,
+                ScenarioVariableKind.Counter or ScenarioVariableKind.Number => all.Where(comparison => !comparison.IsEmptinessCheck()).ToArray(),
+                ScenarioVariableKind.Object or ScenarioVariableKind.ObjectList or ScenarioVariableKind.Text =>
+                    all.Where(comparison => comparison is ScenarioVariableComparison.Equal or ScenarioVariableComparison.NotEqual
+                                            || comparison.IsEmptinessCheck()).ToArray(),
+                _ => new[] { ScenarioVariableComparison.Equal, ScenarioVariableComparison.NotEqual }
+            };
         }
     }
 

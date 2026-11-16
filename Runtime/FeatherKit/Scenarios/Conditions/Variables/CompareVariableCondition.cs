@@ -15,10 +15,12 @@ namespace FeatherKit.Scenarios
         [SerializeField] private ScenarioVariableChoice variable = new ScenarioVariableChoice();
 
         [ScenarioLabel("Is")]
+        [ScenarioValueKindFrom("variable")]
         [SerializeField] private ScenarioVariableComparison comparison;
 
         [Tooltip("What to compare with; the field of the chosen variable's kind is used")]
         [ScenarioLabel("Value")]
+        [ScenarioValueKindFrom("variable", "otherVariable", ComparisonFieldName = "comparison")]
         [SerializeField] private ScenarioVariableValue value = new ScenarioVariableValue();
 
         [Tooltip("Compare with this variable instead of the value. Empty — the value is used")]

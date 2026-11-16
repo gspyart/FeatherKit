@@ -85,8 +85,6 @@ namespace FeatherKit.EditorTools
     }
 
 
-#if FEATHERKIT_SCENARIO_VARIABLE_CHOICE
-    // Временно выключен: ScenarioVariableChoice и ScenarioAllowedVariableKindsAttribute придут с рантаймом на стыковке — тогда снять #if.
     [CustomPropertyDrawer(typeof(ScenarioVariableChoice))]
     internal class ScenarioVariableChoiceDrawer : PropertyDrawer
     {
@@ -101,5 +99,4 @@ namespace FeatherKit.EditorTools
             ScenarioVariableChoiceField.Draw(position, property, label, allowedKinds?.Kinds?.ToList());
         }
     }
-#endif
 }

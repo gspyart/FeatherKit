@@ -13,6 +13,7 @@ namespace FeatherKit.Scenarios
 
         [Tooltip("The value to put; the field of the chosen variable's kind is used")]
         [ScenarioLabel("Value")]
+        [ScenarioValueKindFrom("variable", "sourceVariable")]
         [SerializeField] private ScenarioVariableValue value = new ScenarioVariableValue();
 
         [Tooltip("Copy from this variable instead of the value. Empty — the value is used")]

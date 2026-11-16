@@ -70,24 +70,26 @@ namespace FeatherKit.EditorTools
         }
 
         /// <summary>«New Variable…»: переменная под тип поля, сразу выбранная в нём. fillValue — начальное значение из поля.</summary>
+        /// <summary>isFilledByGraph — переменную заполнит сам граф (поле «куда записать»): открывать её для объекта не нужно.</summary>
         public static void AddNewVariableItem(GenericMenu menu, string itemText, SerializedProperty variableId, Type valueType, string variableName,
-            Action<ScenarioVariableValue> fillValue = null, Action<SerializedProperty> onChosen = null)
+            Action<ScenarioVariableValue> fillValue = null, Action<SerializedProperty> onChosen = null, bool isFilledByGraph = false)
         {
             if (GraphOf(variableId) == null || !ScenarioVariableKinds.TryGetKind(valueType, out var kind))
                 return;
 
-            AddNewVariableItem(menu, itemText, variableId, kind, ObjectTypeFor(valueType, kind), variableName, fillValue, onChosen);
+            AddNewVariableItem(menu, itemText, variableId, kind, ObjectTypeFor(valueType, kind), variableName, fillValue, onChosen, isFilledByGraph);
         }
 
         public static void AddNewVariableItem(GenericMenu menu, string itemText, SerializedProperty variableId, ScenarioVariableKind kind,
-            Type objectType, string variableName, Action<ScenarioVariableValue> fillValue = null, Action<SerializedProperty> onChosen = null)
+            Type objectType, string variableName, Action<ScenarioVariableValue> fillValue = null, Action<SerializedProperty> onChosen = null,
+            bool isFilledByGraph = false)
         {
             var serializedObject = variableId.serializedObject;
             var variableIdPath = variableId.propertyPath;
 
             menu.AddItem(new GUIContent(itemText), false, () =>
             {
-                var created = CreateVariable(serializedObject, kind, objectType, variableName, fillValue);
+                var created = CreateVariable(serializedObject, kind, objectType, variableName, fillValue, isFilledByGraph);
 
                 if (created != null)
                     SetVariableId(serializedObject, variableIdPath, created.Id, onChosen);
@@ -121,9 +123,12 @@ namespace FeatherKit.EditorTools
 
         // ── Новая переменная ─────────────────────────────────────────────
 
-        /// <summary>Переменная в графе объекта поля, с undo. В граф-файле объект сцены — сразу «Set on Object»: иначе файлу его не удержать.</summary>
+        /// <summary>
+        /// Переменная в графе объекта поля, с undo. В граф-файле объект сцены — сразу «Set on Object»: иначе файлу его не удержать.
+        /// Кроме той, что заполняет сам граф: её значение живёт только в игре.
+        /// </summary>
         public static ScenarioVariableDefinition CreateVariable(SerializedObject serializedObject, ScenarioVariableKind kind, Type objectType,
-            string variableName, Action<ScenarioVariableValue> fillValue)
+            string variableName, Action<ScenarioVariableValue> fillValue, bool isFilledByGraph = false)
         {
             var owner = serializedObject.targetObject;
             var graph = owner switch
@@ -144,7 +149,7 @@ namespace FeatherKit.EditorTools
             if (objectType != null)
                 variable.ObjectType = objectType;
 
-            variable.IsExposed = owner is ScenarioGraphAsset && objectType != null && ScenarioBindingsEditing.IsSceneType(objectType);
+            variable.IsExposed = !isFilledByGraph && owner is ScenarioGraphAsset && objectType != null && ScenarioBindingsEditing.IsSceneType(objectType);
             fillValue?.Invoke(variable.InitialValue);
             graph.AddVariable(variable);
 

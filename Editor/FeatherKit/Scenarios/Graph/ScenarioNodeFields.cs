@@ -10,7 +10,7 @@ namespace FeatherKit.EditorTools
     /// <summary>
     /// Поля ноды как элементы UI — одни и те же для ноды на холсте и инспектора ноды.
     /// - обычное поле — PropertyField с подписью из ScenarioLabel; [ScenarioInspectorOnly] — только в инспекторе
-    /// - стопки событий, условий и шагов — ScenarioBlockStackView, исходы Wait For — ScenarioWaitCaseListView
+    /// - стопки событий, условий и шагов — ScenarioBlockStackView; исходы Wait For и случаи Switch — свои списки
     /// </summary>
     internal static class ScenarioNodeFields
     {
@@ -56,6 +56,9 @@ namespace FeatherKit.EditorTools
 
             if (fieldType == typeof(List<ScenarioWaitCase>) && node is ScenarioWaitForNode waitForNode)
                 return new ScenarioWaitCaseListView(graphView, waitForNode, field);
+
+            if (fieldType == typeof(List<ScenarioSwitchCase>) && node is ScenarioSwitchOnCounterNode switchNode)
+                return new ScenarioSwitchCaseListView(graphView, switchNode, field);
 
             var propertyField = new PropertyField(field, label.text) { tooltip = label.tooltip };
             propertyField.BindProperty(field);

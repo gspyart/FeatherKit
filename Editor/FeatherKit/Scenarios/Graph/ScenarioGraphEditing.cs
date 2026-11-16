@@ -9,7 +9,7 @@ namespace FeatherKit.EditorTools
 {
     /// <summary>
     /// Все правки графа из редактора — через API графа, с undo и пометкой «изменено».
-    /// - ноды: создать (в том числе по блоку из поиска), сдвинуть, удалить; провода; исходы Wait For
+    /// - ноды: создать (в том числе по блоку из поиска), сдвинуть, удалить; провода; исходы Wait For и случаи Switch
     /// - переменные графа и заметки на холсте; рамки — частью ScenarioGroupEditing, вставка — ScenarioGraphClipboard
     /// - экземпляр префаба получает свои overrides
     /// Без UI: холст и панели только зовут его, он же под EditMode-тестами.
@@ -188,6 +188,38 @@ namespace FeatherKit.EditorTools
         {
             if (waitForNode.FindCase(caseId) != null)
                 Record("Remove Wait Case", () => Graph.RemoveWaitCase(waitForNode, caseId));
+        }
+
+
+        // ── Случаи Switch on Counter ─────────────────────────────────────
+
+        public ScenarioSwitchCase AddSwitchCase(ScenarioSwitchOnCounterNode switchNode, int value)
+        {
+            return Record("Add Switch Case", () => switchNode.AddCase(value));
+        }
+
+        public void RemoveSwitchCase(ScenarioSwitchOnCounterNode switchNode, string caseId)
+        {
+            if (switchNode.FindCase(caseId) == null)
+                return;
+
+            Record("Remove Switch Case", () =>
+            {
+                Graph.DisconnectPort(switchNode.Id, ScenarioSwitchCase.OutputIdPrefix + caseId);
+                switchNode.RemoveCase(caseId);
+            });
+        }
+
+        // У ноды нет перестановки — переставляем элемент списка в SerializedObject, это тоже одна запись undo.
+        public void MoveSwitchCase(ScenarioSwitchOnCounterNode switchNode, int fromIndex, int toIndex)
+        {
+            var cases = host.NodeProperty(switchNode.Id)?.FindPropertyRelative("cases");
+
+            if (cases == null || fromIndex == toIndex || toIndex < 0 || toIndex >= cases.arraySize)
+                return;
+
+            cases.MoveArrayElement(fromIndex, toIndex);
+            cases.serializedObject.ApplyModifiedProperties();
         }
 
 

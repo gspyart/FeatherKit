@@ -7,6 +7,7 @@ namespace FeatherKit.EditorTools
     /// <summary>
     /// Инспектор сценария: откуда граф (этот объект или граф-файл), значения открытых переменных, кнопка «Open Graph».
     /// Пока встроенный граф пуст — ниже старые разделы «When / If / Do» из ScenarioSectionsDrawer и кнопка «Convert to Graph».
+    /// Блоки со старыми полями — предупреждение с кнопкой «Upgrade Fields»; сам инспектор ничего не переносит.
     /// </summary>
     [CustomEditor(typeof(Scenario))]
     public class ScenarioEditor : Editor
@@ -15,6 +16,8 @@ namespace FeatherKit.EditorTools
         private ScenarioBindingsSection bindings;
         private SerializedProperty graphSource;
         private SerializedProperty graphAsset;
+        private int oldFieldsCount;
+        private int oldFieldsCheckedVersion = -1;
 
 
         private Scenario Scenario => (Scenario)target;
@@ -38,6 +41,8 @@ namespace FeatherKit.EditorTools
             DrawGraphSource();
             bindings.Draw();
             serializedObject.ApplyModifiedProperties();
+
+            DrawOldFields();
 
             if (GUILayout.Button("Open Graph"))
                 ScenarioGraphWindow.Open(Scenario);
@@ -68,6 +73,34 @@ namespace FeatherKit.EditorTools
 
             ScenarioGraphConverter.Convert(Scenario);
             ScenarioGraphWindow.Open(Scenario);
+            GUIUtility.ExitGUI();
+        }
+
+        // Перебор всех полей недешёв — пересчитываем, только когда сценарий или его файл правили.
+        private void DrawOldFields()
+        {
+            var graphFile = Scenario.GraphSource == ScenarioGraphSource.Asset ? Scenario.GraphAsset : null;
+            var version = EditorUtility.GetDirtyCount(Scenario) * 397 + (graphFile != null ? EditorUtility.GetDirtyCount(graphFile) + 1 : 0);
+
+            if (version != oldFieldsCheckedVersion)
+            {
+                oldFieldsCheckedVersion = version;
+                oldFieldsCount = ScenarioLegacyFieldsUpgrade.CountOutdatedBlocks(Scenario) + ScenarioLegacyFieldsUpgrade.CountOutdatedBlocks(graphFile);
+            }
+
+            if (oldFieldsCount == 0)
+                return;
+
+            EditorGUILayout.HelpBox($"Old fields in {oldFieldsCount} blocks: they still work, but should be moved to the new ones.", MessageType.Warning);
+
+            if (!GUILayout.Button(ScenarioLegacyFieldsUpgrade.ButtonText))
+                return;
+
+            ScenarioLegacyFieldsUpgrade.Upgrade(Scenario);
+
+            if (graphFile != null)
+                ScenarioLegacyFieldsUpgrade.Upgrade(graphFile);
+
             GUIUtility.ExitGUI();
         }
 

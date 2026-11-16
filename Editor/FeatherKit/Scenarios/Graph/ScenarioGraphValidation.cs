@@ -12,7 +12,7 @@ namespace FeatherKit.EditorTools
     /// <summary>
     /// Что в графе не так — без UI: для значков на нодах, счётчика в строке состояния и инспектора.
     /// - на нодах: блок пропал или пуст, переменная не найдена или не того вида, не выбран объект, флаг или счётчик,
-    ///   некуда записать результат; провод к порту, которого у ноды нет
+    ///   некуда записать результат, старые поля блока, повтор значения в Switch; провод к порту, которого у ноды нет
     /// - на переменных граф-файла: объект сцены без «Set on Object», открытая Object без значения на объекте
     /// </summary>
     internal static class ScenarioGraphValidation
@@ -32,8 +32,11 @@ namespace FeatherKit.EditorTools
 
             foreach (var node in graph.Nodes)
             {
-                if (node != null)
-                    CheckFields(node, graph, node.Id, problems, 0);
+                if (node == null)
+                    continue;
+
+                CheckFields(node, graph, node.Id, problems, 0);
+                CheckSwitchCases(node, problems);
             }
 
             CheckWires(graph, problems);
@@ -53,10 +56,13 @@ namespace FeatherKit.EditorTools
             if (graph == null || !isGraphFile)
                 return problems;
 
+            // Переменную, в которую граф пишет сам (For Each, Random Item…), заполнять снаружи не нужно.
+            var writtenIds = ScenarioVariableWriters.WrittenVariableIds(graph);
+
             foreach (var variable in graph.Variables)
             {
                 if (variable is { IsExposed: false, Kind: ScenarioVariableKind.Object or ScenarioVariableKind.ObjectList }
-                    && ScenarioBindingsEditing.IsSceneType(variable.ObjectType))
+                    && ScenarioBindingsEditing.IsSceneType(variable.ObjectType) && !writtenIds.Contains(variable.Id))
                     problems.Add(new ScenarioGraphProblem(variable.Id,
                         $"“{variable.Name}” holds scene objects, but a graph file can't keep them — turn on Set on Object", true));
             }
@@ -77,6 +83,11 @@ namespace FeatherKit.EditorTools
         {
             if (depth > MaxDepth)
                 return;
+
+            if (owner is IScenarioUpgradableBlock && ScenarioLegacyFieldsUpgrade.HasLegacyData(owner))
+                problems.Add(new ScenarioGraphProblem(nodeId,
+                    $"“{ScenarioBlockCatalog.TitleOf(owner.GetType())}” keeps fields of an old version — press {ScenarioLegacyFieldsUpgrade.ButtonText}",
+                    false) { IsOldFields = true });
 
             foreach (var field in SerializedFieldsOf(owner.GetType()))
             {
@@ -114,7 +125,7 @@ namespace FeatherKit.EditorTools
                         break;
 
                     case not null when IsValueField(value.GetType()):
-                        CheckValueField(value, graph, nodeId, label, problems);
+                        CheckValueField(value, graph, nodeId, label, AllowsEmpty(field), problems);
                         break;
 
                     case not null when IsNestedData(value.GetType()):
@@ -148,7 +159,8 @@ namespace FeatherKit.EditorTools
             return IsGeneric(type, typeof(ScenarioValue<>));
         }
 
-        private static void CheckValueField(object valueField, ScenarioGraph graph, int nodeId, string label, List<ScenarioGraphProblem> problems)
+        private static void CheckValueField(object valueField, ScenarioGraph graph, int nodeId, string label, bool allowsEmpty,
+            List<ScenarioGraphProblem> problems)
         {
             var type = valueField.GetType();
             var valueType = type.GetGenericArguments()[0];
@@ -160,8 +172,15 @@ namespace FeatherKit.EditorTools
                 return;
             }
 
-            if (typeof(Object).IsAssignableFrom(valueType) && type.GetProperty(nameof(ScenarioValue<int>.Value))?.GetValue(valueField) as Object == null)
+            if (!allowsEmpty && typeof(Object).IsAssignableFrom(valueType)
+                             && type.GetProperty(nameof(ScenarioValue<int>.Value))?.GetValue(valueField) as Object == null)
                 problems.Add(new ScenarioGraphProblem(nodeId, $"“{label}” is empty", false));
+        }
+
+        // Договорённость FeatherKit: подсказка «Empty — …» значит, что у пустого поля есть смысл (камера, этот сценарий).
+        private static bool AllowsEmpty(FieldInfo field)
+        {
+            return field.GetCustomAttribute<TooltipAttribute>()?.tooltip?.Contains("Empty —") == true;
         }
 
         private static void CheckReference(ScenarioGraph graph, int nodeId, string label, string variableId, Object asset, Type valueType,
@@ -197,6 +216,13 @@ namespace FeatherKit.EditorTools
             return neededKind == variable.Kind
                 ? $"“{variable.Name}” holds {variable.ObjectType.Name}, this field needs {valueType.Name}"
                 : $"“{variable.Name}” is a {variable.Kind}, this field needs a {neededKind}";
+        }
+
+
+        private static void CheckSwitchCases(ScenarioNode node, List<ScenarioGraphProblem> problems)
+        {
+            if (node is ScenarioSwitchOnCounterNode switchNode && switchNode.TryFindRepeatedValue(out var repeatedValue))
+                problems.Add(new ScenarioGraphProblem(node.Id, $"Value {repeatedValue} is in two cases — the lower one never fires", false));
         }
 
 
@@ -273,7 +299,7 @@ namespace FeatherKit.EditorTools
 
         // ── Общие помощники ──────────────────────────────────────────────
 
-        private static List<FieldInfo> SerializedFieldsOf(Type type)
+        public static List<FieldInfo> SerializedFieldsOf(Type type)
         {
             if (SerializedFieldsByType.TryGetValue(type, out var fields))
                 return fields;
@@ -298,12 +324,12 @@ namespace FeatherKit.EditorTools
             return fields;
         }
 
-        private static bool IsGeneric(Type type, Type genericDefinition)
+        public static bool IsGeneric(Type type, Type genericDefinition)
         {
             return type.IsGenericType && type.GetGenericTypeDefinition() == genericDefinition;
         }
 
-        private static bool IsNestedData(Type type)
+        public static bool IsNestedData(Type type)
         {
             return type.IsSerializable && !type.IsPrimitive && !type.IsEnum && type != typeof(string)
                    && !typeof(Object).IsAssignableFrom(type) && type.Namespace?.StartsWith("UnityEngine") != true;
@@ -344,5 +370,8 @@ namespace FeatherKit.EditorTools
 
         /// <summary>Ошибка — граф так не сработает; иначе предупреждение.</summary>
         public bool IsError { get; }
+
+        /// <summary>Блок хранит поля прежней версии — лечится кнопкой Upgrade Fields.</summary>
+        public bool IsOldFields { get; set; }
     }
 }

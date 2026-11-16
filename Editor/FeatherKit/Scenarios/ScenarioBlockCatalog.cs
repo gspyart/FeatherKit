@@ -9,7 +9,7 @@ namespace FeatherKit.EditorTools
 {
     /// <summary>
     /// Какие блоки сценария есть в проекте — и в FeatherKit, и в игре.
-    /// Отдаёт их путь в меню «+», название и описание; ищет один раз за перезагрузку домена.
+    /// Отдаёт их путь в меню «+», название и описание; ищет один раз за перезагрузку домена. Устаревшие ([Obsolete]) не предлагает.
     /// </summary>
     internal static class ScenarioBlockCatalog
     {
@@ -22,10 +22,10 @@ namespace FeatherKit.EditorTools
             if (BlockTypesByBaseType.TryGetValue(baseType, out var blockTypes))
                 return blockTypes;
 
-            // [Serializable] обязателен: без него SerializeReference блок не сохранит.
+            // [Serializable] обязателен: без него SerializeReference блок не сохранит. [Obsolete] — читается, но новым не предлагается.
             blockTypes = TypeCache.GetTypesDerivedFrom(baseType)
                 .Where(type => !type.IsAbstract && !type.IsGenericType && type.IsSerializable
-                               && type.GetConstructor(Type.EmptyTypes) != null)
+                               && type.GetConstructor(Type.EmptyTypes) != null && !type.IsDefined(typeof(ObsoleteAttribute), false))
                 .OrderBy(MenuPathOf)
                 .ToList();
 

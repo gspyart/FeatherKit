@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using FeatherKit.Scenarios;
 using UnityEditor;
 using UnityEngine;
@@ -11,7 +12,7 @@ namespace FeatherKit.EditorTools
     /// - в файл: объекты сцены, которые поля читают, — в открытые переменные и привязки этого объекта (ScenarioSceneObjectExtraction);
     ///   объект сцены в обычном поле блока — отказ со списком полей
     /// - в объект: копия графа файла, привязки этого объекта — в начальные значения, «Set on Object» снимается
-    /// - граф с нодами пропавших классов не переносится: их данные не копирует ни один способ Unity — отказ, а не тихая потеря
+    /// - ноды пропавших классов: их данные не копирует ни один способ Unity — отказ с именами; «Delete Anyway» переносит без них
     /// Копия — сериализацией Unity, а не текстом: объекты сцены целы. Одна запись undo у сценария.
     /// </summary>
     internal static class ScenarioGraphFileConverter
@@ -39,16 +40,18 @@ namespace FeatherKit.EditorTools
         // ── В файл ───────────────────────────────────────────────────────
 
         /// <summary>Создать граф-файл из встроенного графа и переключить сценарий на него. Отказ — список причин, файл не создаётся.</summary>
-        public static List<string> MakeGraphFile(Scenario scenario, string assetPath)
+        public static List<string> MakeGraphFile(Scenario scenario, string assetPath, bool dropsMissingNodes = false)
         {
-            var missingClasses = MissingClassesOf(scenario);
+            var missingClasses = MissingClassesMessageOf(scenario);
 
-            if (missingClasses.Count > 0)
-                return missingClasses;
+            if (missingClasses != null && !dropsMissingNodes)
+                return new List<string> { missingClasses };
 
             // Поле графа у компонента и у файла называется одинаково — Unity копирует его целиком, со ссылками на сцену.
             var asset = ScriptableObject.CreateInstance<ScenarioGraphAsset>();
             EditorUtility.CopySerializedManagedFieldsOnly(scenario, asset);
+
+            RemoveLostNodes(new SerializedObject(asset), asset.Graph);
 
             var extraction = new ScenarioSceneObjectExtraction(asset);
             extraction.Plan();
@@ -84,12 +87,12 @@ namespace FeatherKit.EditorTools
         // ── В объект ─────────────────────────────────────────────────────
 
         /// <summary>Скопировать граф-файл в объект. Отказ — список причин, объект не меняется.</summary>
-        public static List<string> EmbedInObject(Scenario scenario)
+        public static List<string> EmbedInObject(Scenario scenario, bool dropsMissingNodes = false)
         {
-            var missingClasses = MissingClassesOf(scenario.GraphAsset);
+            var missingClasses = MissingClassesMessageOf(scenario.GraphAsset);
 
-            if (missingClasses.Count > 0)
-                return missingClasses;
+            if (missingClasses != null && !dropsMissingNodes)
+                return new List<string> { missingClasses };
 
             var boundValues = scenario.VariableBindings.Where(binding => binding != null)
                 .ToDictionary(binding => binding.VariableId, binding => CopyOf(binding.Value));
@@ -118,6 +121,7 @@ namespace FeatherKit.EditorTools
             serializedScenario.FindProperty(GraphAssetPropertyName).objectReferenceValue = null;
             serializedScenario.FindProperty(ScenarioBindingsEditing.BindingsPropertyName).arraySize = 0;
             serializedScenario.ApplyModifiedProperties();
+            RemoveLostNodes(serializedScenario, scenario.Graph);
 
             return new List<string>();
         }
@@ -125,20 +129,52 @@ namespace FeatherKit.EditorTools
 
         // ── Общие помощники ──────────────────────────────────────────────
 
-        // Проверено: Instantiate, CopySerializedManagedFieldsOnly, CopyFromSerializedProperty и boxedValue такие ноды теряют.
-        private static List<string> MissingClassesOf(Object graphOwner)
+        /// <summary>
+        /// Что сказать о нодах и блоках пропавших классов: класс и нода с подписью и id. Null — таких нет.
+        /// Проверено: Instantiate, CopySerializedManagedFieldsOnly, CopyFromSerializedProperty и boxedValue их данные теряют.
+        /// </summary>
+        public static string MissingClassesMessageOf(Object graphOwner)
         {
-            if (!SerializationUtility.HasManagedReferencesWithMissingTypes(graphOwner))
-                return new List<string>();
+            if (graphOwner == null || !SerializationUtility.HasManagedReferencesWithMissingTypes(graphOwner))
+                return null;
 
-            var classNames = SerializationUtility.GetManagedReferencesWithMissingTypes(graphOwner)
-                .Select(missing => missing.className).Distinct();
+            var entries = SerializationUtility.GetManagedReferencesWithMissingTypes(graphOwner).Select(DescribeMissing).Distinct();
 
-            return new List<string>
+            return $"Missing classes: {string.Join(", ", entries)} — restore the class or rename it back with [MovedFrom], or delete the node.";
+        }
+
+        private static string DescribeMissing(ManagedReferenceMissingType missing)
+        {
+            var data = missing.serializedData ?? "";
+            var idMatch = Regex.Match(data, @"(?m)^id:\s*(-?\d+)");
+            var titleMatch = Regex.Match(data, @"(?m)^customTitle:\s*(.*)$");
+
+            if (!idMatch.Success || !titleMatch.Success)
+                return $"{missing.className} (block)";
+
+            var title = titleMatch.Groups[1].Value.Trim();
+
+            return string.IsNullOrEmpty(title)
+                ? $"{missing.className} (node id {idMatch.Groups[1].Value})"
+                : $"{missing.className} (node “{title}”, id {idMatch.Groups[1].Value})";
+        }
+
+        // Копия теряет ноды пропавших классов: убираем пустые места в списке нод и провода к ним — без висящих проводов.
+        private static void RemoveLostNodes(SerializedObject serializedOwner, ScenarioGraph graph)
+        {
+            serializedOwner.Update();
+            var nodes = serializedOwner.FindProperty($"{ScenarioGraphHost.GraphPropertyPath}.nodes");
+
+            for (var index = nodes.arraySize - 1; index >= 0; index--)
             {
-                $"The graph has nodes or blocks of missing classes: {string.Join(", ", classNames)}. "
-                + "They can't be copied — remove them or bring their classes back first."
-            };
+                if (nodes.GetArrayElementAtIndex(index).managedReferenceValue == null)
+                    nodes.DeleteArrayElementAtIndex(index);
+            }
+
+            serializedOwner.ApplyModifiedPropertiesWithoutUndo();
+
+            foreach (var wire in graph.Wires.Where(wire => graph.FindNode(wire.FromNodeId) == null || graph.FindNode(wire.ToNodeId) == null).ToList())
+                graph.Disconnect(wire);
         }
 
         private static ScenarioVariableValue CopyOf(ScenarioVariableValue value)

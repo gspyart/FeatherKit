@@ -73,7 +73,7 @@ namespace FeatherKit.EditorTools
             if (graph != null)
             {
                 menu.AddSeparator("");
-                ScenarioVariablePicking.AddNewVariableItem(menu, "New Variable…", variableId, valueType, fieldName);
+                ScenarioVariablePicking.AddNewVariableItem(menu, "New Variable…", variableId, valueType, fieldName, isFilledByGraph: true);
             }
 
             menu.ShowAsContext();

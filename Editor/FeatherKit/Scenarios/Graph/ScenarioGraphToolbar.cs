@@ -15,7 +15,7 @@ namespace FeatherKit.EditorTools
     /// <summary>
     /// Шапка окна графа — часть ScenarioGraphWindow: что открыто и есть ли несохранённое.
     /// - крошки с иконками: сцена или префаб ▸ объект ▸ Scenario, или граф-файл ▸ via объект; клик выделяет и пингует
-    /// - Lock, Frame All, миникарта, Select, Save; «Make Graph File» и «Embed in Object» (ScenarioGraphFileConverter)
+    /// - Lock, Frame All, миникарта, Select, Save; команды над графом целиком — частью ScenarioGraphFileCommands
     /// - полосы под шапкой: Play Mode и «граф-файл на N объектах»; в игре у граф-файла — «Debug: объект» для подсветки
     /// </summary>
     internal class ScenarioGraphToolbar
@@ -32,8 +32,7 @@ namespace FeatherKit.EditorTools
         private readonly Image lockIcon;
         private readonly ToolbarButton selectButton;
         private readonly ToolbarButton saveButton;
-        private readonly ToolbarButton makeGraphFileButton;
-        private readonly ToolbarButton embedButton;
+        private readonly ScenarioGraphFileCommands fileCommands;
         private readonly ToolbarMenu debugTargetMenu;
         private readonly VisualElement playModeBar;
         private readonly VisualElement sharedFileBar;
@@ -85,12 +84,10 @@ namespace FeatherKit.EditorTools
             toolbar.Add(selectButton);
             saveButton = IconButton(ScenarioIcons.Save, "Save", "Save the scene, prefab or graph file that holds the graph", () => graphView.Host?.Save());
             toolbar.Add(saveButton);
-            makeGraphFileButton = IconButton(ScenarioIcons.GraphFile, "Make Graph File",
-                "Move this graph into a graph file other objects can share; scene objects become Set on Object variables", MakeGraphFile);
-            toolbar.Add(makeGraphFileButton);
-            embedButton = IconButton(ScenarioIcons.TypeIcon(typeof(Scenario)), "Embed in Object",
-                "Copy the graph file into this object only; its Set on Object values become the variables' values", EmbedInObject);
-            toolbar.Add(embedButton);
+            fileCommands = new ScenarioGraphFileCommands(window, graphView);
+            toolbar.Add(fileCommands.ConvertButton);
+            toolbar.Add(fileCommands.MakeGraphFileButton);
+            toolbar.Add(fileCommands.EmbedButton);
 
             Root.Add(toolbar);
 
@@ -101,6 +98,7 @@ namespace FeatherKit.EditorTools
             sharedFileText = sharedFileBar.Q<Label>();
             sharedFileBar.Add(new Button(FindAllUsers) { text = "Find All", tooltip = "Find every scene and prefab using this file" });
             Root.Add(sharedFileBar);
+            Root.Add(fileCommands.OldFieldsBar);
         }
 
 
@@ -128,8 +126,7 @@ namespace FeatherKit.EditorTools
             window.titleContent = new GUIContent(isDirty ? WindowTitle + DirtyMark : WindowTitle, ScenarioIcons.Flow);
 
             saveButton.SetEnabled(isDirty);
-            makeGraphFileButton.style.display = ScenarioGraphFileConverter.CanMakeGraphFile(host) ? DisplayStyle.Flex : DisplayStyle.None;
-            embedButton.style.display = ScenarioGraphFileConverter.CanEmbed(host) ? DisplayStyle.Flex : DisplayStyle.None;
+            fileCommands.Refresh(host);
             selectButton.SetEnabled(host is { IsAlive: true });
             selectButton.tooltip = host is { IsAlive: true } ? $"Select {SelectedObjectOf(host).name}" : "";
 
@@ -270,60 +267,6 @@ namespace FeatherKit.EditorTools
             Refresh();
         }
 
-        private void MakeGraphFile()
-        {
-            var host = graphView.Host;
-
-            if (!ScenarioGraphFileConverter.CanMakeGraphFile(host))
-                return;
-
-            var scenePath = host.Scenario.gameObject.scene.path;
-            var folder = string.IsNullOrEmpty(scenePath) ? "Assets" : Path.GetDirectoryName(scenePath);
-            var path = EditorUtility.SaveFilePanelInProject("Make Graph File", $"{host.Scenario.name} Graph", "asset",
-                "Where to save the graph file", folder);
-
-            if (string.IsNullOrEmpty(path))
-                return;
-
-            var refusals = ScenarioGraphFileConverter.MakeGraphFile(host.Scenario, path);
-
-            if (refusals.Count > 0)
-            {
-                EditorUtility.DisplayDialog("Make Graph File",
-                    "Can't move the graph to a file:\n\n" + string.Join("\n", refusals.Take(15).Select(refusal => "• " + refusal))
-                    + "\n\nScene objects in plain block fields can't use a variable, so a graph file can't keep them. Nothing was changed.", "OK");
-                return;
-            }
-
-            window.ShowCurrentGraph();
-        }
-
-        private void EmbedInObject()
-        {
-            var host = graphView.Host;
-
-            if (!ScenarioGraphFileConverter.CanEmbed(host))
-                return;
-
-            var isConfirmed = EditorUtility.DisplayDialog("Embed in Object",
-                $"Copy “{host.Owner.name}” into {host.Scenario.name}? The object stops using the file; the file itself stays as it is.",
-                "Embed", "Cancel");
-
-            if (!isConfirmed)
-                return;
-
-            var refusals = ScenarioGraphFileConverter.EmbedInObject(host.Scenario);
-
-            if (refusals.Count > 0)
-            {
-                EditorUtility.DisplayDialog("Embed in Object", string.Join("\n", refusals) + "\n\nNothing was changed.", "OK");
-                return;
-            }
-
-            window.ShowCurrentGraph();
-        }
-
-
         private void SelectOwner()
         {
             if (graphView.Host is { IsAlive: true } host)
@@ -350,7 +293,7 @@ namespace FeatherKit.EditorTools
 
         // ── Общие помощники ──────────────────────────────────────────────
 
-        private static ToolbarButton IconButton(Texture icon, string text, string tooltip, Action clicked)
+        public static ToolbarButton IconButton(Texture icon, string text, string tooltip, Action clicked)
         {
             var button = new ToolbarButton(clicked) { tooltip = tooltip };
             button.AddToClassList("scenario-toolbar__button");
@@ -364,7 +307,7 @@ namespace FeatherKit.EditorTools
             return button;
         }
 
-        private static VisualElement Bar(string modifierClass, string text)
+        public static VisualElement Bar(string modifierClass, string text)
         {
             var bar = new VisualElement();
             bar.AddToClassList("scenario-bar");
