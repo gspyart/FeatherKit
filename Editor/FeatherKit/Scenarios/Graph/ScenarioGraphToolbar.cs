@@ -290,9 +290,8 @@ namespace FeatherKit.EditorTools
             if (refusals.Count > 0)
             {
                 EditorUtility.DisplayDialog("Make Graph File",
-                    "These fields hold scene objects and can't use a variable, so a graph file can't keep them:\n\n"
-                    + string.Join("\n", refusals.Take(15).Select(refusal => "• " + refusal))
-                    + "\n\nNothing was changed.", "OK");
+                    "Can't move the graph to a file:\n\n" + string.Join("\n", refusals.Take(15).Select(refusal => "• " + refusal))
+                    + "\n\nScene objects in plain block fields can't use a variable, so a graph file can't keep them. Nothing was changed.", "OK");
                 return;
             }
 
@@ -313,7 +312,14 @@ namespace FeatherKit.EditorTools
             if (!isConfirmed)
                 return;
 
-            ScenarioGraphFileConverter.EmbedInObject(host.Scenario);
+            var refusals = ScenarioGraphFileConverter.EmbedInObject(host.Scenario);
+
+            if (refusals.Count > 0)
+            {
+                EditorUtility.DisplayDialog("Embed in Object", string.Join("\n", refusals) + "\n\nNothing was changed.", "OK");
+                return;
+            }
+
             window.ShowCurrentGraph();
         }
 

@@ -7,7 +7,7 @@ namespace FeatherKit.EditorTools
 {
     /// <summary>
     /// Правки рамок графа — часть ScenarioGraphEditing: создать из нод, переименовать, перекрасить, сменить состав, удалить.
-    /// Нода живёт не больше чем в одной рамке: попав в новую, из старой уходит.
+    /// Нода живёт не больше чем в одной рамке: попав в новую, из старой уходит. Рамка без нод удаляется.
     /// </summary>
     internal class ScenarioGroupEditing
     {
@@ -73,6 +73,9 @@ namespace FeatherKit.EditorTools
 
                 foreach (var nodeId in wanted)
                     MoveNodeInto(group, Graph.FindNode(nodeId));
+
+                if (group.NodeIds.Count == 0)
+                    Graph.RemoveGroup(group.Id);
             });
         }
 
@@ -91,7 +94,16 @@ namespace FeatherKit.EditorTools
         }
 
 
-        /// <summary>Нода в рамку — из прежней рамки она уходит.</summary>
+        /// <summary>Рамка, из которой ушла последняя нода, не нужна. Звать внутри записи undo удаления нод.</summary>
+        public void RemoveEmptied(IEnumerable<int> removedNodeIds)
+        {
+            var removed = new HashSet<int>(removedNodeIds);
+
+            foreach (var group in Graph.Groups.Where(group => group != null && group.NodeIds.All(removed.Contains)).ToList())
+                Graph.RemoveGroup(group.Id);
+        }
+
+        /// <summary>Нода в рамку — из прежней рамки она уходит. Звать внутри записи undo.</summary>
         public void MoveNodeInto(ScenarioGroup group, ScenarioNode node)
         {
             foreach (var other in Graph.Groups)

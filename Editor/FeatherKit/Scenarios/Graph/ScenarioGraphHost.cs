@@ -83,10 +83,11 @@ namespace FeatherKit.EditorTools
                 if (!IsAlive)
                     return false;
 
-                if (EditorUtility.IsPersistent(Owner))
+                // Граф-файл, собранный кодом и ещё не сохранённый, — не компонент, но и не на диске.
+                if (EditorUtility.IsPersistent(Owner) || Owner is not Component component)
                     return EditorUtility.IsDirty(Owner);
 
-                var gameObject = ((Component)Owner).gameObject;
+                var gameObject = component.gameObject;
                 var prefabStage = PrefabStageUtility.GetPrefabStage(gameObject);
 
                 return prefabStage != null ? prefabStage.scene.isDirty : gameObject.scene.isDirty;
@@ -182,7 +183,11 @@ namespace FeatherKit.EditorTools
                 return;
             }
 
-            var gameObject = ((Component)Owner).gameObject;
+            // Граф-файл не на диске сохранять некуда — его создатель решает, куда.
+            if (Owner is not Component component)
+                return;
+
+            var gameObject = component.gameObject;
             var prefabStage = PrefabStageUtility.GetPrefabStage(gameObject);
 
             if (prefabStage != null)

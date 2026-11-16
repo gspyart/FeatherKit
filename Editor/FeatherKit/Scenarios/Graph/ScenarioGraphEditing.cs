@@ -108,6 +108,8 @@ namespace FeatherKit.EditorTools
             {
                 foreach (var nodeId in existingIds)
                     Graph.RemoveNode(nodeId);
+
+                Groups.RemoveEmptied(existingIds);
             });
         }
 

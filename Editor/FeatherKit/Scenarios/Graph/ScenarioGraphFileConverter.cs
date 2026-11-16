@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using FeatherKit.Scenarios;
 using UnityEditor;
 using UnityEngine;
@@ -9,22 +8,18 @@ namespace FeatherKit.EditorTools
 {
     /// <summary>
     /// Граф объекта ↔ граф-файл — кнопки «Make Graph File» и «Embed in Object» в шапке окна графа.
-    /// - в файл: объекты сцены из полей «значение или переменная», целей, точек и списков уходят в открытые переменные
-    ///   и привязки этого объекта; объект сцены в обычном поле блока — отказ со списком таких полей
+    /// - в файл: объекты сцены, которые поля читают, — в открытые переменные и привязки этого объекта (ScenarioSceneObjectExtraction);
+    ///   объект сцены в обычном поле блока — отказ со списком полей
     /// - в объект: копия графа файла, привязки этого объекта — в начальные значения, «Set on Object» снимается
-    /// Всё одной записью undo у сценария; созданный файл undo не удаляет.
+    /// - граф с нодами пропавших классов не переносится: их данные не копирует ни один способ Unity — отказ, а не тихая потеря
+    /// Копия — сериализацией Unity, а не текстом: объекты сцены целы. Одна запись undo у сценария.
     /// </summary>
     internal static class ScenarioGraphFileConverter
     {
         private const string MakeUndoName = "Make Graph File";
         private const string EmbedUndoName = "Embed Graph in Object";
-
-        private static readonly Regex ValuePath = new Regex(@"^(.+)\.value$");
-        private static readonly Regex TargetPath = new Regex(@"^(.+)\.specificObject$");
-        private static readonly Regex PointPath = new Regex(@"^(.+)\.targetTransform$");
-        private static readonly Regex ListItemPath = new Regex(@"^(.+)\.items\.Array\.data\[\d+\]$");
-        private static readonly Regex VariableValuePath = new Regex(@"^graph\.variables\.Array\.data\[(\d+)\]\.initialValue\.");
-        private static readonly Regex NodePath = new Regex(@"^graph\.nodes\.Array\.data\[(\d+)\]");
+        private const string GraphSourcePropertyName = "graphSource";
+        private const string GraphAssetPropertyName = "graphAsset";
 
 
         // ── Можно ли ─────────────────────────────────────────────────────
@@ -43,19 +38,20 @@ namespace FeatherKit.EditorTools
 
         // ── В файл ───────────────────────────────────────────────────────
 
-        /// <summary>Создать граф-файл из встроенного графа и переключить сценарий на него. Отказ — список полей с объектами сцены, файл не создаётся.</summary>
+        /// <summary>Создать граф-файл из встроенного графа и переключить сценарий на него. Отказ — список причин, файл не создаётся.</summary>
         public static List<string> MakeGraphFile(Scenario scenario, string assetPath)
         {
-            var asset = ScriptableObject.CreateInstance<ScenarioGraphAsset>();
-            asset.Graph = DeepCopy(scenario.Graph);
+            var missingClasses = MissingClassesOf(scenario);
 
-            // Копия через текст теряет объекты сцены, а они-то и нужны: кладём на те же места до разбора.
-            var sceneReferences = ScenarioSceneReferences.Collect(new SerializedObject(scenario).FindProperty(ScenarioGraphHost.GraphPropertyPath),
-                ScenarioGraphHost.GraphPropertyPath);
-            ScenarioSceneReferences.Restore(new SerializedObject(asset), sceneReferences);
+            if (missingClasses.Count > 0)
+                return missingClasses;
+
+            // Поле графа у компонента и у файла называется одинаково — Unity копирует его целиком, со ссылками на сцену.
+            var asset = ScriptableObject.CreateInstance<ScenarioGraphAsset>();
+            EditorUtility.CopySerializedManagedFieldsOnly(scenario, asset);
 
             var extraction = new ScenarioSceneObjectExtraction(asset);
-            extraction.Run();
+            extraction.Plan();
 
             if (extraction.Refusals.Count > 0)
             {
@@ -67,10 +63,10 @@ namespace FeatherKit.EditorTools
             AssetDatabase.CreateAsset(asset, assetPath);
             AssetDatabase.SaveAssetIfDirty(asset);
 
-            var serializedScenario = new SerializedObject(scenario);
             Undo.RecordObject(scenario, MakeUndoName);
-            serializedScenario.FindProperty("graphSource").enumValueIndex = (int)ScenarioGraphSource.Asset;
-            serializedScenario.FindProperty("graphAsset").objectReferenceValue = asset;
+            var serializedScenario = new SerializedObject(scenario);
+            serializedScenario.FindProperty(GraphSourcePropertyName).enumValueIndex = (int)ScenarioGraphSource.Asset;
+            serializedScenario.FindProperty(GraphAssetPropertyName).objectReferenceValue = asset;
             serializedScenario.FindProperty(ScenarioGraphHost.GraphPropertyPath).boxedValue = new ScenarioGraph();
             serializedScenario.FindProperty(ScenarioBindingsEditing.BindingsPropertyName).arraySize = 0;
 
@@ -87,202 +83,77 @@ namespace FeatherKit.EditorTools
 
         // ── В объект ─────────────────────────────────────────────────────
 
-        public static void EmbedInObject(Scenario scenario)
+        /// <summary>Скопировать граф-файл в объект. Отказ — список причин, объект не меняется.</summary>
+        public static List<string> EmbedInObject(Scenario scenario)
         {
-            var graph = DeepCopy(scenario.GraphAsset.Graph);
+            var missingClasses = MissingClassesOf(scenario.GraphAsset);
 
-            foreach (var variable in graph.Variables.Where(variable => variable is { IsExposed: true }))
-            {
-                var binding = scenario.VariableBindings.FirstOrDefault(candidate => candidate.VariableId == variable.Id);
+            if (missingClasses.Count > 0)
+                return missingClasses;
 
-                if (binding != null)
-                    CopyValue(binding.Value, variable.InitialValue);
+            var boundValues = scenario.VariableBindings.Where(binding => binding != null)
+                .ToDictionary(binding => binding.VariableId, binding => CopyOf(binding.Value));
 
-                variable.IsExposed = false;
-            }
+            Undo.RecordObject(scenario, EmbedUndoName);
+            EditorUtility.CopySerializedManagedFieldsOnly(scenario.GraphAsset, scenario);
 
             var serializedScenario = new SerializedObject(scenario);
-            Undo.RecordObject(scenario, EmbedUndoName);
-            serializedScenario.FindProperty(ScenarioGraphHost.GraphPropertyPath).boxedValue = graph;
-            serializedScenario.FindProperty("graphSource").enumValueIndex = (int)ScenarioGraphSource.Embedded;
-            serializedScenario.FindProperty("graphAsset").objectReferenceValue = null;
+            var variables = serializedScenario.FindProperty($"{ScenarioGraphHost.GraphPropertyPath}.variables");
+
+            for (var index = 0; index < variables.arraySize; index++)
+            {
+                var variable = variables.GetArrayElementAtIndex(index);
+                var isExposed = variable.FindPropertyRelative("isExposed");
+
+                if (!isExposed.boolValue)
+                    continue;
+
+                if (boundValues.TryGetValue(variable.FindPropertyRelative("id").stringValue, out var boundValue))
+                    variable.FindPropertyRelative("initialValue").boxedValue = boundValue;
+
+                isExposed.boolValue = false;
+            }
+
+            serializedScenario.FindProperty(GraphSourcePropertyName).enumValueIndex = (int)ScenarioGraphSource.Embedded;
+            serializedScenario.FindProperty(GraphAssetPropertyName).objectReferenceValue = null;
             serializedScenario.FindProperty(ScenarioBindingsEditing.BindingsPropertyName).arraySize = 0;
             serializedScenario.ApplyModifiedProperties();
+
+            return new List<string>();
         }
 
 
         // ── Общие помощники ──────────────────────────────────────────────
 
-        /// <summary>Глубокая копия графа: свои ноды и блоки, ни одной общей ссылки с исходным. Ассеты целы, объекты сцены — пусты.</summary>
-        public static ScenarioGraph DeepCopy(ScenarioGraph graph)
+        // Проверено: Instantiate, CopySerializedManagedFieldsOnly, CopyFromSerializedProperty и boxedValue такие ноды теряют.
+        private static List<string> MissingClassesOf(Object graphOwner)
         {
-            var copy = new ScenarioGraph();
-            EditorJsonUtility.FromJsonOverwrite(EditorJsonUtility.ToJson(graph), copy);
+            if (!SerializationUtility.HasManagedReferencesWithMissingTypes(graphOwner))
+                return new List<string>();
 
-            return copy;
+            var classNames = SerializationUtility.GetManagedReferencesWithMissingTypes(graphOwner)
+                .Select(missing => missing.className).Distinct();
+
+            return new List<string>
+            {
+                $"The graph has nodes or blocks of missing classes: {string.Join(", ", classNames)}. "
+                + "They can't be copied — remove them or bring their classes back first."
+            };
         }
 
-        public static void CopyValue(ScenarioVariableValue from, ScenarioVariableValue to)
+        private static ScenarioVariableValue CopyOf(ScenarioVariableValue value)
         {
-            to.FlagValue = from.FlagValue;
-            to.CounterValue = from.CounterValue;
-            to.NumberValue = from.NumberValue;
-            to.ObjectValue = from.ObjectValue;
-            to.VectorValue = from.VectorValue;
-            to.TextValue = from.TextValue;
-            to.ColorValue = from.ColorValue;
-            to.ObjectListValue = new List<Object>(from.ObjectListValue);
-        }
-
-
-        /// <summary>
-        /// Поиск объектов сцены в копии графа для файла: что куда перенести и где отказать.
-        /// Переносится в переменные и значения привязок; один объект в нескольких полях — одна переменная.
-        /// </summary>
-        private class ScenarioSceneObjectExtraction
-        {
-            private readonly ScenarioGraphAsset asset;
-            private readonly SerializedObject serializedAsset;
-            private readonly List<ScenarioVariableDefinition> newVariables = new List<ScenarioVariableDefinition>();
-            private readonly Dictionary<Object, ScenarioVariableDefinition> variablesByObject = new Dictionary<Object, ScenarioVariableDefinition>();
-            private readonly HashSet<string> handledListPaths = new HashSet<string>();
-
-
-            public ScenarioSceneObjectExtraction(ScenarioGraphAsset asset)
+            return new ScenarioVariableValue
             {
-                this.asset = asset;
-                serializedAsset = new SerializedObject(asset);
-            }
-
-
-            public List<string> Refusals { get; } = new List<string>();
-
-            public Dictionary<string, ScenarioVariableValue> BoundValues { get; } = new Dictionary<string, ScenarioVariableValue>();
-
-
-            public void Run()
-            {
-                var property = serializedAsset.GetIterator();
-
-                while (property.Next(true))
-                {
-                    if (property.propertyType == SerializedPropertyType.ObjectReference && property.objectReferenceValue != null
-                                                                                         && !EditorUtility.IsPersistent(property.objectReferenceValue))
-                        Extract(property.Copy());
-                }
-            }
-
-            /// <summary>Записать переносы в копию графа: сначала поля, потом новые переменные — в обход SerializedObject.</summary>
-            public void Apply()
-            {
-                serializedAsset.ApplyModifiedPropertiesWithoutUndo();
-
-                foreach (var variable in newVariables)
-                    asset.Graph.AddVariable(variable);
-            }
-
-
-            private void Extract(SerializedProperty property)
-            {
-                var path = property.propertyPath;
-                Match match;
-
-                if ((match = ListItemPath.Match(path)).Success && HasVariableId(match.Groups[1].Value))
-                    ExtractList(match.Groups[1].Value);
-                else if ((match = VariableValuePath.Match(path)).Success)
-                    ExposeVariable(int.Parse(match.Groups[1].Value));
-                else if ((match = ValuePath.Match(path)).Success && HasVariableId(match.Groups[1].Value))
-                    MoveToVariable(property, match.Groups[1].Value, property.objectReferenceValue.GetType(), null);
-                else if ((match = TargetPath.Match(path)).Success && HasVariableId(match.Groups[1].Value))
-                    MoveToVariable(property, match.Groups[1].Value, typeof(GameObject), (int)ScenarioTargetKind.Variable);
-                else if ((match = PointPath.Match(path)).Success && HasVariableId(match.Groups[1].Value))
-                    MoveToVariable(property, match.Groups[1].Value, typeof(Transform), (int)ScenarioPointKind.Variable);
-                else
-                    Refusals.Add($"{NodeTitleOf(path)} · {property.displayName}: {property.objectReferenceValue.name}");
-            }
-
-            private bool HasVariableId(string ownerPath)
-            {
-                return serializedAsset.FindProperty($"{ownerPath}.{ScenarioVariablePicking.VariableIdPropertyName}") != null;
-            }
-
-            // Поле «значение», цель или точка: переменная Object с этим объектом в привязке; у цели и точки — вид «переменная».
-            private void MoveToVariable(SerializedProperty property, string ownerPath, System.Type objectType, int? variableKindIndex)
-            {
-                var sceneObject = property.objectReferenceValue;
-
-                if (!variablesByObject.TryGetValue(sceneObject, out var variable))
-                {
-                    variable = AddVariable(sceneObject.name, ScenarioVariableKind.Object, objectType);
-                    variablesByObject[sceneObject] = variable;
-                    BoundValues[variable.Id] = new ScenarioVariableValue { ObjectValue = sceneObject };
-                }
-
-                serializedAsset.FindProperty($"{ownerPath}.{ScenarioVariablePicking.VariableIdPropertyName}").stringValue = variable.Id;
-                property.objectReferenceValue = null;
-
-                if (variableKindIndex.HasValue)
-                    serializedAsset.FindProperty($"{ownerPath}.kind").enumValueIndex = variableKindIndex.Value;
-            }
-
-            // Список целиком — в одну переменную Object List: тип элемента — по первому объекту.
-            private void ExtractList(string ownerPath)
-            {
-                if (!handledListPaths.Add(ownerPath))
-                    return;
-
-                var items = serializedAsset.FindProperty($"{ownerPath}.items");
-                var objects = Enumerable.Range(0, items.arraySize).Select(index => items.GetArrayElementAtIndex(index).objectReferenceValue).ToList();
-                var firstObject = objects.First(item => item != null);
-                var variable = AddVariable(serializedAsset.FindProperty(ownerPath).displayName, ScenarioVariableKind.ObjectList, firstObject.GetType());
-
-                BoundValues[variable.Id] = new ScenarioVariableValue { ObjectListValue = objects };
-                serializedAsset.FindProperty($"{ownerPath}.{ScenarioVariablePicking.VariableIdPropertyName}").stringValue = variable.Id;
-                items.arraySize = 0;
-            }
-
-            // Переменная графа уже держала объект сцены: она становится открытой, объект — в привязку.
-            private void ExposeVariable(int variableIndex)
-            {
-                var variableProperty = serializedAsset.FindProperty($"{ScenarioGraphHost.GraphPropertyPath}.variables.Array.data[{variableIndex}]");
-                var variableId = variableProperty.FindPropertyRelative("id").stringValue;
-
-                if (BoundValues.ContainsKey(variableId))
-                    return;
-
-                var initialValue = variableProperty.FindPropertyRelative("initialValue");
-                var value = (ScenarioVariableValue)initialValue.boxedValue;
-
-                BoundValues[variableId] = value;
-                variableProperty.FindPropertyRelative("isExposed").boolValue = true;
-                initialValue.boxedValue = new ScenarioVariableValue();
-            }
-
-            private ScenarioVariableDefinition AddVariable(string name, ScenarioVariableKind kind, System.Type objectType)
-            {
-                var takenNames = asset.Graph.Variables.Select(variable => variable.Name).Concat(newVariables.Select(variable => variable.Name)).ToList();
-                var uniqueName = name;
-
-                for (var number = 2; takenNames.Contains(uniqueName); number++)
-                    uniqueName = $"{name} {number}";
-
-                var variable = new ScenarioVariableDefinition(uniqueName, kind) { ObjectType = objectType, IsExposed = true };
-                newVariables.Add(variable);
-
-                return variable;
-            }
-
-            private string NodeTitleOf(string path)
-            {
-                var match = NodePath.Match(path);
-
-                if (!match.Success)
-                    return "Graph";
-
-                var node = asset.Graph.Nodes[int.Parse(match.Groups[1].Value)];
-
-                return node != null ? node.Title : "Missing node";
-            }
+                FlagValue = value.FlagValue,
+                CounterValue = value.CounterValue,
+                NumberValue = value.NumberValue,
+                ObjectValue = value.ObjectValue,
+                VectorValue = value.VectorValue,
+                TextValue = value.TextValue,
+                ColorValue = value.ColorValue,
+                ObjectListValue = new List<Object>(value.ObjectListValue)
+            };
         }
     }
 }

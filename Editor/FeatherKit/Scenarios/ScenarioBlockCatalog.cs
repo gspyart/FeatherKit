@@ -14,6 +14,7 @@ namespace FeatherKit.EditorTools
     internal static class ScenarioBlockCatalog
     {
         private static readonly Dictionary<Type, List<Type>> BlockTypesByBaseType = new Dictionary<Type, List<Type>>();
+        private static readonly Dictionary<Type, string> DescriptionsByType = new Dictionary<Type, string>();
 
 
         public static IReadOnlyList<Type> BlockTypesOf(Type baseType)
@@ -47,7 +48,17 @@ namespace FeatherKit.EditorTools
         /// <summary>Что делает блок, одной фразой из [ScenarioBlock(Description = …)]; null — описания нет.</summary>
         public static string DescriptionOf(Type blockType)
         {
-            return ScenarioBlockAttribute.DescriptionOf(blockType);
+            if (blockType == null)
+                return null;
+
+            // Шапку каждой ноды подписывают при каждой пересборке холста: атрибут читаем один раз.
+            if (!DescriptionsByType.TryGetValue(blockType, out var description))
+            {
+                description = ScenarioBlockAttribute.DescriptionOf(blockType);
+                DescriptionsByType[blockType] = description;
+            }
+
+            return description;
         }
     }
 }

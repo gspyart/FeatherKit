@@ -103,28 +103,34 @@ namespace FeatherKit.EditorTools
             {
                 ScenarioCollapsedNodes.Remember(graphView.Host.Owner, NodeId, expanded);
                 graphView.Rebuild();
-            });
+            })
+            {
+                text = "▾",
+                tooltip = "Collapse the node to its ports"
+            };
 
             button.AddToClassList("scenario-node__collapse");
             titleContainer.Add(button);
         }
 
         /// <summary>Свернуть, если так запомнено. Звать, когда провода уже на месте: порты с проводами остаются видны.</summary>
-        public void ApplyRememberedCollapse()
+        public void ApplyRememberedCollapse(ICollection<int> collapsedNodeIds)
         {
-            SetCollapsed(ScenarioCollapsedNodes.IsCollapsed(graphView.Host.Owner, NodeId));
+            if (collapsedNodeIds.Contains(NodeId))
+                Collapse();
         }
 
         // Свёрнутая нода прячет поля и порты без проводов — как свёрнутая нода Shader Graph.
-        private void SetCollapsed(bool isCollapsed)
+        // Развёрнутой ничего делать не надо: пересчёт раскладки ноды дорог, а на холсте их сотни.
+        private void Collapse()
         {
-            expanded = !isCollapsed;
-            extensionContainer.style.display = isCollapsed ? DisplayStyle.None : DisplayStyle.Flex;
+            expanded = false;
+            extensionContainer.style.display = DisplayStyle.None;
             RefreshExpandedState();
 
             var button = titleContainer.Q<Button>(className: "scenario-node__collapse");
-            button.text = isCollapsed ? "▸" : "▾";
-            button.tooltip = isCollapsed ? "Expand the node" : "Collapse the node to its ports";
+            button.text = "▸";
+            button.tooltip = "Expand the node";
         }
 
 
@@ -211,7 +217,24 @@ namespace FeatherKit.EditorTools
 
         public static bool IsCollapsed(Object owner, int nodeId)
         {
-            return owner != null && Read(owner).Contains(nodeId.ToString());
+            return CollapsedNodeIds(owner).Contains(nodeId);
+        }
+
+        /// <summary>Все свёрнутые ноды графа — одним чтением на пересборку холста.</summary>
+        public static HashSet<int> CollapsedNodeIds(Object owner)
+        {
+            var nodeIds = new HashSet<int>();
+
+            if (owner == null)
+                return nodeIds;
+
+            foreach (var text in Read(owner))
+            {
+                if (int.TryParse(text, out var nodeId))
+                    nodeIds.Add(nodeId);
+            }
+
+            return nodeIds;
         }
 
         public static void Remember(Object owner, int nodeId, bool isCollapsed)

@@ -19,6 +19,7 @@ namespace FeatherKit.Tests.Scenarios
         private const string TempFolder = "Assets/ScenarioEditorTestTemp";
 
         private readonly List<Object> createdObjects = new List<Object>();
+        private readonly List<UnityEngine.SceneManagement.Scene> createdScenes = new List<UnityEngine.SceneManagement.Scene>();
 
 
         [TearDown]
@@ -31,6 +32,11 @@ namespace FeatherKit.Tests.Scenarios
             }
 
             createdObjects.Clear();
+
+            foreach (var scene in createdScenes.Where(scene => scene.IsValid()))
+                UnityEditor.SceneManagement.EditorSceneManager.ClosePreviewScene(scene);
+
+            createdScenes.Clear();
 
             if (AssetDatabase.IsValidFolder(TempFolder))
                 AssetDatabase.DeleteAsset(TempFolder);
@@ -116,7 +122,65 @@ namespace FeatherKit.Tests.Scenarios
         }
 
 
+        [Test]
+        public void Paste_IntoAnotherScene_ClearsObjectsAndReportsThem()
+        {
+            var sourceScene = TempScene();
+            var targetScene = TempScene();
+            var lamp = ObjectInScene("Lamp", sourceScene).AddComponent<Light>();
+            var source = ObjectInScene("Source", sourceScene).AddComponent<Scenario>();
+            var target = ObjectInScene("Target", targetScene).AddComponent<Scenario>();
+            var steps = source.Graph.AddNode(new ScenarioStepsNode(), Vector2.zero);
+            steps.AddStep(new ScenarioTestRecordPointAction(new ScenarioPoint(ScenarioPointKind.Object) { TargetTransform = lamp.transform }));
+            var editing = new ScenarioGraphEditing(ScenarioGraphHost.For(target));
+            var cleared = new List<string>();
+
+            var content = ScenarioGraphClipboard.Collect(ScenarioGraphHost.For(source), new[] { steps.Id }, new string[0], new string[0]);
+            var pastedIds = ScenarioGraphClipboard.Paste(editing, RoundTrip(content), Vector2.zero, cleared);
+
+            var pasted = (ScenarioTestRecordPointAction)editing.Host.NodeProperty(pastedIds[0])
+                .FindPropertyRelative("steps.actions.Array.data[0]").managedReferenceValue;
+            Assert.That(pasted.Point.TargetTransform, Is.Null, "Another scene's object can't be kept — it would be lost on save");
+            Assert.That(cleared, Has.Some.Contains("Lamp"), "The clearing is reported");
+        }
+
+        [Test]
+        public void Paste_OtherGraph_UsesVariableWithSameNameAndKind()
+        {
+            var source = ScenarioTestGraphs.ForEachOverList();
+            var forEach = ScenarioTestGraphs.FindNode<ScenarioForEachNode>(source, ScenarioTestGraphs.ForEachTitle);
+            var target = new ScenarioGraph();
+            var lamps = target.AddVariable(new ScenarioVariableDefinition(ScenarioTestGraphs.LampsVariableName, ScenarioVariableKind.ObjectList)
+                { ObjectType = typeof(Light) });
+            var editing = EditingOf(GraphFileWith(target));
+
+            var content = ScenarioGraphClipboard.Collect(ScenarioGraphHost.For(GraphFileWith(source)), new[] { forEach.Id }, new string[0], new string[0]);
+            var pastedIds = ScenarioGraphClipboard.Paste(editing, RoundTrip(content), Vector2.zero);
+
+            var pasted = (ScenarioForEachNode)target.FindNode(pastedIds[0]);
+            Assert.That(pasted.List.VariableId, Is.EqualTo(lamps.Id), "“Lamps” of the target graph, not a new “Lamps 2”");
+            Assert.That(target.Variables.Count(variable => variable.Name.StartsWith(ScenarioTestGraphs.LampsVariableName)), Is.EqualTo(1));
+        }
+
+
         // ── Рамки ────────────────────────────────────────────────────────
+
+        [Test]
+        public void Groups_DeletingLastNode_RemovesGroupInSameUndo()
+        {
+            var editing = EditingOf(GraphFileWith(ScenarioTestGraphs.GateAndOnce()));
+            var graph = editing.Host.Graph;
+            var gate = ScenarioTestGraphs.FindNode<ScenarioGateNode>(graph, ScenarioTestGraphs.GateTitle);
+            editing.Groups.Add(new[] { gate.Id });
+
+            Undo.IncrementCurrentGroup();
+            editing.RemoveNodes(new[] { gate.Id });
+            Assert.That(graph.Groups, Is.Empty, "An empty group would sit at (0,0)");
+
+            Undo.PerformUndo();
+            Assert.That(graph.Groups.Single().NodeIds, Is.EqualTo(new[] { gate.Id }), "One undo brings back both");
+        }
+
 
         [Test]
         public void Groups_NodeLivesInOneGroup_RemovingGroupKeepsNodes()
@@ -327,6 +391,24 @@ namespace FeatherKit.Tests.Scenarios
             createdObjects.Add(asset);
 
             return asset;
+        }
+
+        // Сцена-превью: отдельная сцена, которая не трогает открытые и не мешает несохранённой «Untitled».
+        private UnityEngine.SceneManagement.Scene TempScene()
+        {
+            var scene = UnityEditor.SceneManagement.EditorSceneManager.NewPreviewScene();
+            createdScenes.Add(scene);
+
+            return scene;
+        }
+
+        private GameObject ObjectInScene(string name, UnityEngine.SceneManagement.Scene scene)
+        {
+            var gameObject = SceneObject(name);
+            gameObject.hideFlags = HideFlags.DontSave;
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(gameObject, scene);
+
+            return gameObject;
         }
 
         // Скрытый и несохраняемый: тест не должен помечать изменённой открытую сцену.

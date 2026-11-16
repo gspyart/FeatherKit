@@ -32,6 +32,7 @@ namespace FeatherKit.EditorTools
 
         public ScenarioGraphView(EditorWindow window)
         {
+            Window = window;
             style.flexGrow = 1f;
             ApplyStyle(this);
 
@@ -67,6 +68,9 @@ namespace FeatherKit.EditorTools
         /// <summary>Холст пересобран из данных — для строки состояния и шапки окна.</summary>
         public event Action Rebuilt;
 
+
+        /// <summary>Окно холста — для плашек-уведомлений поверх него.</summary>
+        public EditorWindow Window { get; }
 
         public ScenarioGraphHost Host { get; private set; }
 
@@ -215,8 +219,10 @@ namespace FeatherKit.EditorTools
                 AddGroupViews();
                 AddWireViews();
 
+                var collapsedNodeIds = ScenarioCollapsedNodes.CollapsedNodeIds(Host.Owner);
+
                 foreach (var nodeView in nodes.ToList().OfType<ScenarioNodeView>())
-                    nodeView.ApplyRememberedCollapse();
+                    nodeView.ApplyRememberedCollapse(collapsedNodeIds);
             }
 
             shownFingerprint = FingerprintOf(Host);
@@ -294,9 +300,15 @@ namespace FeatherKit.EditorTools
                 if (group == null)
                     continue;
 
+                // Рамка без нод на холсте встала бы в (0,0) пустой: её не рисуем.
+                var nodeViews = group.NodeIds.Where(nodeViewsById.ContainsKey).Select(nodeId => (GraphElement)nodeViewsById[nodeId]).ToList();
+
+                if (nodeViews.Count == 0)
+                    continue;
+
                 var groupView = new ScenarioGroupView(this, group);
                 AddElement(groupView);
-                groupView.Fill(group.NodeIds.Where(nodeViewsById.ContainsKey).Select(nodeId => (GraphElement)nodeViewsById[nodeId]));
+                groupView.Fill(nodeViews);
             }
         }
 

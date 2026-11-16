@@ -13,13 +13,15 @@ namespace FeatherKit.EditorTools
     /// <summary>
     /// Копировать, вырезать, вставить и дублировать на холсте — часть ScenarioGraphView; Cmd/Ctrl+C, X, V, D.
     /// - ноды с проводами между ними, заметки, рамки; глубокая копия через EditorJsonUtility, у вставленного — новые id
-    /// - буфер — системный: вставка работает между окнами и графами; недостающие переменные создаются
-    /// - объекты сцены при вставке в граф-файл сбрасываются с предупреждением: файлу их не удержать
+    /// - буфер — системный: вставка работает между окнами и графами; переменная с тем же именем и видом — общая, иначе создаётся
+    /// - объект сцены, которого граф не удержит (граф-файл, другая сцена), сбрасывается — заметно, плашкой в окне
+    /// - ноды пропавших классов не копируются: о них — тоже плашкой
     /// </summary>
     internal class ScenarioGraphClipboard
     {
         private const string ClipboardPrefix = "FeatherKit.ScenarioGraph:";
         private const string DuplicateOperation = "Duplicate";
+        private const double NotificationSeconds = 5d;
         private static readonly Vector2 DuplicateShift = new Vector2(40f, 40f);
 
         private readonly ScenarioGraphView graphView;
@@ -45,6 +47,7 @@ namespace FeatherKit.EditorTools
                 return null;
 
             var selected = elements.ToList();
+            WarnAboutMissingNodes(selected.OfType<ScenarioMissingNodeView>().ToList());
             var groupIds = selected.OfType<ScenarioGroupView>().Select(groupView => groupView.GroupId).ToList();
             var nodeIds = selected.OfType<ScenarioNodeView>().Select(nodeView => nodeView.NodeId)
                 .Concat(groupIds.SelectMany(groupId => host.Graph.Groups.First(group => group.Id == groupId).NodeIds))
@@ -56,6 +59,17 @@ namespace FeatherKit.EditorTools
             Object.DestroyImmediate(content);
 
             return text;
+        }
+
+        // Ноду без класса не прочесть, а значит и не скопировать: сказать, а не терять молча.
+        private void WarnAboutMissingNodes(List<ScenarioMissingNodeView> missingNodes)
+        {
+            if (missingNodes.Count == 0)
+                return;
+
+            var message = $"Not copied — nodes of missing classes: {string.Join(", ", missingNodes.Select(node => node.title))}";
+            Debug.LogWarning(message, graphView.Host.Owner);
+            graphView.Window?.ShowNotification(new GUIContent(message), NotificationSeconds);
         }
 
         /// <summary>Кусок графа для буфера: ноды, провода между ними, заметки, рамки и переменные, которые ноды читают. Уничтожить после.</summary>
@@ -109,25 +123,39 @@ namespace FeatherKit.EditorTools
             var shift = operationName == DuplicateOperation ? DuplicateShift : mousePosition - origin;
 
             var pasted = new List<int>();
-            graphView.ApplyEdit(editing => pasted = Paste(editing, content, shift));
+            var cleared = new List<string>();
+            graphView.ApplyEdit(editing => pasted = Paste(editing, content, shift, cleared));
             Object.DestroyImmediate(content);
+
+            if (cleared.Count > 0)
+                graphView.Window?.ShowNotification(new GUIContent($"Scene objects this graph can't keep were cleared: {string.Join(", ", cleared.Take(5))}"),
+                    NotificationSeconds);
+
             graphView.SelectAfterRebuild(pasted);
             graphView.Rebuild();
         }
 
-        /// <summary>Вставить кусок в граф одной записью undo со сдвигом. Ноды куска уходят в граф — кусок дважды не вставить. Отдаёт id новых нод.</summary>
-        public static List<int> Paste(ScenarioGraphEditing editing, ScenarioClipboardContent content, Vector2 shift)
+        /// <summary>
+        /// Вставить кусок в граф одной записью undo со сдвигом. Ноды куска уходят в граф — кусок дважды не вставить.
+        /// Отдаёт id новых нод; в clearedObjects — сброшенные объекты сцены.
+        /// </summary>
+        public static List<int> Paste(ScenarioGraphEditing editing, ScenarioClipboardContent content, Vector2 shift, List<string> clearedObjects = null)
         {
             var graph = editing.Host.Graph;
-            var isGraphFile = editing.Host.IsGraphFile;
+            var canKeep = SceneObjectFilterOf(editing.Host);
+            var cleared = new List<string>();
             var newIdsByOldId = new Dictionary<int, int>();
 
-            if (ScenarioSceneReferences.Restore(new SerializedObject(content), content.SceneReferences) > 0)
-                Debug.LogWarning("Pasted: some scene objects were not found — their scene is closed or they were deleted.", editing.Host.Owner);
+            var missingCount = ScenarioSceneReferences.Restore(new SerializedObject(content), content.SceneReferences);
+
+            if (missingCount > 0)
+                cleared.Add($"{missingCount} not found — their scene is closed or they were deleted");
+
+            BindToSameVariables(graph, content);
 
             editing.Record("Paste Scenario Nodes", () =>
             {
-                AddMissingVariables(graph, content.Variables, isGraphFile);
+                AddMissingVariables(graph, content.Variables, editing.Host.IsGraphFile, canKeep, cleared);
 
                 foreach (var node in content.Nodes.Where(node => node != null))
                 {
@@ -140,39 +168,109 @@ namespace FeatherKit.EditorTools
                 AddGroups(editing, content.Groups, newIdsByOldId);
             });
 
-            if (isGraphFile)
-                ClearSceneObjects(editing.Host, newIdsByOldId.Values);
+            cleared.AddRange(ClearSceneObjects(editing.Host, newIdsByOldId.Values, canKeep));
+
+            if (cleared.Count > 0)
+                Debug.LogWarning($"Pasted: scene objects this graph can't keep were cleared — {string.Join(", ", cleared)}. "
+                                 + "A graph file gets them through a Set on Object variable; another scene — only by hand.", editing.Host.Owner);
+
+            clearedObjects?.AddRange(cleared);
 
             return newIdsByOldId.Values.ToList();
         }
 
+        // Граф-файл не держит объектов сцены вовсе, граф объекта — только из своей сцены.
+        private static Func<Object, bool> SceneObjectFilterOf(ScenarioGraphHost host)
+        {
+            if (host.Owner is not Component owner || EditorUtility.IsPersistent(owner))
+                return EditorUtility.IsPersistent;
+
+            var ownerScene = owner.gameObject.scene;
+
+            return candidate => EditorUtility.IsPersistent(candidate) || SceneOf(candidate) == ownerScene;
+        }
+
+        private static UnityEngine.SceneManagement.Scene SceneOf(Object sceneObject)
+        {
+            return sceneObject switch
+            {
+                GameObject gameObject => gameObject.scene,
+                Component component => component.gameObject.scene,
+                _ => default
+            };
+        }
+
+
+        // ── Переменные ───────────────────────────────────────────────────
+
+        // Чужая переменная с тем же именем, видом и типом — та же по смыслу («Lamp» в двух графах): берём её, а не заводим «Lamp 2».
+        private static void BindToSameVariables(ScenarioGraph graph, ScenarioClipboardContent content)
+        {
+            var newIdsByOldId = new Dictionary<string, string>();
+
+            foreach (var variable in content.Variables.Where(variable => variable != null && graph.FindVariable(variable.Id) == null))
+            {
+                var same = graph.Variables.FirstOrDefault(candidate => candidate != null && candidate.Name == variable.Name
+                                                                                       && candidate.Kind == variable.Kind
+                                                                                       && candidate.ObjectType == variable.ObjectType);
+
+                if (same != null)
+                    newIdsByOldId[variable.Id] = same.Id;
+            }
+
+            if (newIdsByOldId.Count == 0)
+                return;
+
+            content.Variables.RemoveAll(variable => variable != null && newIdsByOldId.ContainsKey(variable.Id));
+
+            var serializedContent = new SerializedObject(content);
+            var property = serializedContent.GetIterator();
+
+            while (property.Next(true))
+            {
+                if (property.propertyType == SerializedPropertyType.String && newIdsByOldId.TryGetValue(property.stringValue, out var newId))
+                    property.stringValue = newId;
+            }
+
+            serializedContent.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         // Своя переменная графа (тот же id) остаётся своей; чужая заводится заново, имя — без повторов.
-        private static void AddMissingVariables(ScenarioGraph graph, List<ScenarioVariableDefinition> variables, bool isGraphFile)
+        private static void AddMissingVariables(ScenarioGraph graph, List<ScenarioVariableDefinition> variables, bool isGraphFile,
+            Func<Object, bool> canKeep, List<string> cleared)
         {
             foreach (var variable in variables.Where(variable => variable != null && graph.FindVariable(variable.Id) == null))
             {
                 variable.Name = ScenarioGraphEditing.UniqueVariableName(graph, variable.Name);
 
-                if (isGraphFile)
-                    MoveSceneObjectsToBindings(variable);
+                // Объект сцены граф-файл получает только привязкой: переменная сразу открытая.
+                if (isGraphFile && variable.Kind is ScenarioVariableKind.Object or ScenarioVariableKind.ObjectList
+                                && ScenarioBindingsEditing.IsSceneType(variable.ObjectType))
+                    variable.IsExposed = true;
 
+                ClearInitialValue(variable, canKeep, cleared);
                 graph.AddVariable(variable);
             }
         }
 
-        // Объект сцены граф-файл получает только привязкой: переменная становится открытой, значение по умолчанию — пустым.
-        private static void MoveSceneObjectsToBindings(ScenarioVariableDefinition variable)
+        private static void ClearInitialValue(ScenarioVariableDefinition variable, Func<Object, bool> canKeep, List<string> cleared)
         {
-            if (variable.Kind is ScenarioVariableKind.Object or ScenarioVariableKind.ObjectList && ScenarioBindingsEditing.IsSceneType(variable.ObjectType))
-                variable.IsExposed = true;
-
             var initial = variable.InitialValue;
 
-            if (initial.ObjectValue != null && !EditorUtility.IsPersistent(initial.ObjectValue))
+            if (initial.ObjectValue != null && !canKeep(initial.ObjectValue))
+            {
+                cleared.Add($"{initial.ObjectValue.name} ({variable.Name})");
                 initial.ObjectValue = null;
+            }
 
-            initial.ObjectListValue.RemoveAll(item => item != null && !EditorUtility.IsPersistent(item));
+            foreach (var item in initial.ObjectListValue.Where(item => item != null && !canKeep(item)))
+                cleared.Add($"{item.name} ({variable.Name})");
+
+            initial.ObjectListValue.RemoveAll(item => item != null && !canKeep(item));
         }
+
+
+        // ── Ноды, провода, заметки, рамки ────────────────────────────────
 
         private static void ReconnectWires(ScenarioGraph graph, List<ScenarioWire> wires, Dictionary<int, int> newIdsByOldId)
         {
@@ -218,7 +316,7 @@ namespace FeatherKit.EditorTools
         }
 
         // Ищем по SerializedObject: так видны поля любых блоков, и игровых тоже.
-        private static void ClearSceneObjects(ScenarioGraphHost host, IEnumerable<int> nodeIds)
+        private static List<string> ClearSceneObjects(ScenarioGraphHost host, IEnumerable<int> nodeIds, Func<Object, bool> canKeep)
         {
             var cleared = new List<string>();
             host.SerializedGraph.Update();
@@ -232,7 +330,7 @@ namespace FeatherKit.EditorTools
                 while (property.Next(true) && !SerializedProperty.EqualContents(property, end))
                 {
                     if (property.propertyType != SerializedPropertyType.ObjectReference || property.objectReferenceValue == null
-                                                                                         || EditorUtility.IsPersistent(property.objectReferenceValue))
+                                                                                         || canKeep(property.objectReferenceValue))
                         continue;
 
                     cleared.Add($"{property.objectReferenceValue.name} ({property.displayName})");
@@ -242,9 +340,7 @@ namespace FeatherKit.EditorTools
 
             host.SerializedGraph.ApplyModifiedPropertiesWithoutUndo();
 
-            if (cleared.Count > 0)
-                Debug.LogWarning($"Pasted into a graph file: scene objects can't be kept there and were cleared — {string.Join(", ", cleared)}. "
-                                 + "Use a Set on Object variable instead.", host.Owner);
+            return cleared;
         }
     }
 }
