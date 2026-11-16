@@ -348,6 +348,26 @@ namespace FeatherKit.Tests.Scenarios
         // ── Прочее ───────────────────────────────────────────────────────
 
         [Test]
+        public void NodeView_ShowsItsFieldsOnCanvas()
+        {
+            var window = ScriptableObject.CreateInstance<ScenarioGraphWindow>();
+            createdObjects.Add(window);
+            var graphView = new ScenarioGraphView(window);
+
+            try
+            {
+                graphView.Show(ScenarioGraphHost.For(GraphFileWith(ScenarioTestGraphs.WhenThenSteps())));
+                var steps = graphView.nodes.ToList().OfType<ScenarioNodeView>().First(nodeView => nodeView.Node is ScenarioStepsNode);
+
+                Assert.That(steps.extensionContainer.parent, Is.Not.Null, "Fields of an expanded node are on the canvas, not only its ports");
+            }
+            finally
+            {
+                graphView.Dispose();
+            }
+        }
+
+        [Test]
         public void CollapsedNodes_RememberedPerOwner()
         {
             var first = GraphFileWith(new ScenarioGraph());

@@ -62,7 +62,7 @@ namespace FeatherKit.EditorTools
             Show(ConvertButton, host is { IsAlive: true } && ScenarioGraphConverter.CanConvert(host.Scenario));
 
             var oldFieldsCount = graphView.Problems.Count(problem => problem.IsOldFields);
-            oldFieldsText.text = $"Old fields in {oldFieldsCount} blocks: they still work, but press {ScenarioLegacyFieldsUpgrade.ButtonText} to move them";
+            oldFieldsText.text = $"Old fields in {ScenarioLegacyFieldsUpgrade.BlocksText(oldFieldsCount)}: they still work, but press {ScenarioLegacyFieldsUpgrade.ButtonText} to move them";
             Show(OldFieldsBar, oldFieldsCount > 0);
         }
 

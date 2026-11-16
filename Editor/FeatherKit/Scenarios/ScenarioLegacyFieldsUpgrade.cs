@@ -25,6 +25,13 @@ namespace FeatherKit.EditorTools
         private static readonly Dictionary<System.Type, List<FieldInfo>> LegacyFieldsByType = new Dictionary<System.Type, List<FieldInfo>>();
 
 
+        /// <summary>«1 block» / «3 blocks» — для полосы окна и инспектора.</summary>
+        public static string BlocksText(int count)
+        {
+            return count == 1 ? "1 block" : $"{count} blocks";
+        }
+
+
         // ── Найти ────────────────────────────────────────────────────────
 
         /// <summary>Сколько блоков объекта (Scenario или граф-файла) хранят старые поля.</summary>

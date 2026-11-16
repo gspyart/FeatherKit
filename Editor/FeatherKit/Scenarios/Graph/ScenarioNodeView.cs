@@ -48,6 +48,9 @@ namespace FeatherKit.EditorTools
 
             RefreshCaptions();
             AddCollapseButton();
+
+            // Без этого Node держит поля (extensionContainer) скрытыми: на холсте видны только порты.
+            RefreshExpandedState();
             SetPosition(new Rect(node.Position, Vector2.zero));
 
             titleContainer.RegisterCallback<MouseDownEvent>(HandleTitleDoubleClick);
@@ -121,7 +124,6 @@ namespace FeatherKit.EditorTools
         }
 
         // Свёрнутая нода прячет поля и порты без проводов — как свёрнутая нода Shader Graph.
-        // Развёрнутой ничего делать не надо: пересчёт раскладки ноды дорог, а на холсте их сотни.
         private void Collapse()
         {
             expanded = false;

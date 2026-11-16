@@ -91,7 +91,7 @@ namespace FeatherKit.EditorTools
             if (oldFieldsCount == 0)
                 return;
 
-            EditorGUILayout.HelpBox($"Old fields in {oldFieldsCount} blocks: they still work, but should be moved to the new ones.", MessageType.Warning);
+            EditorGUILayout.HelpBox($"Old fields in {ScenarioLegacyFieldsUpgrade.BlocksText(oldFieldsCount)}: they still work, but should be moved to the new ones.", MessageType.Warning);
 
             if (!GUILayout.Button(ScenarioLegacyFieldsUpgrade.ButtonText))
                 return;

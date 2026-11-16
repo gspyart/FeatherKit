@@ -15,7 +15,7 @@ namespace FeatherKit.EditorTools
     /// <summary>
     /// Шапка окна графа — часть ScenarioGraphWindow: что открыто и есть ли несохранённое.
     /// - крошки с иконками: сцена или префаб ▸ объект ▸ Scenario, или граф-файл ▸ via объект; клик выделяет и пингует
-    /// - Lock, Frame All, миникарта, Select, Save; команды над графом целиком — частью ScenarioGraphFileCommands
+    /// - Lock, Frame All, миникарта, Select, Save, «?» — руководство; команды над графом целиком — частью ScenarioGraphFileCommands
     /// - полосы под шапкой: Play Mode и «граф-файл на N объектах»; в игре у граф-файла — «Debug: объект» для подсветки
     /// </summary>
     internal class ScenarioGraphToolbar
@@ -88,6 +88,7 @@ namespace FeatherKit.EditorTools
             toolbar.Add(fileCommands.ConvertButton);
             toolbar.Add(fileCommands.MakeGraphFileButton);
             toolbar.Add(fileCommands.EmbedButton);
+            toolbar.Add(IconButton(ScenarioIcons.Help, "", "Open the Scenarios guide", ScenarioGuide.Open));
 
             Root.Add(toolbar);
 
