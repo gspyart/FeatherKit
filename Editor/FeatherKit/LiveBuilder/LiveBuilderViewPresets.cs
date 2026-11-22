@@ -4,7 +4,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Готовые виды окна сцены — «Всё», «Комнаты» (срез на 3 м над полом этажа), «Стены вниз» (на 1 м): какой сейчас и включить.
-    /// Общие у панели над сценой (<see cref="LiveBuilderSceneOverlay"/>) и строки общего в окне (<see cref="LiveBuilderCommonSettingsBar"/>).
+    /// Переключает их нижняя строка панели в окне сцены (<see cref="LiveBuilderCommonSettingsBar"/>).
     /// Сам срез — <see cref="LiveBuilderStoreys"/>. Игру не меняет.
     /// </summary>
     public static class LiveBuilderViewPresets

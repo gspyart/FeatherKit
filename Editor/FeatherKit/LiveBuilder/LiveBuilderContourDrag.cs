@@ -198,10 +198,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return frame != null ? frame.TransformPoint(framePoint) : framePoint;
         }
 
-        // Здание, к которому привязана стена по линии, — её точки прилипают к его стенам.
+        // Здание перегородки — по её этажу или привязке: её точки прилипают к его стенам.
         private static SplineBuilding BuildingOfPartition(Component owner)
         {
-            return owner is SplineWall && owner.TryGetComponent<SplineBuildingStoreyLink>(out var link) && link.IsValid ? link.Building : null;
+            return owner is SplineWall ? SplineBuildingStoreys.BuildingOfStoreyContent(owner.transform) : null;
         }
     }
 }

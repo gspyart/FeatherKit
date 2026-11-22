@@ -8,7 +8,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Ручки скоса рёбер (<see cref="BoxModelEdgeChamfer"/>) у выделенной добавляющей коробки: по точке посередине каждого из двенадцати рёбер.
     /// Тянешь точку внутрь коробки — ребро срезается наискось: насколько ушла поперёк одной стороны — настолько срез заходит на неё, так же со второй.
     /// Пандус — тянешь верхнее ребро до противоположного нижнего; вернул точку на ребро — скос убран.
-    /// От точки к началу среза на обеих сторонах — тонкие линии, рядом — размеры. Всё по сетке, с Undo.
+    /// От точки к началу среза на обеих сторонах — тонкие линии, рядом — размеры (полный скос — «Full»). Всё по сетке, с Undo.
     /// </summary>
     public static class BoxModelChamferHandles
     {
@@ -50,12 +50,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
             edgeMiddle[firstAxis] = firstSign > 0f ? max[firstAxis] : min[firstAxis];
             edgeMiddle[secondAxis] = secondSign > 0f ? max[secondAxis] : min[secondAxis];
 
-            var sizeOnFirst = hasChamfer ? chamfer.SizeOnFirstFace : 0f;
-            var sizeOnSecond = hasChamfer ? chamfer.SizeOnSecondFace : 0f;
+            var sizeOnFirst = hasChamfer ? chamfer.SizeOnFirstFaceIn(max - min) : 0f;
+            var sizeOnSecond = hasChamfer ? chamfer.SizeOnSecondFaceIn(max - min) : 0f;
             var position = HandlePosition(edgeMiddle, firstAxis, firstSign, secondAxis, secondSign, sizeOnFirst, sizeOnSecond);
 
             if (hasChamfer)
-                DrawGuides(edgeMiddle, position, firstAxis, secondAxis, chamfer);
+                DrawGuides(edgeMiddle, position, firstAxis, secondAxis, chamfer, sizeOnFirst, sizeOnSecond);
 
             var size = HandleUtility.GetHandleSize(position) * DotSizeFactor;
             EditorGUI.BeginChangeCheck();
@@ -86,7 +86,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
         // Линии от точки к началу среза на обеих сторонах и подпись с размерами.
-        private static void DrawGuides(Vector3 edgeMiddle, Vector3 position, int firstAxis, int secondAxis, BoxModelEdgeChamfer chamfer)
+        private static void DrawGuides(Vector3 edgeMiddle, Vector3 position, int firstAxis, int secondAxis, BoxModelEdgeChamfer chamfer, float sizeOnFirst,
+            float sizeOnSecond)
         {
             if (Event.current.type != EventType.Repaint)
                 return;
@@ -104,8 +105,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var worldPosition = Handles.matrix.MultiplyPoint3x4(position);
 
             using (new Handles.DrawingScope(Matrix4x4.identity))
-                LiveBuilderSceneText.DrawLabel(worldPosition, "скос " + LiveBuilderSceneText.FormatMeters(chamfer.SizeOnFirstFace) + " × " +
-                                                              LiveBuilderSceneText.FormatMeters(chamfer.SizeOnSecondFace) + " м");
+                LiveBuilderSceneText.DrawLabel(worldPosition, "chamfer " + SizeText(sizeOnFirst, chamfer.IsFullOnFirstFace) + " × " +
+                                                              SizeText(sizeOnSecond, chamfer.IsFullOnSecondFace) + " m");
+        }
+
+        private static string SizeText(float meters, bool isFull)
+        {
+            return LiveBuilderSceneText.FormatMeters(meters) + (isFull ? " Full" : "");
         }
     }
 }

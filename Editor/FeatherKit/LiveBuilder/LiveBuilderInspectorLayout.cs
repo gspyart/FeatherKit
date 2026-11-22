@@ -22,14 +22,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Свёрнутая группа: открыта ли. Помнится до перезапуска Unity, одна на все объекты этого вида.
-        // hasNonDefaultValues — внутри что-то не как по умолчанию: открыта всегда и помечена «изменено», спрятанное не удивит.
+        // hasNonDefaultValues — внутри что-то не как по умолчанию: открыта всегда и помечена «changed», спрятанное не удивит.
         public static bool Foldout(string key, string title, bool hasNonDefaultValues = false)
         {
             EditorGUILayout.Space(6f);
 
             if (hasNonDefaultValues)
             {
-                EditorGUILayout.Foldout(true, new GUIContent(title + " · изменено", "Здесь есть изменённые настройки — поэтому раскрыто"), true, EditorStyles.foldoutHeader);
+                EditorGUILayout.Foldout(true, new GUIContent(title + " · changed", "Здесь есть изменённые настройки — поэтому раскрыто"), true, EditorStyles.foldoutHeader);
                 return true;
             }
 
@@ -48,21 +48,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Поле, которое задаёт кто-то другой — здание или тип стены: видно значение, менять нельзя.
-        public static void DrivenValue(string label, string value, string tooltip, string source = "от здания")
+        public static void DrivenValue(string label, string value, string tooltip, string source = "from building")
         {
             EditorGUILayout.LabelField(new GUIContent(label, tooltip), new GUIContent(value + " — " + source, tooltip));
-        }
-
-
-        // Группа «Этажи» у всего с копиями вверх: свои число и шаг, а в здании — только показать, задаёт привязка ниже.
-        public static void StoreyCopies(SerializedObject serializedObject, IStoreyCopies storeyCopies, bool isLinkedToBuilding)
-        {
-            Section("Этажи");
-
-            if (isLinkedToBuilding)
-                DrivenValue("Copies Up", storeyCopies.CopiesUp.ToString(), "Сколько этажей — в привязке к зданию ниже");
-            else
-                Properties(serializedObject, "copiesUp", "copyStep");
         }
     }
 }

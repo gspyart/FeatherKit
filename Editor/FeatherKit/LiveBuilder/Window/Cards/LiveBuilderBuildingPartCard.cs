@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEngine;
@@ -5,35 +6,33 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка «Часть здания» вкладки «Выделено»: выделена собранная часть здания (группа этажа, стены, пол, крыша) — числа у самого здания,
-    /// кнопка перейти к нему. Интерьер (перегородки, лестницы, проёмы) — не собранный, у него свои числа.
+    /// Секция Construction у собранной части здания (стены, перекрытие, крыша, группа этажа старого здания): числа — у самого здания,
+    /// кнопка перейти к нему. Этаж нового здания и то, что в нём (перегородки, лестницы, проёмы), — не собранные части.
     /// </summary>
     public sealed class LiveBuilderBuildingPartCard : LiveBuilderSelectionCard
     {
-        public override int Order => 90;
+        public override int Order => ConstructionOrder;
+
+        public override string Title => "Construction";
 
 
-        public override bool Draw(GameObject selected)
+        public override bool ShowsFor(IReadOnlyList<GameObject> selected)
         {
-            if (selected == null || selected.GetComponent<SplineBuilding>() != null)
-                return false;
+            return selected.Count == 1 && AreAllOfKind(selected, LiveBuilderSelectionKind.BuildingPart);
+        }
 
-            var building = selected.GetComponentInParent<SplineBuilding>();
-            var isGenerated = selected.GetComponent<SplineBuildingPart>() != null
-                || building != null && selected.transform.parent == building.transform && selected.name.StartsWith(SplineBuildingParts.StoreyGroupPrefix);
 
-            if (building == null || !isGenerated)
-                return false;
+        public override void Draw(IReadOnlyList<GameObject> selected)
+        {
+            var building = selected[0].GetComponentInParent<SplineBuilding>();
 
-            using (LiveBuilderWindowControls.Card("Часть здания"))
-            {
-                LiveBuilderWindowControls.Note("Собирается сама. Числа — у здания. Спрятать в окне сцены — «глазик» в иерархии.");
+            if (building == null)
+                return;
 
-                if (GUILayout.Button("Здание «" + building.name + "»"))
-                    Selection.activeGameObject = building.gameObject;
-            }
+            LiveBuilderWindowControls.Note("Built by the building — change its numbers. Hide it in the Scene view with the eye in the Hierarchy.");
 
-            return true;
+            if (GUILayout.Button(new GUIContent("Select Building", "Выделить здание «" + building.name + "»")))
+                Selection.activeGameObject = building.gameObject;
         }
     }
 }

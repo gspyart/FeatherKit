@@ -21,7 +21,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 label = "Live Builder",
                 guiHandler = _ => DrawSettings(),
-                keywords = new[] { "live builder", "box model", "wall", "building", "opening", "коробки", "стены", "здания", "проём", "разрез" }
+                keywords = new[] { "live builder", "box model", "wall", "building", "opening", "cut", "section", "коробки", "стены", "здания", "проём", "разрез" }
             };
         }
 
@@ -34,8 +34,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var serializedSettings = new SerializedObject(settings);
 
-            EditorGUILayout.HelpBox("То, что у каждой игры своё. Общее на проект: хранится в ProjectSettings/FeatherKit и попадает в git. " +
-                                    "Личные настройки окна Live Builder — сетка, этаж, инструмент — у каждого свои.", MessageType.None);
+            EditorGUILayout.HelpBox("What each game sets its own way. Shared by the project: stored in ProjectSettings/FeatherKit and goes to git. " +
+                                    "Personal Live Builder settings — grid, storey, tool — are per user.", MessageType.None);
 
             EditorGUI.BeginChangeCheck();
 

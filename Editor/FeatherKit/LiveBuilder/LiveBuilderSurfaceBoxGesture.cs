@@ -28,8 +28,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public bool IsChoosingDepth => rectangle.IsActive && isChoosingDepth;
 
         public string Hint => !isChoosingDepth
-            ? "Косая поверхность: тяни прямоугольник прямо по ней. Отпусти — дальше глубина"
-            : "Мышь от поверхности — коробка наружу, внутрь — проём: " + LiveBuilderSceneText.FormatMeters(Mathf.Abs(depth)) + " м. Клик — готово, Esc — отмена";
+            ? "Sloped surface: drag a rectangle right on it, release — then depth " + LiveBuilderHintKeys.Esc + " cancel"
+            : "Mouse away from the surface — box, into it — cut: " + LiveBuilderSceneText.FormatMeters(Mathf.Abs(depth)) + " m, click — done " +
+              LiveBuilderHintKeys.Esc + " cancel";
 
         private bool IsCutting => BoxModelDrawModeSetting.Current switch
         {
@@ -140,7 +141,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 model.transform.SetParent(rectangle.SurfaceOwner, true);
 
             BoxModelFactory.CreatePart(model, new Vector3(min.x, min.y, -thickness), new Vector3(min.x + size.x, min.y + size.y, 0f), BoxModelPartMode.Add);
-            BoxModelRebuilder.Rebuild(model);
+            BoxModelRebuilder.Rebuild(model, LiveBuilderBuildQuality.Draft);
             return model.gameObject;
         }
 
@@ -153,6 +154,27 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var cutter = BoxModelFactory.CreateCutter(rectangle.SurfaceOwner, bottom, rectangle.Rotation, size, Mathf.Abs(depth) * 2f);
             LiveBuilderCutterGesture.AttachToOwner(cutter, rectangle.Normal);
             return cutter.gameObject;
+        }
+
+
+        // ── Отчёт для панели ─────────────────────────────────────────────
+
+        // Шаг и размеры для секции Drawing (<see cref="LiveBuilderDrawingReport"/>); чисел с клавиатуры и Enter у косой поверхности нет — готово кликом. Не рисуешь — null.
+        public LiveBuilderDrawingReport Report()
+        {
+            if (!rectangle.IsActive)
+                return null;
+
+            var size = rectangle.Size;
+            var report = new LiveBuilderDrawingReport(isChoosingDepth && IsCutting ? "Opening on slope" : "Box on slope", isChoosingDepth ? 2 : 1, 2,
+                    isChoosingDepth ? "Depth" : "Rectangle")
+                .WithSize("Width", size.x)
+                .WithSize("Height", size.y);
+
+            if (isChoosingDepth)
+                report.WithSize("Depth", Mathf.Abs(depth));
+
+            return report.WithKeys(null, "drop the box");
         }
 
 
@@ -187,8 +209,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 Handles.DrawLine(start, start + offset, 2f);
             }
 
-            var label = LiveBuilderSceneText.FormatMeters(size.x) + " × " + LiveBuilderSceneText.FormatMeters(size.y) + " м" +
-                        (isChoosingDepth ? " × " + LiveBuilderSceneText.FormatMeters(Mathf.Abs(depth)) + " м · " + (IsCutting ? "проём" : "коробка") : "");
+            var label = LiveBuilderSceneText.FormatMeters(size.x) + " × " + LiveBuilderSceneText.FormatMeters(size.y) + " m" +
+                        (isChoosingDepth ? " × " + LiveBuilderSceneText.FormatMeters(Mathf.Abs(depth)) + " m · " + (IsCutting ? "cut" : "box") : "");
             LiveBuilderSceneText.DrawLabel(rectangle.PointAt(min + size) + offset, label);
         }
     }

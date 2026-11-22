@@ -83,7 +83,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 bestPixels = pixels;
                 result = snapped;
-                label = "угол к точке";
+                label = "corner to point";
             }
 
             return result;

@@ -6,7 +6,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Настройки Live Builder на проект — то, что у каждой игры своё: материал и место новых объектов, папки файлов,
-    /// типы стен набора, разрез этажа в шейдере, готовые проёмы и таблица прыжков для линейки.
+    /// типы стен набора, размер плитки материалов, разрез этажа в шейдере, готовые проёмы и таблица прыжков для линейки.
     /// Общие на проект: лежат в ProjectSettings/FeatherKit и попадают в git; страница — <see cref="LiveBuilderProjectSettingsPage"/>.
     /// Личное (сетка, этаж, выбранный инструмент) — не здесь, а в настройках редактора у каждого человека.
     /// </summary>
@@ -16,7 +16,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Свой серый материал набора — когда в проекте материал не задан.
         private const string KitMaterialPath = "Packages/com.gspy.featherkit/Runtime/FeatherKit/LiveBuilder/Materials/LiveBuilder Gray.mat";
 
-        [Header("Новые объекты")]
+        [Header("New Objects")]
         [Tooltip("Материал граней у новых объектов из коробок, стен и зданий. Пусто — серый материал FeatherKit.")]
         [SerializeField] private Material defaultMaterial;
 
@@ -24,16 +24,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
         [SerializeField] private string newObjectsGroup = "";
 
         [Space]
-        [Header("Файлы мешей")]
+        [Header("Mesh Files")]
         [Tooltip("Папка файлов мешей, пока сцена не сохранена. У сохранённой сцены меши лежат рядом с ней, в папке «<Сцена>_BoxModels».")]
         [SerializeField] private string unsavedSceneMeshFolder = "Assets/Live Builder Meshes";
 
         [Tooltip("При сохранении сцены файлы мешей в её папке «<Сцена>_BoxModels», на которые не ссылается ни одна сцена и ни один префаб, " +
-                 "сами уходят в корзину системы. Выключено — только кнопкой «Убрать лишние меши…».")]
+                 "сами уходят в корзину системы. Выключено — только кнопкой Remove Unused Meshes… в окне Live Builder.")]
         [SerializeField] private bool isUnusedMeshCleanupOnSave = true;
 
         [Space]
-        [Header("Типы стен")]
+        [Header("Wall Types")]
         [Tooltip("Папка, куда кладутся новые типы стен.")]
         [SerializeField] private string wallTypesFolder = "Assets/Live Builder Wall Types";
 
@@ -44,7 +44,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         [SerializeField] private Material partitionMaterial;
 
         [Space]
-        [Header("Разрез этажа")]
+        [Header("Material Tiles")]
+        [Tooltip("Сколько метров на один повтор текстуры у материала по U и V. Нет в списке — 1 × 1 м. " +
+                 "Фасадная панель 3 × 3 — текстура ложится ровно по панели при шаге сетки 3 м.")]
+        [SerializeField] private List<LiveBuilderMaterialTileSize> materialTileSizes = new();
+
+        [Space]
+        [Header("Storey Section")]
         [Tooltip("Ключевое слово шейдера: включается в окне сцены, когда включён разрез. Шейдер, который его не знает, просто не режется.")]
         [SerializeField] private string sectionKeyword = "LIVE_BUILDER_SECTION_VIEW";
 
@@ -52,18 +58,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
         [SerializeField] private string sectionHeightProperty = "_LiveBuilderSectionHeight";
 
         [Space]
-        [Header("Проёмы")]
-        [Tooltip("Готовые размеры для инструмента «Проём»: клик по стене ставит выбранный. Низ над полом: 0 — дверь, 1 — окно.")]
+        [Header("Openings")]
+        [Tooltip("Готовые размеры для инструмента «Cut»: клик по стене ставит выбранный. Низ над полом: 0 — дверь, 1 — окно.")]
         [SerializeField] private List<LiveBuilderOpeningSize> openingPresets = new()
         {
-            new LiveBuilderOpeningSize("Дверь 0,9 × 2,1", 0.9f, 2.1f, 0f),
-            new LiveBuilderOpeningSize("Двойная дверь 1,8 × 2,1", 1.8f, 2.1f, 0f),
-            new LiveBuilderOpeningSize("Проход 1,2 × 2,4", 1.2f, 2.4f, 0f),
-            new LiveBuilderOpeningSize("Окно 1,2 × 1,4", 1.2f, 1.4f, 0.9f)
+            new LiveBuilderOpeningSize("Door 0.9 × 2.1", 0.9f, 2.1f, 0f),
+            new LiveBuilderOpeningSize("Double Door 1.8 × 2.1", 1.8f, 2.1f, 0f),
+            new LiveBuilderOpeningSize("Passage 1.2 × 2.4", 1.2f, 2.4f, 0f),
+            new LiveBuilderOpeningSize("Window 1.2 × 1.4", 1.2f, 1.4f, 0.9f)
         };
 
         [Space]
-        [Header("Линейка: прыжки")]
+        [Header("Ruler: Jumps")]
         [Tooltip("Линейка подсказывает, допрыгнет ли игрок: легко, на пределе, нельзя. Выключено — только расстояния.")]
         [SerializeField] private bool isJumpCheckEnabled;
 
@@ -108,6 +114,27 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public Material PartitionMaterial => partitionMaterial != null ? partitionMaterial : DefaultMaterial;
 
 
+        // ── Плитки материалов ────────────────────────────────────────────
+
+        // Таблицу поправили (страница настроек, код): постройки с этими материалами пересобираются (<see cref="LiveBuilderMaterialTiling"/>).
+        public static event System.Action Changed;
+
+
+        public IReadOnlyList<LiveBuilderMaterialTileSize> MaterialTileSizes => materialTileSizes;
+
+
+        // Размер плитки материала в памяти, без записи на диск; 1 × 1 убирает его из таблицы.
+        public void SetMaterialTileSize(Material material, Vector2 metersPerTile)
+        {
+            materialTileSizes.RemoveAll(row => row.Material == material);
+
+            if (material != null && metersPerTile != LiveBuilderMaterialTiling.DefaultMetersPerTile)
+                materialTileSizes.Add(new LiveBuilderMaterialTileSize(material, metersPerTile));
+
+            Changed?.Invoke();
+        }
+
+
         // ── Разрез, проёмы, прыжки ───────────────────────────────────────
 
         public string SectionKeyword => sectionKeyword;
@@ -133,6 +160,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public void SaveChanges()
         {
             Save(true);
+            Changed?.Invoke();
         }
     }
 }

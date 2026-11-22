@@ -25,14 +25,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Копия выреза в мире: сам вырез, поднятый на шаг копий столько раз, какая это копия. Копия 0 — сам вырез.
-        public static Matrix4x4 CopyToWorld(GeometryCutter cutter, int copy)
-        {
-            return Matrix4x4.Translate(Vector3.up * (copy * cutter.CopyStep)) * ShapeToWorld(cutter);
-        }
-
-
-
         // Контур в осях выреза, против часовой стрелки, если смотреть с +Z: тогда лицо передней крышки смотрит по +Z.
         public static List<Vector2> OutlineOf(GeometryCutter cutter)
         {
@@ -121,15 +113,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Точка в мире — внутри тела выреза или одной из его копий вверх, с запасом margin, м: там у того, что он режет, дыра.
+        // Точка в мире — внутри тела выреза или одной из его копий, с запасом margin, м: там у того, что он режет, дыра.
         public static bool Contains(GeometryCutter cutter, Vector3 worldPoint, float margin = 0f)
         {
             var outline = OutlineOf(cutter);
             var halfDepth = cutter.Depth / 2f;
 
-            for (var copy = 0; copy < cutter.CopiesUp; copy++)
+            foreach (var copy in GeometryCutterCopy.AllOf(cutter))
             {
-                var local = CopyToWorld(cutter, copy).inverse.MultiplyPoint3x4(worldPoint);
+                var local = copy.ToWorld.inverse.MultiplyPoint3x4(worldPoint);
                 var flat = new Vector2(local.x, local.y);
 
                 if (Mathf.Abs(local.z) > halfDepth + margin)

@@ -8,6 +8,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Материалы сторон одной коробки: свой у низа, верха, каждого бока или всех боков, иначе общий; всё пусто — материал объекта.
     /// Сторона — у самой коробки: у вырезающей низ — это пол дыры, верх — потолок, бока — стены.
+    /// С ними едут подгонки текстуры тех же сторон (<see cref="BoxModelSideFits"/>): кто дал материал, тот дал и подгонку.
     /// </summary>
     public readonly struct BoxModelSideMaterials
     {
@@ -22,6 +23,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Left = left;
             Front = front;
             Back = back;
+            Fits = default;
+        }
+
+        private BoxModelSideMaterials(BoxModelSideMaterials materials, BoxModelSideFits fits)
+            : this(materials.All, materials.Bottom, materials.Top, materials.Side, materials.Right, materials.Left, materials.Front, materials.Back)
+        {
+            Fits = fits;
         }
 
 
@@ -36,15 +44,24 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public Material Front { get; }
         public Material Back { get; }
 
-        // Для подписи меша: поменялся любой материал — пересборка.
+        // Подгонки текстуры тех же сторон; пусто — «как есть».
+        public BoxModelSideFits Fits { get; }
+
+        // Для подписи меша: поменялся любой материал или подгонка — пересборка. Без подгонок — прежняя строка.
         public string Key => KeyOf(All) + "," + KeyOf(Bottom) + "," + KeyOf(Top) + "," + KeyOf(Side)
-                             + "," + KeyOf(Right) + "," + KeyOf(Left) + "," + KeyOf(Front) + "," + KeyOf(Back);
+                             + "," + KeyOf(Right) + "," + KeyOf(Left) + "," + KeyOf(Front) + "," + KeyOf(Back) + Fits.Key;
 
 
         public static BoxModelSideMaterials Of(BoxModelPart part)
         {
             return new BoxModelSideMaterials(part.Material, part.BottomMaterial, part.TopMaterial, part.SideMaterial,
-                part.RightMaterial, part.LeftMaterial, part.FrontMaterial, part.BackMaterial);
+                part.RightMaterial, part.LeftMaterial, part.FrontMaterial, part.BackMaterial).WithFits(BoxModelSideFits.Of(part.TextureFits));
+        }
+
+
+        public BoxModelSideMaterials WithFits(BoxModelSideFits fits)
+        {
+            return new BoxModelSideMaterials(this, fits);
         }
 
 
@@ -91,66 +108,86 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
     /// <summary>
-    /// Коробка расчёта — одна коробка так, как её видит решатель: с учётом повторов, ступень лестницы или вырез над ней.
-    /// Помнит, откуда взялась (коробка или лестница на сцене): по ней грань выделяется кликом и берёт материал,
-    /// а вырезающая — решает, какие стены и здания объекта режет (<see cref="CutsTarget"/>): порядок в списке объектов для этого не важен.
-    /// Скосы рёбер коробки (<see cref="BoxModelEdgeChamfer"/>) едут с ней и в копии повтора: их срезает <see cref="BoxModelChamferCutter"/>.
+    /// Коробка расчёта — одна коробка так, как её видит решатель: с учётом повторов, ступень лестницы, вырез над ней или вырез-коробка.
+    /// - помнит, откуда взялась (коробка, вырез или лестница на сцене): по ней грань выделяется кликом и берёт материал
+    /// - помнит свой кусок и постройки над ним, а вырезающая — себя глазами правила (<see cref="LiveBuilderCutRules"/>): кого режет, решает правило
+    /// - скосы рёбер (<see cref="BoxModelEdgeChamfer"/>) едут с ней и в копии повтора: их срезает <see cref="BoxModelChamferCutter"/>
     /// </summary>
     public sealed class BoxModelSolverBox
     {
         private static readonly BoxModelEdgeChamfer[] NoChamfers = new BoxModelEdgeChamfer[0];
+        private static readonly Transform[] NoConstructions = new Transform[0];
 
 
         public BoxModelSolverBox(MillimeterBox box, BoxModelPartMode mode, Component owner, BoxModelSideMaterials materials,
-            IReadOnlyList<BoxModelEdgeChamfer> chamfers = null)
+            IReadOnlyList<BoxModelEdgeChamfer> chamfers = null, int pieceKey = 0, IReadOnlyList<Transform> constructionsAbove = null)
+            : this(box, mode, owner, materials, chamfers, pieceKey, constructionsAbove ?? NoConstructions,
+                mode == BoxModelPartMode.Cut ? LiveBuilderCutRules.SourceOfPiece(owner, constructionsAbove ?? NoConstructions, pieceKey) : default)
+        {
+        }
+
+        private BoxModelSolverBox(MillimeterBox box, BoxModelPartMode mode, Component owner, BoxModelSideMaterials materials,
+            IReadOnlyList<BoxModelEdgeChamfer> chamfers, int pieceKey, IReadOnlyList<Transform> constructionsAbove, LiveBuilderCutSource cutSource)
         {
             Box = box;
             Mode = mode;
             Owner = owner;
             Materials = materials;
             Chamfers = chamfers ?? NoChamfers;
+            PieceKey = pieceKey;
+            ConstructionsAbove = constructionsAbove;
+            CutSource = cutSource;
+        }
+
+
+        // Вырез-коробка (<see cref="GeometryCutterSolverBoxes"/>): где и что режет — его собственные поля, а не поля куска.
+        public static BoxModelSolverBox ForCutter(MillimeterBox box, GeometryCutter cutter, BoxModelSideMaterials materials, int pieceKey,
+            IReadOnlyList<Transform> constructionsAbove)
+        {
+            return new BoxModelSolverBox(box, BoxModelPartMode.Cut, cutter, materials, null, pieceKey, constructionsAbove ?? NoConstructions,
+                LiveBuilderCutRules.SourceOf(cutter, pieceKey));
         }
 
 
         public MillimeterBox Box { get; }
         public BoxModelPartMode Mode { get; }
 
-        // Коробка (BoxModelPart) или лестница (BoxModelStairs), которая её дала.
+        // Коробка (BoxModelPart), вырез (GeometryCutter), комната (BoxModelRoom) или лестница (BoxModelStairs), которая её дала. Null — предпросмотр рисования.
         public Component Owner { get; }
         public BoxModelSideMaterials Materials { get; }
         public IReadOnlyList<BoxModelEdgeChamfer> Chamfers { get; }
 
+        // Номер куска в одном сборе объекта — копия лестницы с её вырезом и ступенями: свой кусок вырез не режет. 0 — ничей.
+        public int PieceKey { get; }
+
+        // Постройки над куском в его объекте, от объекта внутрь: сам объект и здания. Пусто — предпросмотр.
+        public IReadOnlyList<Transform> ConstructionsAbove { get; }
+
+        // Вырезающая — она глазами правила; добавляющая — пусто.
+        public LiveBuilderCutSource CutSource { get; }
+
         public BoxModelPartShape Shape => new(Box, Mode);
 
         public BoxModelPart OwnerPart => Owner as BoxModelPart;
-
-        // Что вырезающая коробка режет из стен и зданий: у коробки — её поле, вырез над лестницей — только перекрытия, комната — всё.
-        public LiveBuilderCutTargets CutTargets => Owner switch
-        {
-            BoxModelPart part => part.CutTargets,
-            BoxModelStairs => LiveBuilderCutTargets.SlabsOnly,
-            _ => LiveBuilderCutTargets.Everything
-        };
-
-        public bool CutsWalls => Mode == BoxModelPartMode.Cut && CutTargets != LiveBuilderCutTargets.SlabsOnly;
-
-        public bool CutsSlabs => Mode == BoxModelPartMode.Cut && CutTargets != LiveBuilderCutTargets.WallsOnly;
-
-
-        // Режет ли эта вырезающая коробка стену или здание, которых касается. Коробка и вырез над лестницей — всегда, где бы ни стояли в списке.
-        // Пустота комнаты — только здание: комната открывается в здание, к которому примыкает (эркер), а стены-перегородки внутри неё целы.
-        public bool CutsTarget(Component target)
-        {
-            return Owner is not BoxModelRoom || target is SplineBuilding;
-        }
 
 
         // Материал поверхности с нормалью face: у добавляющей — та же сторона коробки, у вырезающей — противоположная
         // (пол дыры смотрит вверх, а создал его низ вырезающей коробки).
         public Material MaterialForSurface(int face)
         {
-            var side = Mode == BoxModelPartMode.Add ? face : BoxFaces.Opposite(face);
-            return Materials.ForSide(side);
+            return Materials.ForSide(SideOfSurface(face));
+        }
+
+
+        // Подгонка текстуры поверхности с нормалью face — той же стороны, что материал; null — «как есть».
+        public LiveBuilderTextureFit FitForSurface(int face)
+        {
+            return Materials.Fits.ForSide(SideOfSurface(face));
+        }
+
+        private int SideOfSurface(int face)
+        {
+            return Mode == BoxModelPartMode.Add ? face : BoxFaces.Opposite(face);
         }
     }
 

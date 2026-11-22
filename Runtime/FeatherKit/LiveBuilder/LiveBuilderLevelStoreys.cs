@@ -5,11 +5,11 @@ namespace FeatherKit.LiveBuilder
 {
     /// <summary>
     /// Этажи уровня Live Builder в самой сцене: высота этажа и пол первого этажа. Одни для всех, кто открывает сцену, на любом компьютере:
-    /// здания встают на эти этажи, рисование в пустоте идёт от их пола. Один на сцену; кладёт его Live Builder, когда правишь этажи на вкладке «Уровень».
+    /// здания встают на эти этажи, рисование в пустоте идёт от их пола. Один на сцену; кладёт его Live Builder, когда правишь этажи в разделе Storeys окна Live Builder.
     /// Какой этаж открыт сейчас и разрез — у каждого свои и хранятся не здесь.
     /// </summary>
     [FDescription("Этажи уровня Live Builder: высота этажа и пол первого этажа — одни для всех, кто открывает сцену. " +
-                  "Удобнее править на вкладке «Уровень» окна Live Builder.")]
+                  "Удобнее править в разделе Storeys окна Live Builder.")]
     [AddComponentMenu("FeatherKit/Live Builder/Level Storeys")]
     [DisallowMultipleComponent]
     public class LiveBuilderLevelStoreys : MonoBehaviour

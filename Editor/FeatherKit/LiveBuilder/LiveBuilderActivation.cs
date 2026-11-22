@@ -19,5 +19,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
             else if (IsToolActive)
                 ToolManager.RestorePreviousPersistentTool();
         }
+
+
+        // Клавиша B: включить, а включённый — выключить.
+        public static void ToggleTool()
+        {
+            SetToolActive(!IsToolActive);
+        }
     }
 }

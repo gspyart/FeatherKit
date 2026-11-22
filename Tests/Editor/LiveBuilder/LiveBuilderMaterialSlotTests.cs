@@ -125,7 +125,7 @@ namespace FeatherKit.Tests.LiveBuilder
             Assert.AreEqual(testMaterial, building.OuterWallMaterial, "снаружи — наружные стены");
 
             Assert.IsTrue(LiveBuilderMaterialSlots.TryFindUnder(RayFrom(new Vector3(4f, height, 4f), Vector3.down), false, out var floorSlot));
-            Assert.AreEqual("пол здания", floorSlot.Description);
+            Assert.AreEqual("building floor", floorSlot.Description);
         }
 
 

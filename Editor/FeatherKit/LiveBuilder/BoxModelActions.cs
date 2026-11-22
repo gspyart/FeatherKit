@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Действия над объектами из коробок: новый объект, «добавить ⇄ вырезать» у выделенных коробок, заморозка, что выделено.
+    /// Действия над объектами из коробок: новый объект, «Add ⇄ Cut» у выделенных коробок и вырез-коробок, заморозка, что выделено.
     /// Зовут их окно Live Builder и меню — одно место на каждое действие. Включить сам инструмент — <see cref="LiveBuilderActivation"/>.
     /// </summary>
     public static class BoxModelActions
@@ -38,18 +38,29 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Выделенные коробки: добавляющие — в вырезающие, и наоборот.
-        public static void ToggleModeOfSelectedParts()
+        // «Add ⇄ Cut» у выделенных одним шагом Undo: коробка — в вырез-коробку, вырез-коробка — в коробку (<see cref="GeometryCutterBoxConversion"/>).
+        public static void ToggleAddCutOfSelected()
         {
             var parts = SelectedParts();
+            var cutters = SelectedCutterBoxes();
 
-            if (parts.Count == 0)
+            if (parts.Count == 0 && cutters.Count == 0)
                 return;
 
-            Undo.RecordObjects(parts.ToArray(), "Toggle Box Mode");
+            Undo.IncrementCurrentGroup();
+            var undoGroup = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName("Toggle Add / Cut");
 
             foreach (var part in parts)
-                part.Mode = part.Mode == BoxModelPartMode.Add ? BoxModelPartMode.Cut : BoxModelPartMode.Add;
+                if (part.Mode == BoxModelPartMode.Cut)
+                    GeometryCutterBoxConversion.ToAddingPart(part);
+                else
+                    GeometryCutterBoxConversion.ToCutter(part);
+
+            foreach (var cutter in cutters)
+                GeometryCutterBoxConversion.ToPart(cutter);
+
+            Undo.CollapseUndoOperations(undoGroup);
         }
 
 
@@ -75,6 +86,20 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     parts.Add(part);
 
             return parts;
+        }
+
+
+        // Выделенные вырезы, которые можно превратить в коробку: коробка по осям своего объекта.
+        public static List<GeometryCutter> SelectedCutterBoxes()
+        {
+            var cutters = new List<GeometryCutter>();
+
+            foreach (var selected in Selection.gameObjects)
+                if (selected.TryGetComponent<GeometryCutter>(out var cutter)
+                    && GeometryCutterSolverBoxes.IsBoxAlongAxesOf(cutter, GeometryCutterSolverBoxes.CollectingModelOf(cutter)))
+                    cutters.Add(cutter);
+
+            return cutters;
         }
 
 

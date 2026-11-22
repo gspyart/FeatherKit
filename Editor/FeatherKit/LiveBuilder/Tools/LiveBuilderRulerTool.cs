@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEditor.ShortcutManagement;
 using UnityEngine;
 using static FeatherKit.EditorTools.LiveBuilder.LiveBuilderIconRasterizer;
 
@@ -17,7 +18,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public override string Id => "Ruler";
 
-        public override string DisplayName => "Линейка";
+        public override string DisplayName => "Ruler";
 
         public override string Tooltip => "Клик — начало, клик — конец: расстояние и допрыгнет ли игрок";
 
@@ -53,9 +54,28 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public override bool IsBusy => ruler.IsActive;
 
+        public override LiveBuilderDrawingReport DrawingReport => ruler.Report();
+
         public override string Hint => ruler.Hint;
 
-        public override string[] KeyHints { get; } = new[] { "клик, клик — расстояние и допрыгнет ли игрок", "точки прилипают к углам, серединам и рёбрам построек" };
+        public override string[] KeyHints { get; } = { "Click, click — distance and whether the player makes the jump", "Points snap to corners, midpoints and edges" };
+
+
+        // ── Клавиша ──────────────────────────────────────────────────────
+
+        [Shortcut(LiveBuilderShortcutIds.ToolsPrefix + "Ruler", typeof(LiveBuilderIdleShortcutContext), KeyCode.Alpha8)]
+        private static void SelectByShortcut()
+        {
+            LiveBuilderToolPalette.SelectToolOrNextMode<LiveBuilderRulerTool>();
+        }
+
+
+        [Shortcut(LiveBuilderShortcutIds.ToolsPrefix + "Ruler" + LiveBuilderShortcutIds.PreviousModeSuffix, typeof(LiveBuilderIdleShortcutContext),
+            KeyCode.Alpha8, ShortcutModifiers.Shift)]
+        private static void SelectPreviousModeByShortcut()
+        {
+            LiveBuilderToolPalette.SelectToolOrPreviousMode<LiveBuilderRulerTool>();
+        }
 
 
         // ── Что правит: проверка ─────────────────────────────────────────
@@ -72,10 +92,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Как читать цвета замера.
         public override void DrawSettings()
         {
-            using (LiveBuilderWindowControls.Card("Как читать"))
-                LiveBuilderWindowControls.Note("Зелёным — легко, жёлтым — на пределе или только в вис, красным — не допрыгнуть. " +
-                                               "Таблица прыжков — в Project Settings → FeatherKit → Live Builder; там же она включается. " +
-                                               "Цифры грубые, на глаз: точный расчёт — у настроек прыжка игры.");
+            using (LiveBuilderWindowControls.Card("Colors"))
+                LiveBuilderWindowControls.Note("Green — easy, yellow — at the limit or hang only, red — out of reach. " +
+                                               "Jump table — Project Settings → FeatherKit → Live Builder. Rough numbers, by eye.");
         }
 
 

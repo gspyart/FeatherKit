@@ -37,7 +37,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (!perform)
             {
-                ShowNotification(slot.Problem ?? slot.Description + (Event.current.alt ? "" : " · Alt — вся коробка"));
+                ShowNotification(slot.Problem ?? slot.Description + (Event.current.alt ? "" : " · Alt — whole box"));
                 return slot.Problem == null ? DragAndDropVisualMode.Link : DragAndDropVisualMode.Rejected;
             }
 

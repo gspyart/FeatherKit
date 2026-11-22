@@ -1,0 +1,36 @@
+# path	exact	shape	vertices	submeshes	collider
+Canopy/Canopy Building/Roof/Gable Roof	00f7849a2648a1a3b59eb40bb2f637f8	d221294f5f6172da767768c695fbc79d	58	1	same
+Canopy/Canopy Building/Roof/Roof	edc4cce10532ea35dd4888b5d2a8c8a4	af74a2cfc00c47aadd6850f8f2ffd327	12	5	same
+Canopy/Canopy Building/Storey 1/Slab	e8da94974bdc95245da6eef61bee51dd	00d1afcf90bc26ecb4fa0e25f8baa467	6	5	same
+Canopy/Canopy Building/Storey 1/Walls	344ec7e9d93d3012a3af8c3f6b6643ae	23f35553f24966abf822176d2e7f15c1	72	5	same
+Section	72935c80b176db7b23b3c9c5a248b2b5	af38b01fea2bc6298c6b697958916d72	5776	1	ee8381771a3ab559b9696a89fc01bffd
+Section/Building/Roof/Roof	6fb60c007bb0a63a979f3ce4e3a2c06e	bd40e283add283ade59e53aa94b86c61	12	5	same
+Section/Building/Storey 1/Elevator Shaft	39f9d26cfb85661e803412bf40598d8a	8c9fa12cdba0416d59ab3d0492ad80b7	608	1	same
+Section/Building/Storey 1/Partition Hall East	dc1c95e3735a4aa5ccdb61cdbfccfed3	8f2d6ee97f677302c525c62eae738946	84	1	same
+Section/Building/Storey 1/Partition Hall West	4d5e10dfd1a0ea3b1b04c8049ebdd564	fc9bbc636f12cbf2f97614b2c242498c	84	1	same
+Section/Building/Storey 1/Partition Rooms East	79fd62d84b1422d65dd405b8f128891a	114c198ce0e7c22b74ebe68774166cb0	84	1	same
+Section/Building/Storey 1/Partition Rooms West	49c627de1b39a17e16247f91ed7f8ce2	75049dbd55535a1086d723e2e120d1af	84	1	same
+Section/Building/Storey 1/Slab	f161b828b04b676a115b926dc6288ff7	4aed7c5dd35a4a4891d9ec324566194b	6	5	same
+Section/Building/Storey 1/Walls	24cfbba0484447641d3d9cf8ee7f11e7	59075aa543462d1a1c1a30d44c413131	1224	5	same
+Section/Building/Storey 2/Slab	2f60ddac67e3d6efe0c06ba3b2e587ad	935a7b882ba5f6f4521688304ad7f0e1	174	5	same
+Section/Building/Storey 2/Walls	f6cbd4b5286e8cd1cc999ca8eba5758d	91fa960c24cd4ae1753a7836326bb19a	1224	5	same
+Section/Building/Storey 3/Slab	b58a45107156d38410beefcb3eac5b4b	6dcfc24bb18623401cd1b034a5827d34	174	5	same
+Section/Building/Storey 3/Walls	5ea3ce0ea3bb922c95d0275551d8a73b	2c4ece61fe5edcfa92c3b5372286b629	1224	5	same
+Section/Building/Storey 4/Slab	6707d1bf03fcdc79fb6247740d989621	e9eaa5ceb226716358b6fa3e6580215f	174	5	same
+Section/Building/Storey 4/Walls	4fa240ef292a22e4d5e442ef6f0679f9	1eedb70953f0f13ca874d99c20ec5f84	1224	5	same
+Section/Building/Storey 5/Slab	2cca8b8715d5ab41c4b76c6c0cf87b7d	890bad3df443f3eb13817e67dffe9625	174	5	same
+Section/Building/Storey 5/Walls	93528a02770e72e5f66f6fa03fd20f6c	8dd166e935e60ee419ea601ee59aad8d	1224	5	same
+Section/Building/Storey 6/Slab	74cf3e8875bb0143f5a1b762c8fcfadd	218cab3204acd3ecdcdc2012b55b372c	174	5	same
+Section/Building/Storey 6/Walls	9fb8575c900e7768106ab5476daccea4	80c93464cebeba2e34eeb92b609467df	1224	5	same
+Section/Building/Storey 7/Slab	531ffc3b633a32f78c5a1bfaa498c326	6f81984d310b0a970662d663c51f26f8	174	5	same
+Section/Building/Storey 7/Walls	f71544855ab592426acba509e2ae6fc8	51c64c859f6238cf208c8d27d84cf7cd	1224	5	same
+Section/Building/Storey 8/Slab	daa80fab9f2cc9b9ddfa11093b488d6e	29778ed959cae3a9ec5d2ee3735d578d	174	5	same
+Section/Building/Storey 8/Walls	417c0592cfe0d07755f19edd90dc8091	d268d850d57c0535d46528025420a921	1224	5	same
+Section/Building/Storey 9/Slab	0c70b41831478775bec6216c1fbc8332	63f0ad0e9218131cae523c8b689f8e4f	174	5	same
+Section/Building/Storey 9/Walls	98fe023b2dcb35baece4c4ade93e9ac4	3a23c0b02c3eca589cd3ce0c50e4f299	1224	5	same
+Yard	97ea54e83eace58be323e871120921e6	ebcc7e7732d7b4e656954b3a411d1488	57721	1	same
+Yard/Arch Wall	c6444e939a2a5a9cb643847d9e26f1ae	fe6e054ea93df6040cd361f5642e2e28	228	1	same
+Yard/Column	1c6a87de252cafba425b1e3293a85b32	ee1539e21ecc0429984fcd7148e12cd5	170	1	same
+Yard/Column#2	1c6a87de252cafba425b1e3293a85b32	ee1539e21ecc0429984fcd7148e12cd5	170	1	same
+Yard/Column#3	1c6a87de252cafba425b1e3293a85b32	ee1539e21ecc0429984fcd7148e12cd5	170	1	same
+Yard/Column#4	1c6a87de252cafba425b1e3293a85b32	ee1539e21ecc0429984fcd7148e12cd5	170	1	same

@@ -10,8 +10,8 @@ namespace FeatherKit.LiveBuilder
     /// </summary>
     public enum LiveBuilderCutTargets
     {
-        [InspectorName("Всё")] Everything,
-        [InspectorName("Только перекрытия")] SlabsOnly,
-        [InspectorName("Только стены")] WallsOnly
+        [InspectorName("Everything")] Everything,
+        [InspectorName("Slabs only")] SlabsOnly,
+        [InspectorName("Walls only")] WallsOnly
     }
 }

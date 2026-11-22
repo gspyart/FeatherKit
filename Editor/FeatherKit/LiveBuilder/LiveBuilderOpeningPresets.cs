@@ -37,7 +37,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
     /// <summary>
-    /// Проёмы для инструмента «Проём»: готовые размеры из настроек проекта (<see cref="LiveBuilderProjectSettings"/>) и свой.
+    /// Проёмы для инструмента «Cut»: готовые размеры из настроек проекта (<see cref="LiveBuilderProjectSettings"/>) и свой.
     /// Выбранный и свои числа помнит редактор.
     /// </summary>
     public static class LiveBuilderOpeningPresets
@@ -73,7 +73,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
         public static LiveBuilderOpeningSize Selected => SelectedIndex == CustomIndex
-            ? new LiveBuilderOpeningSize("Свой", CustomWidth, CustomHeight, CustomSill)
+            ? new LiveBuilderOpeningSize("Custom", CustomWidth, CustomHeight, CustomSill)
             : Presets[SelectedIndex];
     }
 }

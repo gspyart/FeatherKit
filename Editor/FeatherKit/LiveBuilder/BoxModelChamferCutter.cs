@@ -8,16 +8,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Срезает скосы рёбер (<see cref="BoxModelEdgeChamfer"/>) из готового меша объекта из коробок — как фаска (<see cref="BoxModelBevel"/>),
     /// только у одного ребра одной коробки и на свои размеры: из меша вычитается треугольная призма вдоль ребра (<see cref="MeshSubtraction"/>).
     /// Только у добавляющих коробок: скос срезает объём, а вырезающей пришлось бы его добавлять.
-    /// Режет готовый меш, поэтому срежет и чужую коробку, если та стоит в том же месте. Новые грани — материала граней рядом, развёртка в метрах.
+    /// Режет готовый меш, поэтому срежет и чужую коробку, если та стоит в том же месте. Новые грани — материала граней рядом, развёртка в метрах;
+    /// скат у постройки World — по своей плоскости (<see cref="LiveBuilderFaceUnwrapper.ForSlopes"/>).
     /// </summary>
     public static class BoxModelChamferCutter
     {
-        public static void Apply(Mesh mesh, IReadOnlyList<BoxModelSolverBox> boxes)
+        public static void Apply(Mesh mesh, IReadOnlyList<BoxModelSolverBox> boxes, LiveBuilderFaceUnwrapper unwrapper = null)
         {
             if (mesh.vertexCount == 0 || !HasAnyChamfer(boxes))
                 return;
 
-            var polygons = MeshSubtraction.Read(mesh);
+            var polygons = new MeshSubtractionPolygons(MeshSubtraction.Read(mesh)) { Unwrapper = unwrapper?.ForSlopes() };
 
             foreach (var box in boxes)
             {
@@ -28,10 +29,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var max = box.Box.MaxInMeters;
 
                 foreach (var chamfer in box.Chamfers)
-                    polygons = Cut(polygons, chamfer, min, max);
+                    Cut(polygons, chamfer, min, max);
             }
 
-            MeshSubtraction.Write(mesh, polygons, mesh.subMeshCount);
+            MeshSubtraction.Write(mesh, polygons.InOrder(), mesh.subMeshCount);
         }
 
         private static bool HasAnyChamfer(IReadOnlyList<BoxModelSolverBox> boxes)
@@ -47,25 +48,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Один скос ────────────────────────────────────────────────────
 
         // Оси сечения: x — поперёк второй стороны (по её оси), y — поперёк первой, z — вдоль ребра. Угол ребра — в нуле.
-        private static List<MeshBooleanPolygon> Cut(List<MeshBooleanPolygon> polygons, BoxModelEdgeChamfer chamfer, Vector3 min, Vector3 max)
+        private static void Cut(MeshSubtractionPolygons polygons, BoxModelEdgeChamfer chamfer, Vector3 min, Vector3 max)
         {
             var firstAxis = BoxFaces.Axis(chamfer.FirstFace);
             var secondAxis = BoxFaces.Axis(chamfer.SecondFace);
 
             if (!chamfer.HasCut || firstAxis == secondAxis)
-                return polygons;
+                return;
 
             var alongAxis = 3 - firstAxis - secondAxis;
             var size = max - min;
-            var sizeOnFirst = Mathf.Min(chamfer.SizeOnFirstFace, size[secondAxis]);
-            var sizeOnSecond = Mathf.Min(chamfer.SizeOnSecondFace, size[firstAxis]);
+            var sizeOnFirst = chamfer.SizeOnFirstFaceIn(size);
+            var sizeOnSecond = chamfer.SizeOnSecondFaceIn(size);
             var crossSection = CrossSectionOf(BoxFaces.IsPositive(chamfer.FirstFace) ? 1f : -1f, BoxFaces.IsPositive(chamfer.SecondFace) ? 1f : -1f,
                 sizeOnFirst, sizeOnSecond);
 
             var edgeToMesh = EdgeToMesh(chamfer, firstAxis, secondAxis, alongAxis, min, max);
             var length = size[alongAxis];
 
-            return MeshSubtraction.SubtractNear(polygons, BoxModelEdgeCutting.BoundsOf(crossSection, length, edgeToMesh),
+            polygons.SubtractNear(BoxModelEdgeCutting.BoundsOf(crossSection, length, edgeToMesh),
                 near => MeshSubtraction.PrismPolygons(crossSection, 0f, length, edgeToMesh, MeshSubtraction.MostCommonSubmesh(near)));
         }
 

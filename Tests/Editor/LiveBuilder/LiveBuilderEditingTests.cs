@@ -87,22 +87,21 @@ namespace FeatherKit.Tests.LiveBuilder
             var building = testScene.CreateBuilding(model, 2, Vector3.zero, new Vector3(8f, 0f, 0f), new Vector3(8f, 0f, 8f), new Vector3(0f, 0f, 8f));
             var floor = building.FirstFloorWorldHeight - Origin.y;
 
-            var shaft = CreateLinkedBox(model, building, new Vector3(2f, floor, 2f), building.StoreyHeight);
-            var shelf = CreateLinkedBox(model, building, new Vector3(5f, floor, 5f), 1f);
+            var shaft = CreateRepeatedBox(model, building, new Vector3(2f, floor, 2f), building.StoreyHeight);
+            var shelf = CreateRepeatedBox(model, building, new Vector3(5f, floor, 5f), 1f);
 
             building.StoreyHeight = 5f;
-            SplineBuildingLinkSync.SyncAll();
+            SplineBuildingStoreySync.SyncAll();
 
             Assert.AreEqual(5f, shaft.Size.y, 0.001f, "коробка во весь этаж — выросла с этажом");
             Assert.AreEqual(1f, shelf.Size.y, 0.001f, "коробка своей высоты — какой была");
         }
 
-        // Коробка в интерьере здания, привязанная к его этажам, — как ставит «Коробка» на полу здания.
-        private static BoxModelPart CreateLinkedBox(BoxModel model, SplineBuilding building, Vector3 localMin, float height)
+        // Коробка в первом этаже здания на всех этажах — как ставит «Коробка» на полу здания с «И этажи выше».
+        private static BoxModelPart CreateRepeatedBox(BoxModel model, SplineBuilding building, Vector3 localMin, float height)
         {
-            var part = BoxModelFactory.CreatePart(model, localMin, localMin + new Vector3(1f, height, 1f), BoxModelPartMode.Cut);
-            part.transform.SetParent(BoxModelFactory.InteriorOf(building), true);
-            SplineBuildingLinkSync.Attach(part.gameObject, building, true);
+            var part = BoxModelFactory.CreatePart(model, localMin, localMin + new Vector3(1f, height, 1f), BoxModelPartMode.Add);
+            SplineBuildingInteriorPlacement.PutOnStorey(part.transform, building, true, false, "Create Box");
             return part;
         }
 
@@ -231,8 +230,7 @@ namespace FeatherKit.Tests.LiveBuilder
             var building = testScene.CreateBuilding(1, Vector3.zero, new Vector3(10f, 0f, 0f), new Vector3(10f, 0f, 10f), new Vector3(0f, 0f, 10f));
             var contour = building.GetComponent<SplineContainer>().Spline;
             var partition = testScene.CreateWall(new Vector3(5f, 0f, Inner), new Vector3(5f, 0f, 10f - Inner));
-            partition.transform.SetParent(BoxModelFactory.InteriorOf(building), true);
-            SplineBuildingLinkSync.Attach(partition.gameObject, building, false);
+            partition.transform.SetParent(SplineBuildingStoreys.ContainerOf(building, 0).transform, true);
             SplineWallBuildingAnchors.SyncAll();
 
             // Нижняя стена здания — наискось и обратно, три раза.
@@ -265,7 +263,7 @@ namespace FeatherKit.Tests.LiveBuilder
             var window = BoxModelFactory.CreateCutter(building.transform, building.transform.TransformPoint(bottom), building.transform.rotation * rotation,
                 new Vector2(width, 1.5f), depth);
             window.FollowsWallLine = true;
-            SplineBuildingLinkSync.Attach(window.gameObject, building, true);
+            SplineBuildingInteriorPlacement.PutCutterOnStorey(window, building, true);
             GeometryCutterLineSync.SyncAll();
             SplineBuildingRebuilder.Rebuild(building);
             return window;

@@ -116,16 +116,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 var nameU = AxisName(frameToWorld, firstAxis);
                 var nameV = AxisName(frameToWorld, secondAxis);
-                Consider(axisU, "по оси " + nameU, AxisColor(nameU));
-                Consider(axisV, "по оси " + nameV, AxisColor(nameV));
+                Consider(axisU, nameU + " axis", AxisColor(nameU));
+                Consider(axisV, nameV + " axis", AxisColor(nameV));
                 Consider((axisU + axisV).normalized, "45°", DiagonalColor);
                 Consider((axisU - axisV).normalized, "45°", DiagonalColor);
 
                 if (previous is { } before && (last - before).sqrMagnitude > 0.0001f)
                 {
                     var segment = Vector3.ProjectOnPlane(last - before, Vector3.Cross(axisU, axisV)).normalized;
-                    Consider(segment, "продолжение отрезка", SegmentColor);
-                    Consider(Vector3.Cross(Vector3.Cross(axisU, axisV), segment).normalized, "перпендикулярно отрезку", SegmentColor);
+                    Consider(segment, "segment extension", SegmentColor);
+                    Consider(Vector3.Cross(Vector3.Cross(axisU, axisV), segment).normalized, "perpendicular to segment", SegmentColor);
                 }
             }
 

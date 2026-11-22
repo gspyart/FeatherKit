@@ -8,15 +8,15 @@ namespace FeatherKit.LiveBuilder
     /// <summary>Где стена стоит относительно линии: линия по оси стены (посередине), по её левому или правому краю.</summary>
     public enum SplineWallAlignment
     {
-        [InspectorName("По оси")] Center,
-        [InspectorName("Слева от линии")] Left,
-        [InspectorName("Справа от линии")] Right
+        [InspectorName("Center")] Center,
+        [InspectorName("Left of Line")] Left,
+        [InspectorName("Right of Line")] Right
     }
 
 
     /// <summary>
     /// Стена по линии: сплайн на этом же объекте — путь стены, у точки свой режим — угол или плавный изгиб.
-    /// Толщина и высота — здесь, а с типом (<see cref="SplineWallType"/>) толщина и материал — из типа; «копии вверх» — та же стена на этажах выше (перегородка на все этажи здания).
+    /// Толщина и высота — здесь, а с типом (<see cref="SplineWallType"/>) толщина и материал — из типа; на этажах выше — повтор (<see cref="LiveBuilderArray"/>).
     /// Замкнутая стена в здании может быть комнатой: стороны вдоль стен здания не строятся, но остаются в линии.
     /// У замкнутой стены могут быть свои пол и потолок — плиты по внутренней стороне, своими материалами.
     /// Точки перегородки, лежащие на стене здания, держатся за неё: двигаешь стену здания — точки едут следом.
@@ -29,9 +29,9 @@ namespace FeatherKit.LiveBuilder
     [DisallowMultipleComponent]
     [SelectionBase]
     [RequireComponent(typeof(SplineContainer), typeof(MeshFilter), typeof(MeshRenderer))]
-    public class SplineWall : MonoBehaviour, IStoreyCopies
+    public class SplineWall : MonoBehaviour
     {
-        [Header("Размер")]
+        [Header("Size")]
         [Tooltip("Тип стены: толщина и материал — из него, общие со всеми стенами этого типа. Пусто — свои ниже.")]
         [SerializeField] private SplineWallType wallType;
 
@@ -55,7 +55,7 @@ namespace FeatherKit.LiveBuilder
         [SerializeField] private SplineWallHeightInBuilding heightInBuilding = SplineWallHeightInBuilding.ToCeiling;
 
         [Space]
-        [Header("Пол и потолок")]
+        [Header("Floor and Ceiling")]
         [Tooltip("Плита пола внутри замкнутой стены, на её низу. В здании — свой пол комнаты поверх пола здания, своим материалом. У открытой линии пола нет.")]
         [SerializeField] private bool hasFloor;
 
@@ -72,18 +72,12 @@ namespace FeatherKit.LiveBuilder
         [Tooltip("Материал потолка снизу. Пусто — материал стены.")]
         [SerializeField] private Material ceilingMaterial;
 
-        [Space]
-        [Header("Копии вверх")]
-        [Tooltip("Сколько всего таких стен друг над другом, вместе с этой. В здании задаёт привязка («На этажах»).")]
-        [Range(1, 60)]
-        [SerializeField] private int copiesUp = 1;
-
-        [Tooltip("Шаг копий вверх, м — обычно высота этажа: 4.")]
-        [Min(0.1f)]
-        [SerializeField] private float copyStep = 4f;
+        // Старые копии вверх: их читает только миграция — переводит в повтор (LiveBuilderArray).
+        [SerializeField, HideInInspector] private int copiesUp = 1;
+        [SerializeField, HideInInspector] private float copyStep = 4f;
 
         [Space]
-        [Header("Изгибы")]
+        [Header("Curves")]
         [Tooltip("Длина одного прямого кусочка на плавном изгибе, м. Меньше — глаже, но тяжелее меш. 0,5 — заметно гладко.")]
         [Range(0.1f, 2f)]
         [SerializeField] private float curveStep = 0.5f;
@@ -93,12 +87,21 @@ namespace FeatherKit.LiveBuilder
         [SerializeField] private int cornerSegments = 6;
 
         [Space]
-        [Header("Вид и столкновения")]
+        [Header("Look and Collision")]
         [Tooltip("Материал стены. Пусто — серый материал набора.")]
         [SerializeField] private Material material;
 
         [Tooltip("Собирать коллайдер по мешу — в стену можно упереться.")]
         [SerializeField] private bool hasCollider = true;
+
+        [Space]
+        [Header("Texture")]
+        [Tooltip("World — текстура по миру: ряды плиток сходятся через этажи и соседние постройки, сдвинул постройку — рисунок остаётся на месте. " +
+                 "Object — текстура едет вместе с постройкой. Старые постройки — Object, новые — World.")]
+        [SerializeField] private LiveBuilderTextureAlignment textureAlignment = LiveBuilderTextureAlignment.Object;
+
+        [Tooltip("Сдвиг, масштаб и поворот текстуры: стороны, торцы (верх, откосы проёмов), пол, потолок. Нет строки — как есть.")]
+        [SerializeField] private LiveBuilderTextureFitList<SplineWallTextureSurface> textureFits = new();
 
         // Чем собран текущий меш: изменилось — пересборка. Пишет редактор.
         [SerializeField, HideInInspector] private string builtSignature;
@@ -182,13 +185,14 @@ namespace FeatherKit.LiveBuilder
             set => ceilingMaterial = value;
         }
 
-        public int CopiesUp
+        // Только для миграции старых данных.
+        public int LegacyCopiesUp
         {
             get => copiesUp;
-            set => copiesUp = Mathf.Clamp(value, 1, 60);
+            set => copiesUp = Mathf.Max(1, value);
         }
 
-        public float CopyStep
+        public float LegacyCopyStep
         {
             get => copyStep;
             set => copyStep = Mathf.Max(0.1f, value);
@@ -206,6 +210,14 @@ namespace FeatherKit.LiveBuilder
         }
 
         public bool HasCollider => hasCollider;
+
+        public LiveBuilderTextureAlignment TextureAlignment
+        {
+            get => textureAlignment;
+            set => textureAlignment = value;
+        }
+
+        public LiveBuilderTextureFitList<SplineWallTextureSurface> TextureFits => textureFits ??= new LiveBuilderTextureFitList<SplineWallTextureSurface>();
 
         public string BuiltSignature
         {
@@ -231,6 +243,12 @@ namespace FeatherKit.LiveBuilder
         {
             get => syncedBuildingKnotCount;
             set => syncedBuildingKnotCount = value;
+        }
+
+
+        private void Reset()
+        {
+            textureAlignment = LiveBuilderTextureAlignment.World;
         }
     }
 }

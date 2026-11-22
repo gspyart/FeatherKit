@@ -176,6 +176,10 @@ namespace FeatherKit.EditorTools.LevelPalette
 
             if (!(asset is Material) && !(asset is Texture2D))
             {
+                // Префаб — выбранный для расстановки (инструмент Module в Live Builder).
+                if (asset is GameObject prefab)
+                    LevelPaletteActiveAsset.Prefab = prefab;
+
                 EditorGUIUtility.PingObject(asset);
                 return;
             }

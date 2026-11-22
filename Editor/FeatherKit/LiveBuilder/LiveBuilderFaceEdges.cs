@@ -38,7 +38,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public static readonly LiveBuilderFaceEdges None = new();
 
-        // Меш и треугольники — общие списки на все поиски: «Проём» ищет края на каждое движение мыши.
+        // Меш и треугольники — общие списки на все поиски: «Cut» ищет края на каждое движение мыши.
         private static readonly List<Vector3> VerticesScratch = new();
         private static readonly List<int> TrianglesScratch = new();
 
@@ -103,7 +103,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Поиск ────────────────────────────────────────────────────────
 
         // Края грани меша под точкой: у коллайдера — его меша, иначе меша на том же объекте. Меша нет или он не читается — None.
-        // Та же грань, что в прошлый раз, — прежний ответ: «Проём» спрашивает на каждое движение мыши, а поиск обходит весь меш.
+        // Та же грань, что в прошлый раз, — прежний ответ: «Cut» спрашивает на каждое движение мыши, а поиск обходит весь меш.
         public static LiveBuilderFaceEdges Find(Component meshOwner, Vector3 point, Vector3 normal, Vector3 right, Vector3 up)
         {
             var mesh = MeshOf(meshOwner);

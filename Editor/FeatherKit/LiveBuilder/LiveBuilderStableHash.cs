@@ -104,8 +104,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Число с округлением до 0,1 мм: дрожь последних знаков подпись не меняет.
         public static void AppendQuantized(ref Hash128 hash, float value)
         {
-            var steps = (long)System.Math.Round(value / QuantizationStep);
+            var steps = Quantize(value);
             hash.Append(ref steps);
+        }
+
+
+        // Число в шагах по 0,1 мм — чтобы сравнивать так же, как сравнивает подпись.
+        public static long Quantize(float value)
+        {
+            return (long)System.Math.Round(value / QuantizationStep);
         }
 
 

@@ -7,7 +7,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Стрелки переноса выделенных построек — как штатный перенос Unity (W), но не выходя из Live Builder: коробка, комната, лестница,
-    /// стена по линии, здание, объект из коробок. Стрелки — в центре рамки активного выделенного (<see cref="LiveBuilderSelectionInfo"/>);
+    /// стена по линии, здание, колонна, объект из коробок. Стрелки — в центре рамки активного выделенного (<see cref="LiveBuilderSelectionInfo"/>);
     /// тянешь — едут все выделенные, что правит инструмент, на целое число клеток сетки от исходного места, в осях стрелок.
     /// Оси — как переключатель Global / Local в Unity; у коробки, комнаты и лестницы — всегда оси их объекта: они не поворачиваются.
     /// Shift в начале — копия, как Ctrl+D (связь с префабом, имя, место в иерархии сразу за оригиналом): уезжает копия, оригинал стоит.
@@ -112,7 +112,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
 
             var isMovable = selected.TryGetComponent<BoxModelPart>(out _) || selected.TryGetComponent<BoxModelRoom>(out _) || selected.TryGetComponent<BoxModelStairs>(out _)
-                            || selected.TryGetComponent<SplineWall>(out _) || selected.TryGetComponent<SplineBuilding>(out _) || selected.TryGetComponent<BoxModel>(out _);
+                            || selected.TryGetComponent<SplineWall>(out _) || selected.TryGetComponent<SplineBuilding>(out _) || selected.TryGetComponent<BoxModel>(out _)
+                            || selected.TryGetComponent<LiveBuilderColumn>(out _);
 
             return isMovable ? selected.transform : null;
         }
@@ -263,8 +264,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (!isDragging || Event.current.type != EventType.Repaint)
                 return;
 
-            var offsetText = LiveBuilderSceneText.FormatOffset(snappedOffset) ?? (isCopying ? "тяни дальше — копия встанет на клетку сетки" : "0 м");
-            var text = (isCopying ? "копия · " : "") + offsetText + (pointSnapLabel != null ? " · " + pointSnapLabel : "");
+            var offsetText = LiveBuilderSceneText.FormatOffset(snappedOffset) ?? (isCopying ? "drag further — the copy lands on a grid cell" : "0 m");
+            var text = (isCopying ? "copy · " : "") + offsetText + (pointSnapLabel != null ? " · " + pointSnapLabel : "");
             LiveBuilderSceneText.DrawLabel(HandlePosition, text);
         }
     }

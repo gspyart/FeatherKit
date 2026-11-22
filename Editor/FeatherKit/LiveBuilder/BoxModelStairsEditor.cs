@@ -7,11 +7,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Инспектор лестницы: куда идёт подъём — стрелками, как сверху, и кнопками поворота; всё внутри её коробки (<see cref="BoxModelStairsTurns"/>).
     /// Потом форма → вокруг → тонко. У лестницы с площадкой — ещё площадка, зазор между маршами и сторона первого марша;
-    /// сменил форму или глубину площадки — коробка та же, марши под неё. Тот же инспектор показывает окно Live Builder.
+    /// сменил форму или глубину площадки — коробка та же, марши под неё. Главное — и секция Construction панели.
     /// </summary>
     [CustomEditor(typeof(BoxModelStairs))]
     [CanEditMultipleObjects]
-    public class BoxModelStairsEditor : Editor
+    public class BoxModelStairsEditor : Editor, ILiveBuilderCompactInspector
     {
         // Порядок стрелок в переключателе: как стороны на виде сверху по часовой — вперёд, вправо, назад, влево.
         private static readonly BoxModelStairsDirection[] DirectionOrder =
@@ -20,20 +20,43 @@ namespace FeatherKit.EditorTools.LiveBuilder
         };
 
 
+        // Полный инспектор: главное → вокруг (дыра и материал) → тонко.
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            var stairs = (BoxModelStairs)target;
+            DrawConstruction((BoxModelStairs)target);
 
-            LiveBuilderInspectorLayout.Section("Подъём");
+            LiveBuilderInspectorLayout.Section("Around");
+            LiveBuilderInspectorLayout.Properties(serializedObject, "material");
+
+            if (LiveBuilderInspectorLayout.Foldout("BoxModelStairs.Fine", "Fine Tuning"))
+                LiveBuilderInspectorLayout.Properties(serializedObject, "stepHeight", "stepDepth");
+
+            serializedObject.ApplyModifiedProperties();
+        }
+
+
+        // ILiveBuilderCompactInspector: секция Construction панели — всё, кроме материала и тонкого.
+        public void DrawMainFields()
+        {
+            serializedObject.Update();
+            DrawConstruction((BoxModelStairs)target);
+            serializedObject.ApplyModifiedProperties();
+        }
+
+
+        // Подъём → форма и размеры → площадка → дыра над лестницей.
+        private void DrawConstruction(BoxModelStairs stairs)
+        {
+            LiveBuilderInspectorLayout.Section("Rise");
             DrawDirection(stairs);
             DrawTurnButtons();
 
-            LiveBuilderInspectorLayout.Section("Форма");
+            LiveBuilderInspectorLayout.Section("Shape");
             DrawShapeKeepingBox();
             LiveBuilderInspectorLayout.Properties(serializedObject, "style", "width", "height");
 
-            using (new EditorGUI.DisabledScope(stairs.Style != BoxModelStairsStyle.SeparateSteps))
+            using (new EditorGUI.DisabledScope(stairs.Style != BoxModelStairsStyle.Open))
                 LiveBuilderInspectorLayout.Properties(serializedObject, "stepThickness");
 
             DrawLength(stairs);
@@ -41,13 +64,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (stairs.IsSwitchback)
                 DrawLanding(stairs);
 
-            LiveBuilderInspectorLayout.Section("Вокруг");
-            LiveBuilderInspectorLayout.Properties(serializedObject, "cutsAbove", "material");
-
-            if (LiveBuilderInspectorLayout.Foldout("BoxModelStairs.Fine", "Тонко"))
-                LiveBuilderInspectorLayout.Properties(serializedObject, "stepHeight", "stepDepth");
-
-            serializedObject.ApplyModifiedProperties();
+            LiveBuilderInspectorLayout.Properties(serializedObject, "cutsAbove");
         }
 
 
@@ -56,7 +73,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var current = System.Array.IndexOf(DirectionOrder, stairs.Direction);
             var chosen = LiveBuilderWindowControls.Switch(
-                new GUIContent("Вверх к", "Куда идёт подъём, вид сверху: ↑ — к +Z объекта, → — к +X. Коробка лестницы стоит на месте, ступени перестраиваются под неё"),
+                new GUIContent("Up Toward", "Куда идёт подъём, вид сверху: ↑ — к +Z объекта, → — к +X. Коробка лестницы стоит на месте, ступени перестраиваются под неё"),
                 current, "↑ +Z", "→ +X", "↓ −Z", "← −X");
 
             if (chosen == current)
@@ -76,7 +93,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var length = EditorGUILayout.FloatField(new GUIContent("Length", "Длина лестницы по подъёму, м. Ступеней — от высоты, глубина ступени подгоняется под длину"),
                 stairs.Length);
 
-            GUILayout.Label(stairs.StepCount + " ступеней по " + LiveBuilderSceneText.FormatMeters(stairs.StepDepth) + " м", EditorStyles.miniLabel);
+            GUILayout.Label(stairs.StepCount + " steps of " + LiveBuilderSceneText.FormatMeters(stairs.StepDepth) + " m", EditorStyles.miniLabel);
 
             if (Mathf.Approximately(length, stairs.Length))
                 return;
@@ -106,8 +123,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             KeepingLength(() => LiveBuilderInspectorLayout.Properties(serializedObject, "landingDepth"), "Change Stairs Landing");
             LiveBuilderInspectorLayout.Properties(serializedObject, "flightGap", "isFirstFlightOnOtherSide");
-            GUILayout.Label("Марш шириной " + LiveBuilderSceneText.FormatMeters(stairs.FlightWidth) + " м: " + stairs.FirstFlightStepCount + " ступеней до площадки, " +
-                            stairs.SecondFlightStepCount + " после", EditorStyles.miniLabel);
+            GUILayout.Label("Flight " + LiveBuilderSceneText.FormatMeters(stairs.FlightWidth) + " m wide: " + stairs.FirstFlightStepCount + " steps to the landing, " +
+                            stairs.SecondFlightStepCount + " after", EditorStyles.miniLabel);
         }
 
 
@@ -115,10 +132,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button(new GUIContent("↻ Повернуть", "На четверть оборота по часовой, если смотреть сверху, в той же коробке. Tab в окне сцены — то же")))
+                if (GUILayout.Button(new GUIContent("↻ Turn", "На четверть оборота по часовой, если смотреть сверху, в той же коробке. Tab в окне сцены — то же")))
                     TurnAll(BoxModelStairsTurns.Clockwise);
 
-                if (GUILayout.Button(new GUIContent("⇅ Развернуть", "Подъём в обратную сторону в той же коробке: низ и верх меняются местами")))
+                if (GUILayout.Button(new GUIContent("⇅ Reverse", "Подъём в обратную сторону в той же коробке: низ и верх меняются местами")))
                     TurnAll(BoxModelStairsTurns.Opposite);
             }
         }

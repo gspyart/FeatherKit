@@ -20,12 +20,15 @@ namespace FeatherKit.Tests.LiveBuilder
 
         private LiveBuilderTestScene testScene;
         private Object[] selectionBefore;
+        private LiveBuilderBoxMode boxModeBefore;
 
 
         [SetUp]
         public void OpenScene()
         {
             selectionBefore = Selection.objects;
+            boxModeBefore = LiveBuilderBoxModeSettings.Mode;
+            LiveBuilderBoxModeSettings.Mode = LiveBuilderBoxMode.Solid;
 
             // Выделенное на уровне — цель для нового: без этого коробка встала бы в выделенный объект настоящей сцены.
             Selection.objects = new Object[0];
@@ -41,6 +44,7 @@ namespace FeatherKit.Tests.LiveBuilder
 
             testScene.Dispose();
             Selection.objects = selectionBefore;
+            LiveBuilderBoxModeSettings.Mode = boxModeBefore;
         }
 
 
@@ -101,9 +105,9 @@ namespace FeatherKit.Tests.LiveBuilder
         }
 
 
-        // Балкон: коробка наружу со стены здания — его часть, и с «И этажи выше» встаёт на все этажи, хотя середина вне его стен.
+        // Балкон: коробка наружу со стены здания — его часть, в его первом этаже, и с «И этажи выше» — повтор на все этажи, хотя середина вне его стен.
         [Test]
-        public void BoxTool_OnOuterWallOfBuilding_WithAllStoreys_AttachesToBuilding()
+        public void BoxTool_OnOuterWallOfBuilding_WithAllStoreys_RepeatsInBuildingStorey()
         {
             var model = BoxModelFactory.CreateModel(Origin);
             var building = testScene.CreateBuilding(model, 2, Vector3.zero, new Vector3(8f, 0f, 0f), new Vector3(8f, 0f, 8f), new Vector3(0f, 0f, 8f));
@@ -120,10 +124,10 @@ namespace FeatherKit.Tests.LiveBuilder
                 driver.Type("2");
                 driver.Press(KeyCode.Return);
 
-                var link = InTestScene<BoxModelPart>().Single().GetComponent<SplineBuildingStoreyLink>();
-                Assert.IsNotNull(link, "балкон привязан к зданию");
-                Assert.AreEqual(building, link.Building, "к тому, на чьей стене нарисован");
-                Assert.AreEqual(2, link.CopiesFrom(link.Storey), "«И этажи выше» — на обоих этажах");
+                var balcony = InTestScene<BoxModelPart>().Single().transform;
+                Assert.AreEqual(SplineBuildingStoreys.FindContainer(building, 0).transform, balcony.parent, "балкон — в первом этаже того, на чьей стене нарисован");
+                Assert.IsTrue(balcony.GetComponent<LiveBuilderArray>().CountYToBuildingTop, "«И этажи выше» — повтор до верха");
+                Assert.AreEqual(2, LiveBuilderArrayCopyPoses.CopiesOf(balcony).Count, "на обоих этажах");
             }
             finally
             {
@@ -132,17 +136,21 @@ namespace FeatherKit.Tests.LiveBuilder
             }
         }
 
-        // Ограждение на балконной плите: коробка на коробке, которая уже часть здания, — тоже его часть, в интерьере и на тех же этажах.
+        // Ограждение на балконной плите: коробка на коробке, которая уже часть здания, — тоже его часть, в том же этаже и на тех же этажах.
         [Test]
-        public void BoxTool_OnBalconySlab_AttachesToBuildingToo()
+        public void BoxTool_OnBalconySlab_LandsInSameStoreyToo()
         {
             var model = BoxModelFactory.CreateModel(Origin);
             var building = testScene.CreateBuilding(model, 3, Vector3.zero, new Vector3(8f, 0f, 0f), new Vector3(8f, 0f, 8f), new Vector3(0f, 0f, 8f));
             var secondFloor = building.FirstFloorWorldHeight + building.StoreyHeight;
             var allStoreysBefore = LiveBuilderBuildingContext.IsOnAllStoreys;
             var drawModeBefore = BoxModelDrawModeSetting.Current;
+            var gridBefore = EditorSnapSettings.gridSize;
             LiveBuilderBuildingContext.IsOnAllStoreys = true;
             BoxModelDrawModeSetting.Current = BoxModelDrawMode.Auto;
+
+            // Плита — 0,2 м: на сетке крупнее она прилипла бы в ноль, и коробки бы не было.
+            EditorSnapSettings.gridSize = Vector3.one * 0.1f;
 
             try
             {
@@ -161,23 +169,24 @@ namespace FeatherKit.Tests.LiveBuilder
                 var railing = Selection.activeGameObject;
 
                 Assert.AreNotEqual(slab, railing, "встала новая коробка");
-                var link = railing.GetComponent<SplineBuildingStoreyLink>();
-                Assert.IsNotNull(link, "ограждение привязано к зданию, как и плита");
-                Assert.AreEqual(building, link.Building, "к тому же зданию");
-                Assert.AreEqual(BoxModelFactory.InteriorOf(building), railing.transform.parent, "лежит в его интерьере");
-                Assert.AreEqual(slab.GetComponent<SplineBuildingStoreyLink>().CopiesFrom(1), link.CopiesFrom(link.Storey), "на тех же этажах, что и плита");
+                Assert.AreEqual(SplineBuildingStoreys.FindContainer(building, 1).transform, railing.transform.parent, "ограждение — во втором этаже, как и плита");
+                Assert.AreEqual(slab.transform.parent, railing.transform.parent, "в том же этаже");
+                Assert.IsNotNull(railing.GetComponent<LiveBuilderArray>(), "свой повтор по этажам");
+                Assert.AreEqual(LiveBuilderArrayCopyPoses.CopiesOf(slab.transform).Count, LiveBuilderArrayCopyPoses.CopiesOf(railing.transform).Count,
+                    "на тех же этажах, что и плита");
             }
             finally
             {
                 LiveBuilderBuildingContext.IsOnAllStoreys = allStoreysBefore;
                 BoxModelDrawModeSetting.Current = drawModeBefore;
+                EditorSnapSettings.gridSize = gridBefore;
             }
         }
 
 
-        // Второй марш на площадке лестничной клетки: площадка — часть здания, марш на ней — тоже, с высотой над полом этажа.
+        // Второй марш на площадке лестничной клетки: площадка — часть здания, марш на ней — тоже, в том же этаже, с высотой над его полом.
         [Test]
-        public void StairsTool_OnLandingInBuilding_AttachesToBuildingToo()
+        public void StairsTool_OnLandingInBuilding_LandsInSameStoreyToo()
         {
             var model = BoxModelFactory.CreateModel(Origin);
             var building = testScene.CreateBuilding(model, 3, Vector3.zero, new Vector3(8f, 0f, 0f), new Vector3(8f, 0f, 8f), new Vector3(0f, 0f, 8f));
@@ -191,7 +200,8 @@ namespace FeatherKit.Tests.LiveBuilder
                 box.Drag(DownRay(1f, 1f, floor + 1.5f), DownRay(4f, 3f, floor + 1.5f));
                 box.Type("2");
                 box.Press(KeyCode.Return);
-                Assert.IsNotNull(Selection.activeGameObject.GetComponent<SplineBuildingStoreyLink>(), "площадка на полу здания привязана");
+                var landing = Selection.activeGameObject.transform;
+                Assert.AreEqual(SplineBuildingStoreys.FindContainer(building, 0).transform, landing.parent, "площадка на полу здания — в первом этаже");
                 BoxModelRebuilder.Rebuild(model);
                 Physics.SyncTransforms();
 
@@ -202,11 +212,10 @@ namespace FeatherKit.Tests.LiveBuilder
                 stairs.Press(KeyCode.Return);
 
                 var flight = InTestScene<BoxModelStairs>().Single();
-                var link = flight.GetComponent<SplineBuildingStoreyLink>();
-                Assert.IsNotNull(link, "марш на площадке привязан к зданию");
-                Assert.AreEqual(building, link.Building, "к тому же зданию");
-                Assert.AreEqual(BoxModelFactory.InteriorOf(building), flight.transform.parent, "лежит в его интерьере");
-                Assert.AreEqual(2f, link.HeightAboveFloor, 0.01f, "стоит на площадке — на 2 над полом этажа");
+                Assert.AreEqual(landing.parent, flight.transform.parent, "марш на площадке — в том же этаже");
+                Assert.AreEqual(building, SplineBuildingStoreys.BuildingOf(flight.transform), "часть того же здания");
+                Assert.AreEqual(2f, flight.transform.position.y - landing.parent.position.y, 0.01f, "стоит на площадке — на 2 над полом этажа");
+                Assert.AreEqual("last", flight.GetComponent<LiveBuilderArray>().SkipY, "лестница по этажам — без верхнего");
             }
             finally
             {
@@ -214,9 +223,9 @@ namespace FeatherKit.Tests.LiveBuilder
             }
         }
 
-        // Коробка на крыше (будка выхода): коробка объекта здания в его интерьере, привязанная к крыше, — добавили этаж, поднялась с ней.
+        // Коробка на крыше (будка выхода): коробка объекта здания в его «Roof» — добавили этаж, поднялась с крышей.
         [Test]
-        public void BoxTool_OnRoof_AttachesToRoof_FollowsNewStorey()
+        public void BoxTool_OnRoof_LandsInRoof_FollowsNewStorey()
         {
             var model = BoxModelFactory.CreateModel(Origin);
             var building = testScene.CreateBuilding(model, 2, Vector3.zero, new Vector3(8f, 0f, 0f), new Vector3(8f, 0f, 8f), new Vector3(0f, 0f, 8f));
@@ -229,14 +238,12 @@ namespace FeatherKit.Tests.LiveBuilder
             driver.Press(KeyCode.Return);
 
             var hut = Selection.activeGameObject.transform;
-            var link = hut.GetComponent<SplineBuildingStoreyLink>();
-            Assert.IsNotNull(link, "коробка на крыше привязана");
-            Assert.IsTrue(link.IsOnRoof, "к крыше, а не к этажу");
-            Assert.AreEqual(BoxModelFactory.InteriorOf(building), hut.parent, "лежит в интерьере здания");
+            Assert.AreEqual(SplineBuildingStoreys.FindRoof(building).transform, hut.parent, "коробка на крыше — в «Roof»");
+            Assert.IsNull(hut.GetComponent<LiveBuilderArray>(), "по этажам не повторяется");
 
             var heightBefore = hut.transform.position.y;
             building.StoreyCount = 3;
-            SplineBuildingLinkSync.SyncAll();
+            SplineBuildingStoreySync.SyncAll();
             Assert.AreEqual(heightBefore + building.StoreyHeight, hut.transform.position.y, 0.001f, "добавили этаж — поднялся с крышей");
         }
 
@@ -263,7 +270,7 @@ namespace FeatherKit.Tests.LiveBuilder
 
                 var stairs = InTestScene<BoxModelStairs>().Single();
                 Assert.IsTrue(stairs.IsSwitchback, "лестница с площадкой");
-                Assert.IsNotNull(stairs.GetComponent<SplineBuildingStoreyLink>(), "привязана к этажам здания");
+                Assert.IsNotNull(stairs.GetComponent<LiveBuilderArray>(), "повтор по этажам здания");
                 Assert.Less(stairs.Length, 7f, "этажная площадка осталась у ближнего конца клетки");
                 RebuildAll(model, building);
 
@@ -273,7 +280,7 @@ namespace FeatherKit.Tests.LiveBuilder
                 Assert.IsTrue(LiveBuilderTestScene.IsOpen(new Vector3(Origin.x + 1.5f, floor + 2.6f, Origin.z + 3.5f), Vector3.up, 1.3f), "над маршами — дыра в перекрытии");
 
                 building.StoreyHeight = 5f;
-                SplineBuildingLinkSync.SyncAll();
+                SplineBuildingStoreySync.SyncAll();
                 RebuildAll(model, building);
 
                 Assert.AreEqual(5f, stairs.Height, 0.001f, "лестница — на весь новый этаж");
@@ -316,16 +323,15 @@ namespace FeatherKit.Tests.LiveBuilder
         // ── Комната ──────────────────────────────────────────────────────
 
         [Test]
-        public void RoomTool_SidesTypedWhileDragging_MakeRoomThatSize()
+        public void RoomMode_SidesTypedWhileDragging_MakeRoomThatSize()
         {
-            var shapeBefore = LiveBuilderRoomSettings.Shape;
             var wallSideBefore = LiveBuilderRoomSettings.WallSide;
-            LiveBuilderRoomSettings.Shape = LiveBuilderRoomShape.Rectangle;
             LiveBuilderRoomSettings.WallSide = LiveBuilderRoomWallSide.Outward;
+            LiveBuilderBoxModeSettings.Mode = LiveBuilderBoxMode.Room;
 
             try
             {
-                var driver = new LiveBuilderToolDriver(LiveBuilderToolPalette.Get<LiveBuilderRoomTool>());
+                var driver = new LiveBuilderToolDriver(LiveBuilderToolPalette.Get<LiveBuilderBoxTool>());
                 driver.Hold(FloorRay(0f, 0f), FloorRay(1f, 1f));
                 driver.Type("5x3,5");
                 driver.Release();
@@ -336,9 +342,22 @@ namespace FeatherKit.Tests.LiveBuilder
             }
             finally
             {
-                LiveBuilderRoomSettings.Shape = shapeBefore;
                 LiveBuilderRoomSettings.WallSide = wallSideBefore;
             }
+        }
+
+
+        // Клик без протягивания в режиме Room комнату не ставит, а подсказка говорит, чем рисовать комнату по контуру.
+        [Test]
+        public void RoomMode_ClickWithoutDrag_HintsWallOrBuilding()
+        {
+            LiveBuilderBoxModeSettings.Mode = LiveBuilderBoxMode.Room;
+            var boxTool = LiveBuilderToolPalette.Get<LiveBuilderBoxTool>();
+
+            Assert.IsFalse(new LiveBuilderToolDriver(boxTool).Click(FloorRay(1f, 1f)), "клик — не жест, его выделяет окно сцены");
+            Assert.IsEmpty(InTestScene<BoxModelRoom>(), "комнаты нет");
+            StringAssert.Contains("Wall", boxTool.Hint);
+            StringAssert.Contains("Building", boxTool.Hint);
         }
 
 

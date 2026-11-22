@@ -7,67 +7,88 @@ using UnityEngine.Splines;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка «Точки» вкладки «Выделено» у стены по линии и здания: сколько точек, вид точек — выбранных в сцене, а если не выбрано ни одной, всех;
-    /// скругление выбранных углов, убрать выбранные, замкнуть или разомкнуть стену (здание всегда замкнуто). Как править в сцене — пояснение.
+    /// Секция Points у стены по линии и здания: сколько точек, вид точек — выбранных в сцене, а если не выбрано ни одной, всех;
+    /// скругление выбранных углов, убрать выбранные, замкнуть или разомкнуть стену (здание всегда замкнуто). Свёрнута: точки правят в сцене.
     /// </summary>
     public sealed class LiveBuilderPathPointsCard : LiveBuilderSelectionCard
     {
-        public override int Order => 50;
+        public override int Order => PointsOrder;
+
+        public override string Title => "Points";
+
+        public override bool IsOpenByDefault => false;
 
 
-        public override bool Draw(GameObject selected)
+        public override bool ShowsFor(IReadOnlyList<GameObject> selected)
         {
-            var component = OwnComponentOf(selected);
+            return selected.Count == 1 && AreAllOfKind(selected, LiveBuilderSelectionKind.Wall, LiveBuilderSelectionKind.Building);
+        }
 
-            if (component is not (SplineWall or SplineBuilding))
-                return false;
 
-            DrawPathActions(component.GetComponent<SplineContainer>(), component is SplineWall);
-            return true;
+        // «4 corners · none selected».
+        public override string SummaryOf(IReadOnlyList<GameObject> selected)
+        {
+            var container = selected[0].GetComponent<SplineContainer>();
+
+            if (container == null)
+                return null;
+
+            var selectedCount = SelectedCountIn(container);
+            return TotalOf(container) + " points · " + (selectedCount > 0 ? selectedCount + " selected" : "none selected");
+        }
+
+
+        public override void Draw(IReadOnlyList<GameObject> selected)
+        {
+            var container = selected[0].GetComponent<SplineContainer>();
+
+            if (container != null)
+                DrawPathActions(container, selected[0].GetComponent<SplineWall>() != null);
         }
 
         private static void DrawPathActions(SplineContainer container, bool canOpen)
         {
-            using (LiveBuilderWindowControls.Card("Точки"))
+            var selected = SelectedCountIn(container);
+            var current = LiveBuilderContourSelection.CommonShapeOf(container);
+            var chosen = LiveBuilderWindowControls.Switch(
+                new GUIContent(selected > 0 ? "Selected" : "All points", "Corner — прямые отрезки. Smooth — кривая сама проходит через точку. " +
+                                                                        "Bezier — у точки два уса, ими гнёшь кривую в сцене. Выбрано в сцене — меняются выбранные, иначе все"),
+                current, ("Corner", LiveBuilderOptionIcon.Corner), ("Smooth", LiveBuilderOptionIcon.Smooth), ("Bezier", LiveBuilderOptionIcon.Bezier));
+
+            if (chosen != current && chosen >= 0)
+                LiveBuilderContourSelection.ApplyShape(container, (LiveBuilderKnotShape)chosen);
+
+            if (selected > 0)
+                DrawCornerRadius(container);
+
+            using (new EditorGUILayout.HorizontalScope())
             {
-                var total = 0;
+                using (new EditorGUI.DisabledScope(selected == 0))
+                    if (GUILayout.Button(new GUIContent("Remove Selected", "Как Delete в сцене. Меньше трёх точек у замкнутого контура и двух у линии не останется")))
+                        LiveBuilderContourKeys.RemoveSelectedKnots(container);
 
-                foreach (var spline in container.Splines)
-                    total += spline.Count;
-
-                var isOwnSelection = LiveBuilderContourSelection.Owner != null && LiveBuilderContourSelection.Owner.GetComponent<SplineContainer>() == container;
-                var selected = isOwnSelection ? LiveBuilderContourSelection.Knots.Count : 0;
-                LiveBuilderWindowControls.Computed("Точек", total + (selected > 0 ? ", выбрано " + selected : ""));
-
-                var current = LiveBuilderContourSelection.CommonShapeOf(container);
-                var chosen = LiveBuilderWindowControls.Switch(
-                    new GUIContent(selected > 0 ? "Выбранные" : "Все точки", "Угол — прямые отрезки. Плавно — кривая сама проходит через точку. " +
-                                                                           "Безье — у точки два уса, ими гнёшь кривую в сцене. Выбрано в сцене — меняются выбранные, иначе все"),
-                    current, ("Угол", LiveBuilderOptionIcon.Corner), ("Плавно", LiveBuilderOptionIcon.Smooth), ("Безье", LiveBuilderOptionIcon.Bezier));
-
-                if (chosen != current && chosen >= 0)
-                    LiveBuilderContourSelection.ApplyShape(container, (LiveBuilderKnotShape)chosen);
-
-                if (selected > 0)
-                    DrawCornerRadius(container);
-
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    using (new EditorGUI.DisabledScope(selected == 0))
-                        if (GUILayout.Button(new GUIContent("Убрать выбранные", "Как Delete в сцене. Меньше трёх точек у замкнутого контура и двух у линии не останется")))
-                            LiveBuilderContourKeys.RemoveSelectedKnots(container);
-
-                    using (new EditorGUI.DisabledScope(!container.Spline.Closed && container.Spline.Count < 3))
-                        if (canOpen && GUILayout.Button(new GUIContent(container.Spline.Closed ? "Разомкнуть" : "Замкнуть",
-                                "Замкнуть — последняя точка соединится с первой, разомкнуть — замыкающий отрезок уберётся. В сцене — клавиша C")))
-                            LiveBuilderContourKeys.ToggleClosed(container);
-                }
-
-                var selectHotkey = LiveBuilderToolPalette.HotkeyOf(LiveBuilderToolPalette.Get<LiveBuilderSelectTool>());
-                LiveBuilderWindowControls.Explanation("В сцене, в «Выделении» (" + selectHotkey + ") или в инструменте этой постройки: тяни точку, «+» на отрезке — новая точка, " +
-                                                      "«+» за концом — продлить, Shift+клик или Shift+рамка — выбрать несколько, двойной клик — угол → плавно → Безье, " +
-                                                      "у Безье тяни усы, у угла — голубая ручка скругления, клавиши ←↑→↓ — на шаг сетки, Delete — убрать.");
+                using (new EditorGUI.DisabledScope(!container.Spline.Closed && container.Spline.Count < 3))
+                    if (canOpen && GUILayout.Button(new GUIContent(container.Spline.Closed ? "Open" : "Close",
+                            "Замкнуть — последняя точка соединится с первой, разомкнуть — замыкающий отрезок уберётся. В сцене — клавиша C")))
+                        LiveBuilderContourKeys.ToggleClosed(container);
             }
+        }
+
+
+        private static int TotalOf(SplineContainer container)
+        {
+            var total = 0;
+
+            foreach (var spline in container.Splines)
+                total += spline.Count;
+
+            return total;
+        }
+
+        private static int SelectedCountIn(SplineContainer container)
+        {
+            var isOwnSelection = LiveBuilderContourSelection.Owner != null && LiveBuilderContourSelection.Owner.GetComponent<SplineContainer>() == container;
+            return isOwnSelection ? LiveBuilderContourSelection.Knots.Count : 0;
         }
 
         // Скругление выбранных углов одним числом: разные — поле пустое, введёшь — у всех станет это.
@@ -87,8 +108,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             EditorGUI.showMixedValue = isMixed;
             EditorGUI.BeginChangeCheck();
-            var radius = EditorGUILayout.FloatField(new GUIContent("Скругление, м", "Радиус выбранных углов. 0 — острый угол. Из скольких кусков дуга — " +
-                                                                                    "в «Тонко» у стены или здания, 1 кусок — срез"), first);
+            var radius = EditorGUILayout.FloatField(new GUIContent("Corner radius, m", "Радиус выбранных углов. 0 — острый угол. Из скольких кусков дуга — " +
+                                                                                    "в Fine Tuning у стены или здания, 1 кусок — срез"), first);
             EditorGUI.showMixedValue = false;
 
             if (!EditorGUI.EndChangeCheck())

@@ -102,14 +102,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (unused.Count == 0)
             {
-                EditorUtility.DisplayDialog("Лишние меши", "Лишних файлов мешей нет: на все ссылаются сцены, префабы или другие ассеты.", "Хорошо");
+                EditorUtility.DisplayDialog("Unused Meshes", "No unused mesh files: every one is used by a scene, prefab or other asset.", "OK");
                 return 0;
             }
 
-            var message = "Файлов мешей, на которые не ссылается ни одна сцена, префаб или другой ассет: " + unused.Count + ".\n\n" + ListOf(unused) +
-                          "\n\nОни уйдут в корзину системы — оттуда их можно вернуть.";
+            var message = "Mesh files not used by any scene, prefab or other asset: " + unused.Count + ".\n\n" + ListOf(unused) +
+                          "\n\nThey go to the system trash — you can restore them from there.";
 
-            if (!EditorUtility.DisplayDialog("Лишние меши", message, "Убрать в корзину", "Отмена"))
+            if (!EditorUtility.DisplayDialog("Unused Meshes", message, "Move to Trash", "Cancel"))
                 return 0;
 
             return MoveToTrash(unused);
@@ -134,7 +134,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 lines.Add(paths[index]);
 
             if (paths.Count > shownCount)
-                lines.Add("… и ещё " + (paths.Count - shownCount));
+                lines.Add("… and " + (paths.Count - shownCount) + " more");
 
             return string.Join("\n", lines);
         }

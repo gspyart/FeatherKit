@@ -6,40 +6,93 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка «Внутри объекта» вкладки «Выделено»: выделен объект из коробок, а в нём здания и стены по линии — кнопки, чтобы перейти к ним:
-    /// их числа — у них самих.
+    /// Секция Inside — что лежит внутри выделенного, без окна Hierarchy; клик — выделить:
+    /// - здание — его этажи плашками с числом вещей на каждом
+    /// - этаж здания — вещи на нём
+    /// - объект из коробок — здания и стены по линии в нём: их числа — у них самих
     /// </summary>
     public sealed class LiveBuilderInnerObjectsCard : LiveBuilderSelectionCard
     {
-        public override int Order => 80;
+        private const float ChipWidth = 76f;
 
 
-        public override bool Draw(GameObject selected)
+        public override int Order => InsideOrder;
+
+        public override string Title => "Inside";
+
+
+        public override bool ShowsFor(IReadOnlyList<GameObject> selected)
         {
-            if (selected == null || !selected.TryGetComponent<BoxModel>(out var model))
-                return false;
+            return selected.Count == 1 && InsideOf(selected[0]).Count > 0;
+        }
 
-            var inner = new List<Component>();
-            inner.AddRange(model.GetComponentsInChildren<SplineBuilding>(false));
-            inner.AddRange(model.GetComponentsInChildren<SplineWall>(false));
 
-            if (inner.Count == 0)
-                return false;
+        // «Storey 1 · 4, Storey 2 · 6…».
+        public override string SummaryOf(IReadOnlyList<GameObject> selected)
+        {
+            var inside = InsideOf(selected[0]);
+            return string.Join(", ", inside.ConvertAll(LabelOf));
+        }
 
-            using (LiveBuilderWindowControls.Card("Внутри объекта"))
+
+        public override void Draw(IReadOnlyList<GameObject> selected)
+        {
+            var inside = InsideOf(selected[0]);
+            var perRow = Mathf.Max(1, Mathf.FloorToInt((LiveBuilderWindowControls.AvailableWidth - 16f) / (ChipWidth + 2f)));
+
+            for (var first = 0; first < inside.Count; first += perRow)
+                using (new EditorGUILayout.HorizontalScope())
+                    for (var index = first; index < Mathf.Min(first + perRow, inside.Count); index++)
+                        if (GUILayout.Button(new GUIContent(LabelOf(inside[index]), "Выделить «" + inside[index].name + "»"), EditorStyles.miniButton,
+                                GUILayout.Width(ChipWidth)))
+                            Selection.activeGameObject = inside[index].gameObject;
+        }
+
+
+        // ── Что внутри ───────────────────────────────────────────────────
+
+        // У здания — этажи и крыша, у этажа — его вещи без собранных частей, у объекта из коробок — здания и стены.
+        public static List<Transform> InsideOf(GameObject selected)
+        {
+            var inside = new List<Transform>();
+
+            if (selected.TryGetComponent<SplineBuilding>(out var building))
             {
-                LiveBuilderWindowControls.Note("Выдели, чтобы менять:");
+                foreach (var container in SplineBuildingStoreys.ContainersOf(building))
+                    inside.Add(container.transform);
+            }
+            else if (selected.TryGetComponent<SplineBuildingStorey>(out _))
+            {
+                inside.AddRange(ThingsOn(selected.transform));
+            }
+            else if (selected.TryGetComponent<BoxModel>(out var model))
+            {
+                foreach (var innerBuilding in model.GetComponentsInChildren<SplineBuilding>(false))
+                    inside.Add(innerBuilding.transform);
 
-                foreach (var owner in inner)
-                {
-                    var kind = owner is SplineBuilding ? "Здание" : "Стена";
-
-                    if (GUILayout.Button(kind + " «" + owner.name + "»"))
-                        Selection.activeGameObject = owner.gameObject;
-                }
+                foreach (var wall in model.GetComponentsInChildren<SplineWall>(false))
+                    inside.Add(wall.transform);
             }
 
-            return true;
+            return inside;
+        }
+
+        // Вещи этажа — его дети, кроме частей, которые собирает здание.
+        private static List<Transform> ThingsOn(Transform storey)
+        {
+            var things = new List<Transform>();
+
+            foreach (Transform child in storey)
+                if (!child.TryGetComponent<SplineBuildingPart>(out _))
+                    things.Add(child);
+
+            return things;
+        }
+
+        // Этаж — «Storey 2 · 6», где 6 — вещей на нём; остальное — имя.
+        private static string LabelOf(Transform each)
+        {
+            return each.TryGetComponent<SplineBuildingStorey>(out _) ? each.name + " · " + ThingsOn(each).Count : each.name;
         }
     }
 }

@@ -1,23 +1,30 @@
 using System.Collections.Generic;
 using FeatherKit.LiveBuilder;
 using UnityEditor;
+using UnityEditor.ShortcutManagement;
 using UnityEngine;
 using static FeatherKit.EditorTools.LiveBuilder.LiveBuilderIconRasterizer;
 
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// «Коробка»: протянул прямоугольник, мышью глубина, клик — коробка (<see cref="BoxModelDrawGesture"/>);
-    /// на косой поверхности — коробка по её нормали (<see cref="LiveBuilderSurfaceBoxGesture"/>). Правит только коробки и их грани.
+    /// «Коробка»: рисует протягиванием по поверхности — в четырёх режимах (<see cref="LiveBuilderBoxMode"/>), у каждого своя часть с жестом:
+    /// Solid — коробка, Room — пустая комната на высоту этажа, Ramp — пандус, Column — колонна.
+    /// Правит коробки, их грани, вырез-коробки, комнаты и колонны — в любом режиме.
     /// Здесь же — «новый объект»: следующая коробка отдельным объектом, даже поверх другого; на полу здания — вложенным объектом в нём.
     /// </summary>
     public sealed class LiveBuilderBoxTool : LiveBuilderTool
     {
-        private const string IdleHint = "Протяни по поверхности — новая коробка. Клик по грани — выделить коробку";
-        private const string NewModelHint = "Новый объект: протяни прямоугольник на поверхности или земле; на полу здания — встанет в здание. Esc — отмена";
+        // По части на режим, в порядке LiveBuilderBoxMode.
+        private readonly LiveBuilderBoxToolMode[] modeParts =
+        {
+            new LiveBuilderSolidBoxMode(),
+            new LiveBuilderRoomBoxMode(),
+            new LiveBuilderRampBoxMode(),
+            new LiveBuilderColumnBoxMode()
+        };
 
-        private readonly BoxModelDrawGesture drawGesture = new();
-        private readonly LiveBuilderSurfaceBoxGesture surfaceBoxGesture = new();
+        private LiveBuilderToolModes modes;
 
 
         // Кнопка «Новый»: следующая нарисованная коробка — отдельный новый объект, даже если рисуешь на другом объекте из коробок.
@@ -28,9 +35,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public override string Id => "Box";
 
-        public override string DisplayName => "Коробка";
+        public override string DisplayName => "Box";
 
-        public override string Tooltip => "Протяни по поверхности, мышью глубина, клик — коробка. Клик по грани — выделить коробку; правит только коробки";
+        public override string Tooltip => "Протяни по поверхности, мышью глубина, клик — готово. Режимы: Solid — коробка, Room — пустая комната, " +
+                                          "Ramp — пандус, Column — колонна; клавиша ещё раз — следующий режим. Клик по грани — выделить коробку";
 
         public override int PaletteOrder => 1;
 
@@ -42,6 +50,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Points(12, 12, 12, 21)
         };
 
+        public override LiveBuilderToolModes Modes => modes ??= new LiveBuilderToolModes(() => (int)LiveBuilderBoxModeSettings.Mode, SwitchMode,
+            new LiveBuilderToolModeLabel("Solid", LiveBuilderOptionIcon.Boxes, "Коробка: наружу добавляет, внутрь вырезает (Auto · Add · Cut)"),
+            new LiveBuilderToolModeLabel("Room", LiveBuilderOptionIcon.Room, "Пустая комната на высоту этажа: стены, пол и потолок вокруг. По контуру — «Wall» или «Building»"),
+            new LiveBuilderToolModeLabel("Ramp", LiveBuilderOptionIcon.Ramp, "Пандус: скат во всю длину, поднимается к концу протягивания, Tab — повернуть"),
+            new LiveBuilderToolModeLabel("Column", LiveBuilderOptionIcon.Column, "Колонна-цилиндр в протянутом прямоугольнике, отдельный объект: вырезы её не режут"));
+
+        private LiveBuilderBoxToolMode CurrentPart => modeParts[(int)LiveBuilderBoxModeSettings.Mode];
+
 
         // ── Что правит ───────────────────────────────────────────────────
 
@@ -52,190 +68,120 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public override bool PlacesIntoBuilding => true;
 
 
+        // ── Куда встанет новое ───────────────────────────────────────────
+
+        public override string IntoTarget => LiveBuilderIntoTarget.OfBox(IsNewModelRequested);
+
+
         // ── Окно сцены ───────────────────────────────────────────────────
 
         // «Новый» — не начатое рисование: цифры по-прежнему меняют инструмент, а смена инструмента «Новый» снимает.
-        public override bool IsBusy => drawGesture.IsActive || surfaceBoxGesture.IsActive;
+        public override bool IsBusy => CurrentPart.IsBusy;
 
-        public override bool DrawsSurfaceHover => !drawGesture.IsActive;
+        public override LiveBuilderDrawingReport DrawingReport => CurrentPart.DrawingReport;
+
+        public override bool DrawsSurfaceHover => CurrentPart.DrawsSurfaceHover;
 
         public override bool DrawsSnapCursor => true;
 
-        // Что рисуешь сейчас, иначе — про грани или выделенную коробку.
-        public override string Hint
+        public override string Hint => CurrentPart.Hint;
+
+        public override bool ShowsDepthClickHint => CurrentPart.ShowsDepthClickHint;
+
+        public override string[] KeyHints => CurrentPart.KeyHints;
+
+
+        // ── Окно: редкие настройки ───────────────────────────────────────
+
+        public override string MoreSettingsSummary => CurrentPart.MoreSettingsSummary;
+
+        public override bool AreMoreSettingsChanged => CurrentPart.AreMoreSettingsChanged;
+
+
+        // ── Клавиша ──────────────────────────────────────────────────────
+
+        [Shortcut(LiveBuilderShortcutIds.ToolsPrefix + "Box", typeof(LiveBuilderIdleShortcutContext), KeyCode.Alpha2)]
+        private static void SelectByShortcut()
         {
-            get
-            {
-                if (drawGesture.IsActive)
-                    return drawGesture.Hint;
-
-                if (surfaceBoxGesture.IsActive)
-                    return surfaceBoxGesture.Hint;
-
-                if (IsNewModelRequested)
-                    return NewModelHint;
-
-                if (BoxModelSelectionModeSetting.IsSelectingFaces)
-                    return FaceSelectionHint + ". Протяни — новая коробка";
-
-                return IsBoxSelected ? BoxModelPartExtrusion.Hint : IdleHint;
-            }
+            LiveBuilderToolPalette.SelectToolOrNextMode<LiveBuilderBoxTool>();
         }
 
-        public override bool ShowsDepthClickHint => true;
 
-        public override string[] KeyHints { get; } = new[]
+        [Shortcut(LiveBuilderShortcutIds.ToolsPrefix + "Box" + LiveBuilderShortcutIds.PreviousModeSuffix, typeof(LiveBuilderIdleShortcutContext),
+            KeyCode.Alpha2, ShortcutModifiers.Shift)]
+        private static void SelectPreviousModeByShortcut()
         {
-            "протянуть — прямоугольник, потом мышью глубина; пока тянешь, «4 X 3» — стороны",
-            "цифры + Enter — глубина; «4 X 3» — стороны, «4 X 3 X 2» — всё",
-            "клик или Enter — готово",
-            "Esc — отмена; «Новый» в окне — отдельный объект"
-        };
+            LiveBuilderToolPalette.SelectToolOrPreviousMode<LiveBuilderBoxTool>();
+        }
+
+
+        // ── Режим ────────────────────────────────────────────────────────
+
+        // Начатое в прежнем режиме бросаем: оно рисовалось другим жестом.
+        private void SwitchMode(int index)
+        {
+            CurrentPart.Cancel();
+            LiveBuilderBoxModeSettings.Mode = (LiveBuilderBoxMode)index;
+        }
 
 
         // ── Что правит: проверка ─────────────────────────────────────────
 
-        // Только коробки.
+        // Коробки и вырез-коробки своего объекта, комнаты из коробок, колонны.
         protected override bool CanEditTarget(Component target)
         {
-            return target is BoxModelPart;
+            return target is BoxModelPart || target is BoxModelRoom || target is LiveBuilderColumn
+                || target is GeometryCutter cutter && GeometryCutterSolverBoxes.IsSolverPiece(cutter);
         }
 
 
         // ── Окно ─────────────────────────────────────────────────────────
 
-        // Режим рисования, что выделяет клик и куда встанет коробка.
         public override void DrawSettings()
         {
-            using (LiveBuilderWindowControls.Card("Рисование"))
-            {
-                var drawMode = (BoxModelDrawMode)LiveBuilderWindowControls.Switch(
-                    new GUIContent("Режим", "Что делает нарисованная коробка. Авто — наружу добавляет, внутрь вырезает"),
-                    (int)BoxModelDrawModeSetting.Current,
-                    ("Авто", LiveBuilderOptionIcon.BoxAuto), ("Добавить", LiveBuilderOptionIcon.BoxAdd), ("Вырезать", LiveBuilderOptionIcon.BoxCut));
-
-                if (drawMode != BoxModelDrawModeSetting.Current)
-                    BoxModelDrawModeSetting.Current = drawMode;
-
-                LiveBuilderToolSettingsFields.DrawSelectionModeSwitch();
-                DrawTargetModel();
-            }
-
-            LiveBuilderWindowControls.Explanation("Протяни по поверхности, мышью глубина, клик — готово. Клик по грани — выделить коробку или кусок грани, " +
-                                                  "смотря что выбрано в «Клик выделяет». Здесь правятся только коробки; остальное — в своих инструментах или в «Выделении».");
+            CurrentPart.DrawSettings();
         }
 
-        // Куда встанет коробка на пустом месте: в выделенный объект, иначе — новый. По чужой поверхности — всегда в тот объект.
-        // «Новый объект» нажат — следующая коробка точно отдельным объектом; нажать ещё раз — отмена.
-        private static void DrawTargetModel()
+
+        public override void DrawMoreSettings()
         {
-            var selectedModel = BoxModelActions.SelectedModel();
-            var isNewRequested = IsNewModelRequested;
-            var targetName = isNewRequested ? "новый, отдельный" : selectedModel != null ? selectedModel.name : "новый (ничего не выделено)";
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                LiveBuilderWindowControls.PrefixLabel(new GUIContent("Объект", "Куда встанет коробка, нарисованная на пустом месте. " +
-                                                                     "Рисуешь по поверхности другого объекта — она встанет в него"));
-                LiveBuilderWindowControls.ValueChip(new GUIContent(targetName, targetName), GUILayout.MinWidth(40f));
-
-                var isPressed = LiveBuilderWindowControls.IconToggle(isNewRequested, LiveBuilderOptionIcon.NewObject, "Новый",
-                    "Следующая коробка — отдельный объект, даже поверх другого. На полу здания — вложенный объект в нём, привязанный к этажу " +
-                    "(шахта, лестничная клетка). Нажать ещё раз — отмена");
-
-                if (isPressed == isNewRequested)
-                    return;
-
-                if (isPressed)
-                    BoxModelActions.BeginNewModelDrawing();
-                else
-                    IsNewModelRequested = false;
-
-                SceneView.RepaintAll();
-            }
+            CurrentPart.DrawMoreSettings();
         }
 
 
         // ── Окно сцены: мышь ─────────────────────────────────────────────
 
-        // Выбираешь глубину — мышь её и задаёт.
         public override bool OnMouseMove(Ray worldRay, Event current)
         {
-            if (drawGesture.IsChoosingDepth)
-                drawGesture.UpdateDepth(current.mousePosition);
-            else if (surfaceBoxGesture.IsChoosingDepth)
-                surfaceBoxGesture.UpdateDepth(current.mousePosition);
-            else
-                return false;
-
-            return true;
+            return CurrentPart.OnMouseMove(worldRay, current);
         }
 
 
-        // Клик, пока выбираешь глубину, — коробка готова.
         public override bool OnMouseDown(Ray worldRay, Event current)
         {
-            if (drawGesture.IsChoosingDepth)
-            {
-                if (drawGesture.Commit())
-                    IsNewModelRequested = false;
-
-                return true;
-            }
-
-            if (!surfaceBoxGesture.IsChoosingDepth)
-                return false;
-
-            surfaceBoxGesture.Commit();
-            IsNewModelRequested = false;
-            return true;
+            return CurrentPart.OnMouseDown(worldRay, current);
         }
 
 
-        // Косая поверхность — коробка или вырез по её нормали; иначе — обычная коробка по осям объекта.
         public override void OnMouseDrag(Ray downRay, Ray worldRay, bool canBeginGesture)
         {
-            if (canBeginGesture && !drawGesture.IsActive && !surfaceBoxGesture.IsActive)
-            {
-                if (LiveBuilderSurfaceBoxGesture.IsAngledSurface(downRay, IsNewModelRequested))
-                    surfaceBoxGesture.TryBegin(downRay);
-                else
-                    drawGesture.TryBegin(downRay, IsNewModelRequested);
-            }
-
-            if (surfaceBoxGesture.IsActive)
-                surfaceBoxGesture.UpdateRectangle(worldRay);
-            else
-                drawGesture.UpdateRectangle(worldRay);
+            CurrentPart.OnMouseDrag(downRay, worldRay, canBeginGesture);
         }
 
 
-        // Отпустил прямоугольник — дальше мышью глубина.
         public override bool OnMouseUp(Event current)
         {
-            if (drawGesture.IsActive)
-                drawGesture.TryFinishRectangle(current.mousePosition);
-            else if (surfaceBoxGesture.IsActive)
-                surfaceBoxGesture.FinishRectangle(current.mousePosition);
-            else
-                return false;
-
-            return true;
+            return CurrentPart.OnMouseUp(current);
         }
 
 
         // ── Окно сцены: клавиши, отмена и вид ────────────────────────────
 
-        // Глубина: цифры — точно, Enter — готово. Esc при нажатом «Новый», пока ничего не рисуешь, — снять «Новый» и остаться в «Коробке».
+        // Клавиши — режиму. Esc при нажатом «Новый», пока ничего не рисуешь, — снять «Новый» и остаться в «Коробке».
         public override bool OnKeyDown(Event current)
         {
-            if (drawGesture.HandleKey(current.keyCode, out var isCommitted))
-            {
-                if (isCommitted)
-                    IsNewModelRequested = false;
-
+            if (CurrentPart.OnKeyDown(current))
                 return true;
-            }
 
             if (current.keyCode != KeyCode.Escape || !IsNewModelRequested || IsBusy)
                 return false;
@@ -246,28 +192,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Бросить начатую коробку и «Новый».
+        // Бросить начатое во всех режимах и «Новый».
         public override void Cancel()
         {
-            drawGesture.Cancel();
-            surfaceBoxGesture.Cancel();
+            CancelAfterUndo();
             IsNewModelRequested = false;
         }
 
 
-        // Ctrl+Z: начатую коробку бросаем, «Новый» остаётся.
+        // Ctrl+Z: начатое бросаем, «Новый» остаётся.
         public override void CancelAfterUndo()
         {
-            drawGesture.Cancel();
-            surfaceBoxGesture.Cancel();
+            foreach (var part in modeParts)
+                part.Cancel();
         }
 
 
-        // Как встанет рисуемая коробка.
         public override void DrawPreview()
         {
-            drawGesture.DrawPreview();
-            surfaceBoxGesture.DrawPreview();
+            CurrentPart.DrawPreview();
         }
     }
 }

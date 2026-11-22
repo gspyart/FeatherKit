@@ -108,15 +108,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Подсказка ────────────────────────────────────────────────────
 
-        // «Клик ещё раз сюда — глубже (2 из 4)», пока мышь там, где кликнули, и под ней есть что-то ещё; иначе пусто.
+        // «click again — deeper (2/4)», пока мышь там, где кликнули, и под ней есть что-то ещё; иначе пусто.
         public static string HintAt(Vector2 mousePosition, LiveBuilderTool tool)
         {
             if (!hasLastClick || tool != lastTool || lastTargetCount < 2 || (mousePosition - lastMousePosition).magnitude > SamePlacePixels
                 || !lastTarget.IsSelectedAlone())
                 return "";
 
-            var number = lastTargetNumber > 0 ? lastTargetNumber + " из " + lastTargetCount : "из " + lastTargetCount;
-            return " · Клик ещё раз сюда — глубже (" + number + ")";
+            var number = lastTargetNumber > 0 ? lastTargetNumber + "/" + lastTargetCount : "of " + lastTargetCount;
+            return " " + LiveBuilderHintKeys.Key("click again") + " deeper (" + number + ")";
         }
 
 

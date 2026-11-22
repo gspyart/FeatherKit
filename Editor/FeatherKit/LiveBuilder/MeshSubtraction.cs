@@ -6,7 +6,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Вычитание тел из готового меша постройки — общее у вырезов (<see cref="GeometryCutterApplier"/>) и фаски рёбер (<see cref="BoxModelBevel"/>):
-    /// меш ⇄ многоугольники, вычитание (<see cref="MeshBoolean"/>) только для треугольников рядом с телом — остальные не трогаются,
+    /// меш ⇄ многоугольники, вычитание (<see cref="MeshBoolean"/>) только для треугольников рядом с телом (<see cref="MeshSubtractionPolygons"/>) — остальные не трогаются,
     /// новые грани (стенки дыры, срез ребра) — с развёрткой в метрах на ближайшую плоскость, как у всех построек.
     /// Само тело обычно призма — контур, протянутый по оси: её тоже строит здесь.
     /// </summary>
@@ -15,59 +15,38 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Больше вершин — нужен 32-битный индекс.
         private const int MaxVerticesFor16BitIndex = 65000;
 
-        // Запас к габариту тела при отборе треугольников рядом, м.
-        private const float NearMargin = 0.01f;
+        // Буферы на один вызов — общие: их зовут на каждое ребро фаски, а новые списки на каждый раз — работа сборщику мусора.
+        private static readonly List<Vector3> SolidPoints = new();
+        private static readonly List<Vector2> FanTriangle = new();
+        private static int[] countsBySubmesh = new int[8];
 
 
         // ── Вычитание ────────────────────────────────────────────────────
 
-        // Тело с габаритом solidBounds (в осях меша) — из треугольников рядом с ним. solidFor строит тело по треугольникам рядом:
-        // по ним, например, выбирают материал новых граней.
-        public static List<MeshBooleanPolygon> SubtractNear(List<MeshBooleanPolygon> polygons, Bounds solidBounds,
-            System.Func<List<MeshBooleanPolygon>, List<MeshBooleanPolygon>> solidFor)
-        {
-            solidBounds.Expand(NearMargin * 2f);
-
-            var near = new List<MeshBooleanPolygon>();
-            var result = new List<MeshBooleanPolygon>();
-
-            foreach (var polygon in polygons)
-                (BoundsOf(polygon).Intersects(solidBounds) ? near : result).Add(polygon);
-
-            if (near.Count == 0)
-                return polygons;
-
-            var cut = MeshBoolean.Subtract(near, solidFor(near));
-
-            foreach (var polygon in cut)
-                if (polygon.IsFromCutter)
-                    UnwrapFlat(polygon);
-
-            result.AddRange(cut);
-            return result;
-        }
-
-
         // Часть меша, которой среди многоугольников больше всего: новые грани — как то, что вокруг.
         public static int MostCommonSubmesh(List<MeshBooleanPolygon> polygons)
         {
-            var counts = new Dictionary<int, int>();
+            var submeshCount = 0;
+
+            foreach (var polygon in polygons)
+                submeshCount = Mathf.Max(submeshCount, polygon.Submesh + 1);
+
+            if (countsBySubmesh.Length < submeshCount)
+                countsBySubmesh = new int[submeshCount];
+
             var best = polygons[0].Submesh;
 
             foreach (var polygon in polygons)
-            {
-                counts[polygon.Submesh] = counts.TryGetValue(polygon.Submesh, out var count) ? count + 1 : 1;
-
-                if (counts[polygon.Submesh] > counts[best])
+                if (++countsBySubmesh[polygon.Submesh] > countsBySubmesh[best])
                     best = polygon.Submesh;
-            }
 
+            System.Array.Clear(countsBySubmesh, 0, submeshCount);
             return best;
         }
 
 
         // Новая грань: нормаль — по её плоскости, развёртка — в метрах на плоскость, ближайшую к ней.
-        private static void UnwrapFlat(MeshBooleanPolygon polygon)
+        public static void UnwrapFlat(MeshBooleanPolygon polygon)
         {
             var normal = polygon.Plane.Normal;
             var absolute = new Vector3(Mathf.Abs(normal.x), Mathf.Abs(normal.y), Mathf.Abs(normal.z));
@@ -84,7 +63,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
         }
 
-        private static Bounds BoundsOf(MeshBooleanPolygon polygon)
+        public static Bounds BoundsOf(MeshBooleanPolygon polygon)
         {
             var bounds = new Bounds(polygon.Vertices[0].Position, Vector3.zero);
 
@@ -101,43 +80,56 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // невыпуклый должен быть виден целиком из первой точки: крышка тогда — веер из неё.
         public static List<MeshBooleanPolygon> PrismPolygons(List<Vector2> outline, float fromZ, float toZ, Matrix4x4 prismToMesh, int submesh)
         {
-            var polygons = new List<MeshBooleanPolygon>();
+            var polygons = new List<MeshBooleanPolygon>(outline.Count + 2);
             var isMirrored = prismToMesh.determinant < 0f;
 
-            foreach (var cap in CapsOf(outline))
+            if (IsConvex(outline))
             {
-                var frontCap = cap.ConvertAll(point => new Vector3(point.x, point.y, toZ));
-                var backCap = cap.ConvertAll(point => new Vector3(point.x, point.y, fromZ));
-                backCap.Reverse();
-                AddSolidPolygon(polygons, frontCap, prismToMesh, submesh, isMirrored);
-                AddSolidPolygon(polygons, backCap, prismToMesh, submesh, isMirrored);
+                AddCaps(polygons, outline, fromZ, toZ, prismToMesh, submesh, isMirrored);
+            }
+            else
+            {
+                for (var index = 1; index + 1 < outline.Count; index++)
+                {
+                    FanTriangle.Clear();
+                    FanTriangle.Add(outline[0]);
+                    FanTriangle.Add(outline[index]);
+                    FanTriangle.Add(outline[index + 1]);
+                    AddCaps(polygons, FanTriangle, fromZ, toZ, prismToMesh, submesh, isMirrored);
+                }
             }
 
             for (var index = 0; index < outline.Count; index++)
             {
                 var start = outline[index];
                 var end = outline[(index + 1) % outline.Count];
-                AddSolidPolygon(polygons, new List<Vector3>
-                {
-                    new(start.x, start.y, fromZ), new(end.x, end.y, fromZ), new(end.x, end.y, toZ), new(start.x, start.y, toZ)
-                }, prismToMesh, submesh, isMirrored);
+                SolidPoints.Clear();
+                SolidPoints.Add(new Vector3(start.x, start.y, fromZ));
+                SolidPoints.Add(new Vector3(end.x, end.y, fromZ));
+                SolidPoints.Add(new Vector3(end.x, end.y, toZ));
+                SolidPoints.Add(new Vector3(start.x, start.y, toZ));
+                AddSolidPolygon(polygons, SolidPoints, prismToMesh, submesh, isMirrored);
             }
 
             return polygons;
         }
 
-        // Крышка выпуклого контура — он сам, невыпуклого — веер треугольников из первой точки.
-        private static List<List<Vector2>> CapsOf(List<Vector2> outline)
+        // Передняя крышка — по обходу контура, задняя — наоборот.
+        private static void AddCaps(List<MeshBooleanPolygon> polygons, List<Vector2> cap, float fromZ, float toZ, Matrix4x4 prismToMesh, int submesh, bool isMirrored)
         {
-            if (IsConvex(outline))
-                return new List<List<Vector2>> { outline };
+            SolidPoints.Clear();
 
-            var caps = new List<List<Vector2>>();
+            foreach (var point in cap)
+                SolidPoints.Add(new Vector3(point.x, point.y, toZ));
 
-            for (var index = 1; index + 1 < outline.Count; index++)
-                caps.Add(new List<Vector2> { outline[0], outline[index], outline[index + 1] });
+            AddSolidPolygon(polygons, SolidPoints, prismToMesh, submesh, isMirrored);
+            SolidPoints.Clear();
 
-            return caps;
+            foreach (var point in cap)
+                SolidPoints.Add(new Vector3(point.x, point.y, fromZ));
+
+            SolidPoints.Reverse();
+            AddSolidPolygon(polygons, SolidPoints, prismToMesh, submesh, isMirrored);
         }
 
         private static bool IsConvex(List<Vector2> outline)
@@ -155,13 +147,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return true;
         }
 
-        // Грань тела: точки — в осях призмы; зеркальный перенос выворачивает обход — разворачиваем обратно.
+        // Грань тела: точки — в осях призмы; зеркальный перенос выворачивает обход — разворачиваем обратно. localPoints портятся.
         private static void AddSolidPolygon(List<MeshBooleanPolygon> polygons, List<Vector3> localPoints, Matrix4x4 prismToMesh, int submesh, bool isMirrored)
         {
             if (isMirrored)
                 localPoints.Reverse();
 
-            var vertices = new List<MeshBooleanVertex>();
+            var vertices = new List<MeshBooleanVertex>(localPoints.Count);
 
             foreach (var point in localPoints)
                 vertices.Add(new MeshBooleanVertex(prismToMesh.MultiplyPoint3x4(point), Vector3.zero, Vector2.zero));
@@ -221,9 +213,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Многоугольники — веером в треугольники; у каждого треугольника свои вершины.
         public static void Write(Mesh mesh, List<MeshBooleanPolygon> polygons, int submeshCount)
         {
-            var vertices = new List<Vector3>();
-            var normals = new List<Vector3>();
-            var textureCoordinates = new List<Vector2>();
+            var vertexCount = 0;
+
+            foreach (var polygon in polygons)
+                vertexCount += polygon.Vertices.Count;
+
+            var vertices = new List<Vector3>(vertexCount);
+            var normals = new List<Vector3>(vertexCount);
+            var textureCoordinates = new List<Vector2>(vertexCount);
             var trianglesBySubmesh = new List<int>[submeshCount];
 
             for (var submesh = 0; submesh < submeshCount; submesh++)
@@ -240,8 +237,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     textureCoordinates.Add(vertex.TextureCoordinate);
                 }
 
+                var triangles = trianglesBySubmesh[polygon.Submesh];
+
                 for (var index = 1; index + 1 < polygon.Vertices.Count; index++)
-                    trianglesBySubmesh[polygon.Submesh].AddRange(new[] { first, first + index, first + index + 1 });
+                {
+                    triangles.Add(first);
+                    triangles.Add(first + index);
+                    triangles.Add(first + index + 1);
+                }
             }
 
             mesh.Clear();

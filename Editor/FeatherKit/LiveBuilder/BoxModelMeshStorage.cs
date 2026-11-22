@@ -9,11 +9,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Хранит меш объекта из коробок и стены по линии отдельным файлом, а не внутри сцены: сцена не раздувается, как с ProBuilder.
-    /// Папка — рядом со сценой, «<Сцена>_BoxModels»; сцена ещё не сохранена — общая папка из настроек проекта,
-    /// при сохранении сцены её файлы оттуда переезжают копией в папку сцены (<see cref="BoxModelMeshSaving"/>).
-    /// Меш для столкновений со скатами лестниц — второй меш в том же файле.
-    /// Пересобранный меш записывается на диск сам, через короткую паузу, — не ждёт сохранения сцены:
-    /// префаб или копия, которые на него ссылаются, никогда не останутся с незаписанной геометрией.
+    /// - папка — рядом со сценой, «<Сцена>_BoxModels»; сцена не сохранена — общая папка из настроек проекта, при сохранении файлы переезжают (<see cref="BoxModelMeshSaving"/>)
+    /// - меш для столкновений со скатами лестниц — второй меш в том же файле
+    /// - пересобранный меш пишет на диск сам, через 2 с без жеста и черновиков (<see cref="LiveBuilderDraftBuilds"/>): префаб или копия не останутся с незаписанной геометрией
     /// </summary>
     [InitializeOnLoad]
     public static class BoxModelMeshStorage
@@ -21,8 +19,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private const string FolderSuffix = "_BoxModels";
         private const string ColliderMeshSuffix = " Collider";
 
-        // Пауза после последней пересборки перед записью на диск: пока тянешь ручку, файл не пишется на каждый шаг, с.
-        private const double SaveDelaySeconds = 0.5;
+        // Пауза после последней пересборки перед записью на диск: правки идут пачкой — файл пишется один раз, с.
+        public const double SaveDelaySeconds = 2.0;
 
         private static readonly HashSet<Mesh> MeshesToSave = new();
 
@@ -98,11 +96,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Копия файла меша (вместе с мешем для столкновений) в папку folder. Возвращает пары «меш файла → его копия».
+        // Копируется файл на диске — незаписанное в нём пишется сначала, иначе копия вышла бы старой.
         public static Dictionary<Mesh, Mesh> CopyMeshFileTo(Mesh mainMesh, string folder)
         {
             EnsureFolder(folder);
 
             var sourcePath = AssetDatabase.GetAssetPath(mainMesh);
+            AssetDatabase.SaveAssetIfDirty(AssetDatabase.GUIDFromAssetPath(sourcePath));
             var copyPath = AssetDatabase.GenerateUniqueAssetPath(folder + "/" + Path.GetFileName(sourcePath));
             var copies = new Dictionary<Mesh, Mesh>();
 
@@ -157,16 +157,47 @@ namespace FeatherKit.EditorTools.LiveBuilder
             saveTime = EditorApplication.timeSinceStartup + SaveDelaySeconds;
         }
 
+        // Записать отложенные файлы сейчас, не дожидаясь паузы: замер и проверки идут кодом, без кадров редактора.
+        // Список — копией: запись сначала доводит черновики (<see cref="LiveBuilderDraftBuildsBeforeAssetSave"/>), и доводка просит записать ещё.
+        public static void SavePendingNow()
+        {
+            using (LiveBuilderRebuildProfiler.Measure(LiveBuilderRebuildStage.DiskSave))
+            {
+                var meshes = new List<Mesh>(MeshesToSave);
+                MeshesToSave.Clear();
+
+                foreach (var mesh in meshes)
+                    if (mesh != null)
+                        SaveMeshFile(mesh);
+            }
+        }
+
+        // Пока тянут ручку или есть черновики — не пишем: черновик на диске не нужен, а запись посреди жеста — рывок.
         private static void SavePendingMeshes()
         {
             if (MeshesToSave.Count == 0 || EditorApplication.timeSinceStartup < saveTime || EditorApplication.isPlayingOrWillChangePlaymode)
                 return;
 
-            foreach (var mesh in MeshesToSave)
-                if (mesh != null)
-                    AssetDatabase.SaveAssetIfDirty(mesh);
+            if (LiveBuilderGestureTracker.IsGestureActive || LiveBuilderDraftBuilds.HasPending)
+            {
+                saveTime = EditorApplication.timeSinceStartup + SaveDelaySeconds;
+                return;
+            }
 
-            MeshesToSave.Clear();
+            SavePendingNow();
+        }
+
+
+        // Файл меша — на диск, если в нём есть незаписанное.
+        public static void SaveMeshFile(Mesh mesh)
+        {
+            using (LiveBuilderRebuildProfiler.Measure(LiveBuilderRebuildStage.DiskSave))
+            {
+                if (EditorUtility.IsDirty(mesh))
+                    LiveBuilderRebuildProfiler.CountSavedFile();
+
+                AssetDatabase.SaveAssetIfDirty(mesh);
+            }
         }
 
 
@@ -217,9 +248,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (mesh == null || mesh.vertexCount == 0 || mesh.uv2.Length > 0)
                 return;
 
-            Unwrapping.GenerateSecondaryUVSet(mesh);
+            using (LiveBuilderRebuildProfiler.Measure(LiveBuilderRebuildStage.LightmapUV))
+                Unwrapping.GenerateSecondaryUVSet(mesh);
+
             EditorUtility.SetDirty(mesh);
-            AssetDatabase.SaveAssetIfDirty(mesh);
+            SaveMeshFile(mesh);
         }
 
 

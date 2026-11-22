@@ -10,7 +10,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Привязка к точкам построек, как в SketchUp: точка рисования прилипает к углу или середине ребра коробки, к точке или середине отрезка
     /// стены и здания, если до неё на экране меньше <see cref="SnapPixels"/>; нет такой — к любой точке ребра или отрезка («на ребре»); дальше — сетка. Точка другой высоты — по проекции на плоскость рисования:
-    /// коробка на полу встаёт вровень с углом здания над ней. Что прилипло — подпись у прицела («угол», «середина», «точка»).
+    /// коробка на полу встаёт вровень с углом здания над ней. Что прилипло — подпись у прицела («corner», «midpoint», «point», «on edge»).
     /// Работает везде, где точка ложится на плоскость рисования (<see cref="BoxModelDrawPlane.SnapOnPlane"/>): коробка, комната, лестница, стена,
     /// здание, линейка. Точки берутся из данных построек (не из меша) и помнятся до следующей правки сцены; на горизонтальной плоскости
     /// перебираются только соседние по плану (<see cref="LiveBuilderPlanCells"/>). Спрятанное разрезом этажа и точки, закрытые от камеры стенами, не ловит. Клавиша S или кнопка в окне —
@@ -132,7 +132,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 }
 
             if (bestLabel == null && TrySnapToEdge(frameToWorld, worldToFrame, axis, coordinate, world, mouse, reach, isLevelPlane, out snappedLocal))
-                bestLabel = "на ребре";
+                bestLabel = "on edge";
 
             if (bestLabel == null)
                 return false;
@@ -312,6 +312,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             foreach (var building in stage.FindComponentsOfType<SplineBuilding>())
                 if (building.gameObject.activeInHierarchy)
                     AddLinePoints(building);
+
+            foreach (var column in stage.FindComponentsOfType<LiveBuilderColumn>())
+                if (column.gameObject.activeInHierarchy)
+                    AddColumnPoints(column);
         }
 
         // Углы, середины и рёбра наружных поверхностей объекта из коробок.
@@ -342,16 +346,32 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 for (var index = 0; index < corners.Length; index++)
                 {
-                    Add(corners[index], "угол");
+                    Add(corners[index], "corner");
                     AddEdge(corners[index], corners[(index + 1) % corners.Length]);
                 }
 
-                Add(PointAt(middleU, minV), "середина");
-                Add(PointAt(middleU, maxV), "середина");
-                Add(PointAt(minU, middleV), "середина");
-                Add(PointAt(maxU, middleV), "середина");
+                Add(PointAt(middleU, minV), "midpoint");
+                Add(PointAt(middleU, maxV), "midpoint");
+                Add(PointAt(minU, middleV), "midpoint");
+                Add(PointAt(maxU, middleV), "midpoint");
             }
         }
+
+        // Центр и четыре крайние точки сечения колонны — внизу и вверху.
+        private static void AddColumnPoints(LiveBuilderColumn column)
+        {
+            var size = column.Size;
+
+            foreach (var height in new[] { 0f, size.y })
+            {
+                Add(column.transform.TransformPoint(new Vector3(size.x / 2f, height, size.z / 2f)), "column center");
+                Add(column.transform.TransformPoint(new Vector3(0f, height, size.z / 2f)), "column side");
+                Add(column.transform.TransformPoint(new Vector3(size.x, height, size.z / 2f)), "column side");
+                Add(column.transform.TransformPoint(new Vector3(size.x / 2f, height, 0f)), "column side");
+                Add(column.transform.TransformPoint(new Vector3(size.x / 2f, height, size.z)), "column side");
+            }
+        }
+
 
         // Точки линии стены или контура здания и середины их отрезков.
         private static void AddLinePoints(Component owner)
@@ -366,13 +386,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 for (var index = 0; index < count; index++)
                 {
                     var point = owner.transform.TransformPoint(spline[index].Position);
-                    Add(point, "точка");
+                    Add(point, "point");
 
                     if (index + 1 >= count && !spline.Closed)
                         continue;
 
                     var next = owner.transform.TransformPoint(spline[(index + 1) % count].Position);
-                    Add((point + next) / 2f, "середина");
+                    Add((point + next) / 2f, "midpoint");
                     AddEdge(point, next);
                 }
             }

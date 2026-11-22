@@ -20,11 +20,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public static BoxModelStairsStyle Style
         {
-            get => LiveBuilderPreferences.GetEnum("Stairs.Style", BoxModelStairsStyle.SeparateSteps);
+            get => LiveBuilderPreferences.GetEnum("Stairs.Style", BoxModelStairsStyle.Open);
             set => LiveBuilderPreferences.SetInt("Stairs.Style", (int)value);
         }
 
-        // Толщина плиты ступени у вида «Ступени», м.
+        // Толщина плиты ступени у открытой лестницы (Open), м.
         public static float StepThickness
         {
             get => LiveBuilderPreferences.GetFloat("Stairs.StepThickness", FactoryStepThickness);

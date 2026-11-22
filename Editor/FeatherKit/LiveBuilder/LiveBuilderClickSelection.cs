@@ -10,7 +10,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// (<see cref="LiveBuilderTool.CanEdit(UnityEngine.GameObject)"/>): в «Выделении» — что угодно, в «Коробке» — только коробки и так далее:
     /// - грань объекта из коробок — коробка, комната или лестница, которая её создала;
     ///   в режиме «Грани» — видимый кусок грани под мышью, двойной клик — грань коробки целиком
-    /// - стена по линии или здание по контуру — они сами
+    /// - стена по линии, здание по контуру или колонна — они сами
     /// - дыра от выреза (<see cref="GeometryCutter"/>) или вырезающей коробки в здании — сам резчик:
     ///   он невидим, но его коробка ближе того, что за дырой, — и откос дыры тоже
     /// - мимо всего — снять выделение; не своё — выделение не трогать. Shift — добавить к выделению или убрать
@@ -43,7 +43,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var hit = LiveBuilderSceneHit.Find(HandleUtility.GUIPointToWorldRay(current.mousePosition));
 
-            if (hit.HasBoxSurface && !hit.IsGeometryCutterInFront && !hit.IsPathOwnerCloser && BoxModelSelectionModeSetting.IsSelectingFaces
+            if (hit.HasBoxSurface && !hit.IsGeometryCutterInFront && !hit.IsPathOwnerCloser && !hit.IsColumnCloser && BoxModelSelectionModeSetting.IsSelectingFaces
                 && tool.CanEditFaces)
             {
                 if (!BoxModelPartFace.TryFindUnder(hit.BoxSurface, out var piece))
@@ -87,7 +87,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return true;
         }
 
-        // Что под мышью выделилось бы: резчик дыры, стена или здание, коробка или комната с лестницей, создавшая грань, иначе объект из коробок.
+        // Что под мышью выделилось бы: резчик дыры, стена или здание, колонна, коробка или комната с лестницей, создавшая грань, иначе объект из коробок.
         private static GameObject ClickedObject(LiveBuilderSceneHit hit)
         {
             if (hit.IsGeometryCutterInFront)
@@ -95,6 +95,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (hit.IsPathOwnerCloser)
                 return hit.PathOwner.gameObject;
+
+            if (hit.IsColumnCloser)
+                return hit.Column.gameObject;
 
             if (!hit.HasBoxSurface)
                 return null;

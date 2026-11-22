@@ -21,8 +21,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var isSelected = Selection.Contains(cutter.gameObject);
             var outline = GeometryCutterOutline.OutlineOf(cutter);
 
-            for (var copy = 0; copy < cutter.CopiesUp; copy++)
-                DrawCopy(cutter, outline, GeometryCutterOutline.CopyToWorld(cutter, copy), isSelected);
+            foreach (var copy in GeometryCutterCopy.AllOf(cutter))
+                DrawCopy(cutter, outline, copy.ToWorld, isSelected);
         }
 
         private static void DrawCopy(GeometryCutter cutter, List<Vector2> outline, Matrix4x4 copyToWorld, bool isSelected)

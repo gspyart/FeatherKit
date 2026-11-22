@@ -7,34 +7,24 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Инструмент Live Builder — что делает мышь в окне сцены, пока включён Live Builder. Один класс — всё про один инструмент:
-    /// - плитка в палитре: имя, подсказка, значок из линий, место (номер места — клавиша)
+    /// - плитка в палитре: имя, подсказка, значок из линий, место; клавиша выбора — свой ярлык в файле инструмента (<see cref="LiveBuilderShortcutIds.ToolOf"/>)
     /// - что он правит: «Выделение» — всё, остальные — только своё; чужое выделенное видно каркасом, без ручек
-    /// - свои настройки на вкладке «Инструмент» окна (<see cref="LiveBuilderToolTab"/>): частые — сверху, редкие — под свёрнутым «Ещё»
+    /// - режимы (<see cref="Modes"/>) и свои настройки в строке инструмента панели (<see cref="LiveBuilderPanelView"/>): частые — в строке, редкие — под «⋯»
     /// - свои жесты в окне сцены: окно сцены (<see cref="LiveBuilderSceneTool"/>) решает, клик это или протягивание, и зовёт крючки ниже
     /// Новый инструмент — новый наследник: палитра находит его сама (<see cref="LiveBuilderToolPalette"/>).
     /// У инструмента, который ставит точки линии кликами (<see cref="PathGesture"/>), крючки по умолчанию уже ведут эту линию.
     /// </summary>
     public abstract class LiveBuilderTool
     {
-        // Клавиши инструмента линии — для шпаргалки в окне сцены.
-        protected static readonly string[] PathKeyHints =
-        {
-            "клик — точка, по первой — замкнуть",
-            "Shift + клик — точка наоборот: угол или плавно",
-            "цифры + Enter — точная длина отрезка",
-            "пунктир — по оси, 45°, вдоль и поперёк отрезка; Ctrl — угол шагом 15°",
-            "Enter — готово, Esc — бросить линию, Ctrl+Z — убрать точку"
-        };
-
-        // Подсказка про грани — общая у «Выделения» и «Коробки»: обе правят грани.
-        protected const string FaceSelectionHint = "Клик — выделить кусок грани, двойной клик — грань целиком, Shift — добавить или убрать. " +
-                                                   "Ручка у выделенного куска: тянешь — новая коробка, толкаешь — вырезающая коробка; грань с Ctrl — выдавить";
+        // Подсказка про грани — общая у Select и Box: оба правят грани.
+        internal static string FaceSelectionHint => "Click — select a face piece " + LiveBuilderHintKeys.Key("double-click") + " whole face " +
+                                                    LiveBuilderHintKeys.Shift + " add / remove " + LiveBuilderHintKeys.Key("drag handle") + " new box or cut";
 
 
         // ── Выделенное ───────────────────────────────────────────────────
 
         // Выделена коробка — подсказка про её выдавливание.
-        protected static bool IsBoxSelected => Selection.activeGameObject != null && Selection.activeGameObject.TryGetComponent<BoxModelPart>(out _);
+        internal static bool IsBoxSelected => Selection.activeGameObject != null && Selection.activeGameObject.TryGetComponent<BoxModelPart>(out _);
 
 
         // ── Описание ─────────────────────────────────────────────────────
@@ -47,11 +37,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Что делает инструмент — во всплывающей подсказке плитки и внизу окна, пока сцена не дала свою.
         public abstract string Tooltip { get; }
 
-        // Место в палитре: меньше — раньше. Номер места — клавиша 1, 2, 3… в окне сцены.
+        // Место в палитре: меньше — раньше.
         public abstract int PaletteOrder { get; }
 
         // Линии значка в клетке 24×24 (<see cref="LiveBuilderIconRasterizer"/>). Каждый раз новый список: его можно дополнять.
         public abstract List<Vector2[]> IconLines { get; }
+
+        // Режимы — виды одного рисования: клавиша инструмента ещё раз — следующий, с Shift — предыдущий. Без режимов — null.
+        public virtual LiveBuilderToolModes Modes => null;
 
 
         // ── Что правит ───────────────────────────────────────────────────
@@ -62,7 +55,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Ручка группы повтора.
         public virtual bool CanEditRepeats => false;
 
-        // Наведённый на здание по контуру, ставит своё в него, на его этажи (<see cref="LiveBuilderBuildingContext"/>): на вкладке — карточка «В здании».
+        // Наведённый на здание по контуру, ставит своё в него, на его этажи (<see cref="LiveBuilderBuildingContext"/>): в строке инструмента — To top.
         public virtual bool PlacesIntoBuilding => false;
 
         // Виден ли контур выделенной стены или здания.
@@ -72,10 +65,19 @@ namespace FeatherKit.EditorTools.LiveBuilder
         protected virtual bool CanEditOtherObjects => false;
 
 
+        // ── Куда встанет новое ───────────────────────────────────────────
+
+        // Строка «Into: …» (<see cref="LiveBuilderIntoTarget"/>); инструмент ничего не ставит — null.
+        public virtual string IntoTarget => null;
+
+
         // ── Окно сцены ───────────────────────────────────────────────────
 
         // Что-то начато: цифры — не смена инструмента, Esc — отмена начатого, ручки выделенного спрятаны. У инструмента линии — пока линия рисуется.
         public virtual bool IsBusy => PathGesture is { IsActive: true };
+
+        // Что рисуется сейчас — секция Drawing панели вместо карточки (<see cref="LiveBuilderDrawingSection"/>). Ничего не рисует — null.
+        public virtual LiveBuilderDrawingReport DrawingReport => PathGesture?.Report();
 
         // Линия, которую ставят кликами: стена, здание, комната по контуру. Иначе — null.
         public virtual LiveBuilderPathGesture PathGesture => null;
@@ -92,17 +94,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Дописать к подсказке «клик ещё раз — глубже» (<see cref="LiveBuilderDepthClick"/>): мышь знает окно сцены, оно и дописывает.
         public virtual bool ShowsDepthClickHint => false;
 
-        // Клавиши и жесты инструмента — строки шпаргалки в окне сцены (<see cref="LiveBuilderSceneKeys"/>): «что нажать — что будет».
-        // У инструмента линии — клавиши линии.
-        public virtual string[] KeyHints => PathGesture != null ? PathKeyHints : System.Array.Empty<string>();
+        // Клавиши и жесты инструмента — строки шпаргалки в окне сцены (<see cref="LiveBuilderSceneKeys"/>): «что нажать — что будет», плашки — <see cref="LiveBuilderHintKeys"/>.
+        // У инструмента линии — клавиши линии. Каждый раз новый массив: подписи клавиш — из нынешних привязок.
+        public virtual string[] KeyHints => PathGesture != null ? PathKeyHints() : System.Array.Empty<string>();
 
 
-        // ── Окно: редкие настройки ───────────────────────────────────────
+        // ── Панель: редкие настройки ─────────────────────────────────────
 
-        // Что лежит под свёрнутым «Ещё» — серым в его строке, например «толщины, материалы». null — строки «Ещё» нет.
+        // Что лежит под «⋯» строки инструмента — в его подсказке названиями секций: «thicknesses, materials». null — «⋯» нет.
         public virtual string MoreSettingsSummary => null;
 
-        // Что-то под «Ещё» не как по умолчанию — «Ещё» раскрыто всегда: спрятанное не удивит.
+        // Что-то под «⋯» не как по умолчанию — на «⋯» точка: спрятанное не удивит.
         public virtual bool AreMoreSettingsChanged => false;
 
 
@@ -111,9 +113,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Подсказка инструмента линии: что сейчас — и про точки своего выделенного: их правят тут же.
         protected static string PathHint(LiveBuilderPathGesture pathGesture)
         {
-            return pathGesture.Hint + (!pathGesture.IsActive && LiveBuilderContourHandles.IsShown
-                ? " · Точки выделенного — тяни, «+» — новая, двойной клик — вид"
-                : " · Клик по готовому — выделить");
+            if (pathGesture.IsActive)
+                return pathGesture.Hint;
+
+            return pathGesture.Hint + (LiveBuilderContourHandles.IsShown
+                ? " " + LiveBuilderHintKeys.Key("drag a point") + " edit outline"
+                : " " + LiveBuilderHintKeys.Key("click a finished one") + " select");
+        }
+
+
+        // Клавиши инструмента линии — для шпаргалки в окне сцены.
+        private static string[] PathKeyHints()
+        {
+            return new[]
+            {
+                LiveBuilderHintKeys.Shift + " + click — the other point kind",
+                "digits " + LiveBuilderHintKeys.Enter + " — exact segment length",
+                LiveBuilderHintKeys.Ctrl + " — angle in 15° steps",
+                LiveBuilderHintKeys.Undo + " — remove the last point"
+            };
         }
 
 
@@ -153,6 +171,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (gameObject.TryGetComponent<GeometryCutter>(out var cutter))
                 return CanEdit(cutter);
 
+            if (gameObject.TryGetComponent<LiveBuilderColumn>(out var column))
+                return CanEdit(column);
+
             if (gameObject.TryGetComponent<SplineWall>(out var wall))
                 return CanEdit(wall);
 
@@ -166,15 +187,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // ── Окно ─────────────────────────────────────────────────────────
+        // ── Панель ───────────────────────────────────────────────────────
 
-        // Свои карточки настроек на вкладке — то, что меняют каждый раз. Карточку «В здании» и строку «Ещё» рисует сама вкладка.
+        // Свои частые настройки нового в строке инструмента; режимы, «Into», To top и «⋯» рисует сама строка.
         public virtual void DrawSettings()
         {
         }
 
 
-        // Редкие настройки под раскрытым «Ещё» (<see cref="MoreSettingsSummary"/>).
+        // Редкие настройки во всплывающем «⋯» (<see cref="MoreSettingsSummary"/>).
         public virtual void DrawMoreSettings()
         {
         }
@@ -222,7 +243,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно сцены: клавиши, отмена, вид ─────────────────────────────
 
-        // Своя клавиша — раньше общих: шага сетки, этажа, цифр инструментов. true — забрал её.
+        // Клавиша от окна сцены (<see cref="LiveBuilderSceneKeyboard"/>): цифры и X при рисовании, запятая, Backspace, Enter, Esc, Tab. true — забрал её.
         public virtual bool OnKeyDown(Event current)
         {
             return PathGesture != null && PathGesture.HandleKey(current.keyCode);
@@ -249,13 +270,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public virtual void DrawPreview()
         {
             PathGesture?.DrawPreview();
-        }
-
-
-        // Начало подсказки над зданием по контуру — его этаж; null — этаж уровня, как в пустоте.
-        public virtual string BuildingStoreyHint(LiveBuilderBuildingContext context)
-        {
-            return context.DescriptionOf(false);
         }
     }
 }

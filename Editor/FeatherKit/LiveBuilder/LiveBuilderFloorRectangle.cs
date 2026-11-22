@@ -6,12 +6,11 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Прямоугольник на полу для «Комнаты» и «Лестницы»: зажал — первый угол, тянешь — второй, всё по сетке.
+    /// Прямоугольник на полу для режима Room «Коробки» и «Лестницы»: зажал — первый угол, тянешь — второй, всё по сетке.
     /// Пол — этаж здания по контуру под мышью (углы прилипают к его стенам); выделена группа этого здания — пол её этажа, и новое встаёт в неё;
     /// верх объекта из коробок, а если там стена, потолок, другая геометрия или пусто — пол текущего этажа.
     /// Верх коробки, которая уже часть здания (площадка лестницы), — пол этой коробки, а здание помнится (<see cref="SurfaceBuilding"/>): новое — тоже его часть.
     /// Помнит, начат ли он внутри объекта из коробок — на полу под потолком того же объекта или в его сплошном объёме: тогда новое вырезается в нём.
-    /// Тот же поиск пола под потолком дома нужен и комнате по контуру — <see cref="TryFindHouseFloor"/>.
     /// Пока тянешь, стороны можно набрать цифрами: «4 X 3» — ровно 4 по X и 3 по Z от первого угла, в сторону мыши (<see cref="HandleKey"/>).
     /// </summary>
     public sealed class LiveBuilderFloorRectangle
@@ -46,6 +45,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // Стороны, набранные цифрами, как есть: «4×3»; не набирают — пусто.
         public string TypedText => typedSides.Text;
+
+        // Набраны обе стороны — прямоугольник ровно такой, мышь его не меняет.
+        public bool AreSidesTyped => typedSides.TryPeekAll(typedValues) && typedValues.Count >= 2;
 
         // Модель, в которую пойдёт новое: та, на чьём полу начали, или выделенная; null — будет новая.
         public BoxModel TargetModel => Plane.Model;
@@ -114,26 +116,28 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var group = BoxModelFactory.SelectedBuildingGroup(out _);
 
             if (group != null)
-                return "в группу «" + group.name + "», из коробок, со своими стенами, полом и потолком";
+                return "into group '" + group.name + "', with its own walls, floor and ceiling";
 
             if (LiveBuilderBuildingContext.TryFind(worldRay, out var context))
-                return "перегородками здания «" + context.Building.name + "»: стены до потолка, пол и потолок — здания";
+                return "in building '" + context.Building.name + "': walls only where it has none, floor and ceiling are its slabs";
 
             if (BoxModelPicker.TryPickSurface(worldRay, out var surfaceHit) && surfaceHit.Surface.Face == TopFace)
                 return TryFindCeilingAbove(surfaceHit.Model, surfaceHit.LocalPoint, out _)
-                    ? "пустотой в доме «" + surfaceHit.Model.name + "»: без своих стен"
-                    : "на «" + surfaceHit.Model.name + "», со своими стенами, полом и потолком";
+                    ? "as a void in house '" + surfaceHit.Model.name + "', without walls of its own"
+                    : "on '" + surfaceHit.Model.name + "', with its own walls, floor and ceiling";
 
             var selected = BoxModelActions.SelectedModel();
-            return selected != null ? "в «" + selected.name + "», со своими стенами, полом и потолком" : "новым объектом, со своими стенами, полом и потолком";
+            return selected != null ? "in '" + selected.name + "', with its own walls, floor and ceiling" : "as a new object, with its own walls, floor and ceiling";
         }
 
 
-        // Пол выделенной группы здания: этаж, к которому она привязана (без привязки — выбранный в окне), в осях группы.
+        // Пол выделенной группы здания: этаж, в котором она лежит или к которому привязана (иначе — выбранный в окне), в осях группы.
         private bool TryBeginOnGroupFloor(Ray worldRay, BoxModel group, SplineBuilding building)
         {
             var windowStorey = Mathf.Clamp(LiveBuilderStoreys.CurrentStorey - SplineBuildingLevelAlignment.BaseStoreyOf(building), 0, building.StoreyCount - 1);
-            var storey = group.TryGetComponent<SplineBuildingStoreyLink>(out var link) && link.IsValid ? link.Storey : windowStorey;
+            var storey = SplineBuildingStoreys.TryGetStoreyOf(group.transform, out var groupBuilding, out var groupStorey) && groupBuilding == building
+                ? Mathf.Min(groupStorey, building.StoreyCount - 1)
+                : windowStorey;
             var floorHeight = building.FirstFloorWorldHeight + storey * building.StoreyHeight;
             var groupTransform = group.transform;
             var localFloor = groupTransform.InverseTransformPoint(groupTransform.position + Vector3.up * (floorHeight - groupTransform.position.y)).y;
@@ -215,25 +219,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Пол дома из коробок под мышью: верх объекта, над которым в пределах этажа его же потолок. Точка — по сетке, в мире;
-        // высота — от пола до этого потолка, м. Так комната по контуру в доме знает, докуда ставить стены.
-        public static bool TryFindHouseFloor(Ray worldRay, out BoxModel house, out Vector3 worldPoint, out float ceilingHeight)
-        {
-            house = null;
-            worldPoint = default;
-            ceilingHeight = 0f;
-
-            if (!BoxModelPicker.TryPickSurface(worldRay, out var surfaceHit) || surfaceHit.Surface.Face != TopFace
-                || !TryFindCeilingAbove(surfaceHit.Model, surfaceHit.LocalPoint, out ceilingHeight)
-                || !BoxModelDrawPlaneFinder.TryFind(worldRay, false, out var plane, out var point))
-                return false;
-
-            house = surfaceHit.Model;
-            worldPoint = plane.FrameToWorld.MultiplyPoint3x4(point);
-            return true;
-        }
-
-
         // Пол текущего этажа: в осях выделенного объекта, а без выделения — того, внутри чьего объёма точка (сплошной дом под разрезом).
         private static bool TryFindStoreyFloor(Ray worldRay, out BoxModelDrawPlane plane, out Vector3 point)
         {
@@ -264,12 +249,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static bool IsInsideSolid(BoxModel model, Vector3 localPoint)
         {
             var probe = MillimeterBox.ToMillimeters(localPoint + Vector3.up * 0.05f);
+            var boxes = BoxModelRebuilder.GetSolverBoxes(model);
             var shapes = new List<BoxModelPartShape>();
 
-            foreach (var box in BoxModelRebuilder.GetSolverBoxes(model))
+            foreach (var box in boxes)
                 shapes.Add(box.Shape);
 
-            foreach (var cell in BoxModelSolver.Solve(shapes))
+            foreach (var cell in BoxModelSolver.Solve(shapes, LiveBuilderCutRules.RuleOf(model), LiveBuilderCutRules.SolverFilterOf(model, boxes)))
                 if (probe.x > cell.Box.Min.x && probe.x < cell.Box.Max.x && probe.y > cell.Box.Min.y && probe.y < cell.Box.Max.y
                     && probe.z > cell.Box.Min.z && probe.z < cell.Box.Max.z)
                     return true;

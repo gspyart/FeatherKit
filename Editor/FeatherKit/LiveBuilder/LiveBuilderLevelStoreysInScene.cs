@@ -49,11 +49,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             searchedScene = activeScene;
             isSearched = true;
-            foundStoreys = FindIn(activeScene);
+            foundStoreys = SearchIn(activeScene);
             return foundStoreys;
         }
 
-        private static LiveBuilderLevelStoreys FindIn(Scene scene)
+
+        // Этажи уровня любой открытой сцены: у активной — из памяти, у остальных — поиском (их спрашивает только сверка зданий).
+        public static LiveBuilderLevelStoreys FindIn(Scene scene)
+        {
+            return scene == SceneManager.GetActiveScene() ? Find() : SearchIn(scene);
+        }
+
+        private static LiveBuilderLevelStoreys SearchIn(Scene scene)
         {
             if (!scene.IsValid() || !scene.isLoaded)
                 return null;

@@ -38,7 +38,7 @@ namespace FeatherKit.Tests.LiveBuilder
 
         // ── Выделенная группа здания ─────────────────────────────────────
 
-        // Выделена группа здания (или что-то в ней) — новое встаёт в неё, а не в «Interior»; комната — на пол её этажа, хоть за стенами здания.
+        // Выделена группа здания (или что-то в ней) — новое встаёт в неё, а не в этаж; комната — на пол её этажа, хоть за стенами здания.
         [Test]
         public void SelectedBuildingGroup_TakesNewThings_RoomOnItsFloorOutsideWalls()
         {
@@ -46,10 +46,9 @@ namespace FeatherKit.Tests.LiveBuilder
             var building = testScene.CreateBuilding(model, 3, Vector3.zero, new Vector3(8f, 0f, 0f), new Vector3(8f, 0f, 8f), new Vector3(0f, 0f, 8f));
             var group = LiveBuilderGroups.CreateGroupInside(building.gameObject);
 
-            Assert.AreEqual(group.transform, BoxModelFactory.InteriorTargetOf(building), "выделена группа — новое в неё");
+            Assert.AreEqual(group, BoxModelFactory.SelectedGroupIn(building), "выделена группа — новое в неё");
 
-            var link = group.GetComponent<SplineBuildingStoreyLink>();
-            var groupFloor = building.FirstFloorWorldHeight + link.Storey * building.StoreyHeight;
+            var groupFloor = group.transform.parent.position.y;
             var outsideWalls = new Vector3(Origin.x - 3f, groupFloor + 20f, Origin.z + 4f);
             var rectangle = new LiveBuilderFloorRectangle();
 
@@ -59,16 +58,16 @@ namespace FeatherKit.Tests.LiveBuilder
             Assert.AreEqual(groupFloor, rectangle.ToWorld(rectangle.Start).y, 0.001f, "на пол этажа группы");
             rectangle.Cancel();
 
-            Assert.That(LiveBuilderFloorRectangle.DescribeTargetAt(new Ray(outsideWalls, Vector3.down)), Does.StartWith("в группу"),
+            Assert.That(LiveBuilderFloorRectangle.DescribeTargetAt(new Ray(outsideWalls, Vector3.down)), Does.StartWith("into group"),
                 "подсказка «Комнаты» заранее говорит: в группу");
 
             Selection.activeGameObject = building.gameObject;
-            Assert.AreEqual(BoxModelFactory.InteriorOf(building), BoxModelFactory.InteriorTargetOf(building), "выделено само здание — в «Interior»");
+            Assert.IsNull(BoxModelFactory.SelectedGroupIn(building), "выделено само здание — не в группу, а в этаж");
 
             var intoBuilding = new Ray(new Vector3(Origin.x + 4f, building.FirstFloorWorldHeight + 20f, Origin.z + 4f), Vector3.down);
 
             if (LiveBuilderBuildingContext.TryFind(intoBuilding, out _))
-                Assert.That(LiveBuilderFloorRectangle.DescribeTargetAt(intoBuilding), Does.StartWith("перегородками здания"), "над зданием — перегородки, и подсказка так и говорит");
+                Assert.That(LiveBuilderFloorRectangle.DescribeTargetAt(intoBuilding), Does.StartWith("in building"), "над зданием — комната в здании, и подсказка так и говорит");
         }
 
 
@@ -108,7 +107,7 @@ namespace FeatherKit.Tests.LiveBuilder
         {
             var building = testScene.CreateBuilding(2, Vector3.zero, new Vector3(8f, 0f, 0f), new Vector3(8f, 0f, 8f), new Vector3(0f, 0f, 8f));
             var floor = building.FirstFloorWorldHeight - Origin.y;
-            var interior = BoxModelFactory.InteriorOf(building);
+            var interior = SplineBuildingStoreys.ContainerOf(building, 0).transform;
             var group = BoxModelFactory.CreateGroup(interior);
             var wall = testScene.CreateWall(group, new Vector3(2f, floor, 4f), new Vector3(6f, floor, 4f));
             var cutter = BoxModelFactory.CreateCutter(building.transform, new Vector3(Origin.x + 4f, building.FirstFloorWorldHeight + 0.5f, Origin.z + 4f),
@@ -123,7 +122,7 @@ namespace FeatherKit.Tests.LiveBuilder
             Assert.IsTrue(IsPartitionOpen(building), "перегородка прямо в интерьере — прорезана");
 
             wall.transform.SetParent(group.transform, true);
-            cutter.Scope = GeometryCutterScope.Everything;
+            cutter.Scope = GeometryCutterScope.EverythingItTouches;
             SplineWallRebuilder.Rebuild(wall);
 
             Assert.IsTrue(IsPartitionOpen(building), "«всё вокруг» режет и сквозь группу");
@@ -165,24 +164,23 @@ namespace FeatherKit.Tests.LiveBuilder
         private static bool IsMeshUpToDate(BoxModel model)
         {
             var method = typeof(BoxModelRebuilder).GetMethod("IsMeshUpToDate", BindingFlags.NonPublic | BindingFlags.Static);
-            return (bool)method.Invoke(null, new object[] { model, model.GetComponent<MeshFilter>().sharedMesh });
+            return (bool)method.Invoke(null, new object[] { model, model.GetComponent<MeshFilter>().sharedMesh, LiveBuilderBuildQuality.Final });
         }
 
 
         // ── Команды ──────────────────────────────────────────────────────
 
         [Test]
-        public void NewGroupOnBuilding_LandsInInteriorWithStoreyLink()
+        public void NewGroupOnBuilding_LandsOnBuildingStoreyFloor()
         {
             var building = testScene.CreateBuilding(3, Vector3.zero, new Vector3(8f, 0f, 0f), new Vector3(8f, 0f, 8f), new Vector3(0f, 0f, 8f));
             var group = LiveBuilderGroups.CreateGroupInside(building.gameObject);
 
-            Assert.AreEqual(BoxModelFactory.InteriorOf(building), group.transform.parent, "в «Interior» здания");
-
-            var link = group.GetComponent<SplineBuildingStoreyLink>();
-            Assert.IsTrue(link != null && link.IsValid && link.Building == building, "привязана к этажам здания");
-            Assert.That(link.Storey, Is.InRange(0, building.StoreyCount - 1), "на одном из его этажей");
-            Assert.AreEqual(building.FirstFloorWorldHeight + link.Storey * building.StoreyHeight, group.transform.position.y, 0.001f, "на полу своего этажа");
+            var storey = group.transform.parent.GetComponent<SplineBuildingStorey>();
+            Assert.IsNotNull(storey, "в этаже здания");
+            Assert.AreEqual(building, storey.Building, "того самого");
+            Assert.That(storey.Storey, Is.InRange(0, building.StoreyCount - 1), "на одном из его этажей");
+            Assert.AreEqual(building.FirstFloorWorldHeight + storey.Storey * building.StoreyHeight, group.transform.position.y, 0.001f, "на полу своего этажа");
         }
 
 

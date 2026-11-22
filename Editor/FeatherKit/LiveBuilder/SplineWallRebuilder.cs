@@ -8,24 +8,15 @@ using UnityEngine.Splines;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Пересобирает меш стен по линии, когда изменились линия, размеры, вырезы или вырезающие коробки объекта вокруг:
-    /// правка точек, перенос, Ctrl+Z. Как у объектов из коробок — по «подписи», без лишних пересборок; меш — файлом рядом со сценой.
-    /// Когда проверять — решает общая очередь <see cref="LiveBuilderRebuildQueue"/>: стены — последними, после коробок и зданий.
-    /// Вырезающие коробки объекта, в котором стена лежит, переводит в проёмы в координатах стены: там, где коробка пересекает линию стены,
-    /// стена прорезана насквозь. Режут коробки, которые режут стены (<see cref="BoxModelSolverBox.CutsTarget"/>), где бы ни стояли в списке; пустота комнаты стены по линии не режет.
-    /// Коробка во всю высоту стены — комната, в которой стена стоит, а не проём: такую стену она не режет.
-    /// Вырезы (<see cref="GeometryCutter"/>) вычитаются из готового меша (<see cref="GeometryCutterApplier"/>).
-    /// У стены-комнаты в здании стороны на его стенах не строятся (<see cref="SplineWallBuildingSides"/>).
+    /// Пересобирает меш стен по линии, когда изменились линия, размеры, вырезы или вырезающие коробки объекта вокруг; когда — решает <see cref="LiveBuilderRebuildQueue"/>.
+    /// - как у объектов из коробок — по подписи, без лишних пересборок; меш — файлом рядом со сценой
+    /// - вырезающие коробки объекта вокруг — проёмы насквозь; кого они режут, решает <see cref="LiveBuilderCutRules"/>
+    /// - вырезы (<see cref="GeometryCutter"/>) вычитаются из готового меша (<see cref="GeometryCutterApplier"/>)
+    /// - у стены-комнаты в здании стороны на его стенах не строятся (<see cref="SplineWallBuildingSides"/>)
+    /// - стена под повтором (<see cref="LiveBuilderArray"/>) — все копии в её меше, у каждой свои проёмы
     /// </summary>
     public static class SplineWallRebuilder
     {
-        // Версия расчёта стены: поменялась — все стены пересобираются. 2 — стороны на отрезке строго поперёк, откосы прямые;
-        // 4 — коробка во всю высоту стены её не режет; 5 — развёртка верха и низа по плану.
-        private const int GeometryVersion = 5;
-
-        // Запас габарита стены или здания для поиска вырезающих коробок, м: коробка, вплотную касающаяся стены, тоже в подписи.
-        private const float OwnerBoundsMargin = 0.05f;
-
         // Габарит стены до вырезов, в её осях: по нему ищут вырезы. По прорезанному мешу нельзя — стена целиком в вырезе пустая,
         // её вырез «пропадает», подпись не сходится, и стена пересобиралась бы на каждой правке. Помнится до перезагрузки скриптов.
         private static readonly Dictionary<EntityId, Bounds> UncutBoundsByWall = new();
@@ -37,22 +28,41 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // общий меш копий не перезаписывается — изменённая копия получает свой файл.
         public static void RebuildChangedWalls()
         {
-            foreach (var wall in StageUtility.GetCurrentStageHandle().FindComponentsOfType<SplineWall>())
+            RebuildChangedWalls(LiveBuilderRebuildScope.WholeScene, LiveBuilderBuildQuality.Final);
+        }
+
+
+        public static void RebuildChangedWalls(LiveBuilderRebuildScope scope, LiveBuilderBuildQuality quality)
+        {
+            foreach (var wall in scope.Find<SplineWall>())
             {
                 try
                 {
                     if (TryUsePrefabGeometry(wall))
                         continue;
 
+                    bool isUpToDate;
+
                     // Пустой меш — тоже готовый: стена из одной точки или целиком в вырезе.
-                    if (wall.GetComponent<MeshFilter>().sharedMesh == null || wall.BuiltSignature != SignatureOf(wall))
-                        Rebuild(wall);
+                    using (LiveBuilderRebuildProfiler.Measure(LiveBuilderRebuildStage.SignatureCheck))
+                        isUpToDate = wall.GetComponent<MeshFilter>().sharedMesh != null
+                                     && LiveBuilderDraftBuilds.IsBuilt(wall, wall.BuiltSignature, SignatureOf(wall, quality), quality);
+
+                    if (!isUpToDate)
+                        Rebuild(wall, quality);
                 }
                 catch (System.Exception exception)
                 {
                     Debug.LogException(exception, wall);
                 }
             }
+        }
+
+
+        // Стена удалена или её сцена закрыта — её габарит до вырезов больше не нужен.
+        public static void ForgetDestroyed()
+        {
+            LiveBuilderDestroyedObjects.RemoveFrom(UncutBoundsByWall);
         }
 
 
@@ -67,7 +77,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var source = PrefabUtility.GetCorrespondingObjectFromSource(instance);
             var sourceMesh = source != null ? source.GetComponent<MeshFilter>().sharedMesh : null;
-            return sourceMesh != null && sourceMesh.vertexCount > 0 && source.BuiltSignature == SignatureOf(instance);
+            return sourceMesh != null && sourceMesh.vertexCount > 0 && source.BuiltSignature == SignatureOf(instance, LiveBuilderBuildQuality.Final);
         }
 
         // Чем сейчас собран префаб — если после пересборки он всё равно не сходится, второй раз его не трогаем.
@@ -81,29 +91,60 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public static void Rebuild(SplineWall wall)
         {
-            var paths = SplineWallBuildingSides.PathsToBuild(wall);
-            var holesByPath = paths.ConvertAll(path => CollectHoles(wall, path));
+            Rebuild(wall, LiveBuilderBuildQuality.Final);
+        }
+
+
+        // Черновик — без коллайдера, подпись в сцене не пишется (<see cref="LiveBuilderDraftBuilds"/>).
+        public static void Rebuild(SplineWall wall, LiveBuilderBuildQuality quality)
+        {
+            LiveBuilderRebuildProfiler.CountRebuiltConstruction();
+
+            List<SplineWallPath> paths;
+            List<SplineWallPath> slabPaths;
+            List<SplineWallCopy> copies;
             var material = wall.Material != null ? wall.Material : BoxModelFactory.LoadDefaultMaterial();
 
-            // Пол и потолок — по всей замкнутой линии, и вдоль стен здания тоже: стороны там не строятся, а комната под ними есть.
-            var slabPaths = wall.HasSlabs ? SplineWallPath.FromWall(wall).FindAll(path => path.IsClosed && path.IsUsable) : new List<SplineWallPath>();
-            var slabHoles = slabPaths.Count > 0 ? SplineBuildingRebuilder.CollectSlabHoles(wall) : new List<SplineBuildingSlabHole>();
+            using (LiveBuilderRebuildProfiler.Measure(LiveBuilderRebuildStage.WallGeometry))
+            {
+                paths = PathsOf(wall);
 
+                // Пол и потолок — по всей замкнутой линии, и вдоль стен здания тоже: стороны там не строятся, а комната под ними есть.
+                slabPaths = wall.HasSlabs ? SplineWallPath.FromWall(wall).FindAll(path => path.IsClosed && path.IsUsable) : new List<SplineWallPath>();
+                copies = CopiesOf(wall, paths, slabPaths.Count > 0);
+            }
+
+            // Подпись до вырезов — только для заготовки жеста с проёмом: иначе её незачем считать.
+            var uncutKey = quality == LiveBuilderBuildQuality.Draft && GeometryCutterDragBlanks.HasMovingCutters ? SplineWallSignature.UncutOf(wall) : null;
+            var materials = slabPaths.Count > 0
+                ? new[] { material, wall.FloorMaterial != null ? wall.FloorMaterial : material, wall.CeilingMaterial != null ? wall.CeilingMaterial : material }
+                : new[] { material };
             var written = LiveBuilderMeshWriter.Write(wall, null, mesh =>
             {
-                SplineWallMeshBuilder.Fill(mesh, wall, paths, holesByPath, slabPaths, slabHoles);
+                using (LiveBuilderRebuildProfiler.Measure(LiveBuilderRebuildStage.WallGeometry))
+                    SplineWallMeshBuilder.Fill(mesh, wall, paths, copies, slabPaths, SplineWallTexturing.ForWall(wall, materials));
+
                 UncutBoundsByWall[wall.GetEntityId()] = mesh.bounds;
+                return materials;
+            }, null, quality, uncutKey);
 
-                return slabPaths.Count > 0
-                    ? new[] { material, wall.FloorMaterial != null ? wall.FloorMaterial : material, wall.CeilingMaterial != null ? wall.CeilingMaterial : material }
-                    : new[] { material };
-            });
+            string signature;
 
-            var signature = SignatureOf(wall, written.Cutters);
+            using (LiveBuilderRebuildProfiler.Measure(LiveBuilderRebuildStage.SignatureCheck))
+                signature = SplineWallSignature.Of(wall, written.Cutters, quality);
+
+            if (quality == LiveBuilderBuildQuality.Draft)
+            {
+                LiveBuilderDraftBuilds.Remember(wall, signature);
+                return;
+            }
+
             var isSceneChanged = written.IsNewMesh || wall.BuiltSignature != signature;
 
-            LiveBuilderMeshWriter.UpdateCollider(wall, wall.HasCollider, written.Mesh);
+            using (LiveBuilderRebuildProfiler.Measure(LiveBuilderRebuildStage.Collider))
+                LiveBuilderMeshWriter.UpdateCollider(wall, wall.HasCollider, written.Mesh);
             wall.BuiltSignature = signature;
+            LiveBuilderDraftBuilds.Forget(wall);
 
             if (isSceneChanged)
             {
@@ -112,36 +153,102 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
         }
 
+        // Копии стены или здания из повторов над ними — каждая со своими проёмами и дырами в перекрытиях; без повторов — одна, сама постройка.
+        public static List<SplineWallCopy> CopiesOf(Component owner, IReadOnlyList<SplineWallPath> paths, bool includesSlabHoles)
+        {
+            var offsets = LiveBuilderArrayCopyPoses.CopiesOf(owner.transform);
+            var copies = new List<SplineWallCopy>(offsets.Count);
+
+            foreach (var offset in offsets)
+            {
+                var slabHoles = includesSlabHoles ? SplineBuildingSlabHoles.Collect(owner, offset) : new List<SplineBuildingSlabHole>();
+                copies.Add(new SplineWallCopy(LiveBuilderArrayCopyPoses.LocalOffsetOf(owner.transform, offset), CollectHoles(owner, paths, offset), slabHoles));
+            }
+
+            return copies;
+        }
+
+
         // ── Проёмы ───────────────────────────────────────────────────────
 
-        // Проёмы одного пути в координатах стены или здания — от вырезающих коробок объекта вокруг, что режут стены (<see cref="BoxModelSolverBox.CutsTarget"/>); порядок в списке не важен.
-        // Вырез лестницы и коробка «только перекрытия» стену не пробивают.
-        public static List<SplineWallHole> CollectHoles(Component owner, SplineWallPath path)
+        // Пути, по которым строится стена или стены здания, в их осях.
+        public static List<SplineWallPath> PathsOf(Component owner)
         {
-            var holes = new List<SplineWallHole>();
+            return owner is SplineBuilding building
+                ? SplineWallPath.FromContainer(building.GetComponent<SplineContainer>(), building.CurveStep)
+                : SplineWallBuildingSides.PathsToBuild((SplineWall)owner);
+        }
+
+
+        // Проёмы каждого пути в координатах стены или здания — от вырезающих коробок объекта вокруг, что режут стены; порядок в списке не важен.
+        // Вырез лестницы и коробка «только перекрытия» стену не пробивают; вырез-коробка, которая стену не проходит насквозь, режет её вычитанием.
+        public static List<List<SplineWallHole>> CollectHoles(Component owner, IReadOnlyList<SplineWallPath> paths)
+        {
+            return CollectHoles(owner, paths, Vector3.zero);
+        }
+
+
+        // Проёмы копии постройки, сдвинутой повтором на copyOffset в мире: коробки те же, а копия стоит в другом месте.
+        public static List<List<SplineWallHole>> CollectHoles(Component owner, IReadOnlyList<SplineWallPath> paths, Vector3 copyOffset)
+        {
+            var holesByPath = new List<List<SplineWallHole>>(paths.Count);
+
+            foreach (var _ in paths)
+                holesByPath.Add(new List<SplineWallHole>());
+
+            if (owner is SplineWall wall)
+                AddChildCutterHoles(wall, paths, holesByPath);
+
             var model = OuterModelOf(owner);
 
             if (model == null)
-                return holes;
+                return holesByPath;
+
+            Dictionary<GeometryCutter, bool> isPreciseByCutter = null;
+            var wallToModel = model.transform.worldToLocalMatrix * LiveBuilderArrayCopyPoses.LocalToWorldOfCopy(owner.transform, copyOffset);
 
             foreach (var box in BoxModelRebuilder.GetSolverBoxes(model))
             {
-                if (!box.CutsWalls)
+                if (box.Mode != BoxModelPartMode.Cut || !box.CutSource.CutsWalls || !LiveBuilderCutRules.CutBoxCutsConstruction(model, box, owner))
                     continue;
 
-                if (box.CutsTarget(owner))
-                    AddCutBoxHoles(owner, model, path, box.Box, holes);
+                if (box.Owner is GeometryCutter cutter && !IsCutterPrecise(cutter, model, owner, paths, ref isPreciseByCutter))
+                    continue;
+
+                for (var index = 0; index < paths.Count; index++)
+                    AddCutBoxHoles(wallToModel, paths[index], box.Box, holesByPath[index]);
             }
 
-            return holes;
+            return holesByPath;
+        }
+
+        // Дверь — ребёнок стены, коробка по её осям — проём по линии (<see cref="LiveBuilderCutRules.IsWallChildBox"/>). Копия стены несёт свою дверь.
+        private static void AddChildCutterHoles(SplineWall wall, IReadOnlyList<SplineWallPath> paths, List<List<SplineWallHole>> holesByPath)
+        {
+            foreach (var cutter in LiveBuilderCutRules.PreciseChildCuttersOf(wall))
+                foreach (var box in GeometryCutterSolverBoxes.BoxesOf(cutter, wall.transform, Vector3.zero))
+                    for (var index = 0; index < paths.Count; index++)
+                        AddCutBoxHoles(Matrix4x4.identity, paths[index], box, holesByPath[index]);
+        }
+
+        // Решается раз на вырез: у его копий — одно решение, как у вычитания.
+        private static bool IsCutterPrecise(GeometryCutter cutter, BoxModel model, Component owner, IReadOnlyList<SplineWallPath> paths,
+            ref Dictionary<GeometryCutter, bool> isPreciseByCutter)
+        {
+            isPreciseByCutter ??= new Dictionary<GeometryCutter, bool>();
+
+            if (!isPreciseByCutter.TryGetValue(cutter, out var isPrecise))
+                isPreciseByCutter[cutter] = isPrecise = LiveBuilderCutRules.CutsWallsPrecisely(cutter, model, owner, paths);
+
+            return isPrecise;
         }
 
         // Где линия стены проходит внутри коробки (в плане) — там проём на высоту коробки. По отрезку на каждый кусок пути.
-        private static void AddCutBoxHoles(Component owner, BoxModel model, SplineWallPath path, MillimeterBox box, List<SplineWallHole> holes)
+        // wallToModel — из осей стены (её копии) в оси коробки.
+        private static void AddCutBoxHoles(Matrix4x4 wallToModel, SplineWallPath path, MillimeterBox box, List<SplineWallHole> holes)
         {
             var boxMin = box.MinInMeters;
             var boxMax = box.MaxInMeters;
-            var wallToModel = model.transform.worldToLocalMatrix * owner.transform.localToWorldMatrix;
             var modelToWall = wallToModel.inverse;
 
             for (var segment = 0; segment < path.SegmentCount; segment++)
@@ -162,31 +269,93 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var top = modelToWall.MultiplyPoint3x4(new Vector3(middle.x, boxMax.y, middle.z)).y;
                 var baseHeight = path.BaseHeightAt((alongFrom + alongTo) / 2f);
 
-                if (owner is SplineWall wall && IsSpaceAroundWall(wall, bottom - baseHeight, top - baseHeight))
-                    continue;
-
                 holes.Add(new SplineWallHole(alongFrom, alongTo, bottom - baseHeight, top - baseHeight));
             }
         }
 
-        // Коробка во всю высоту стены (хоть одной её копии) — это комната, в которой стена стоит, а не проём в ней: стену внутри дома из коробок она не режет.
-        private static bool IsSpaceAroundWall(SplineWall wall, float bottom, float top)
+        // ── Насквозь ли ──────────────────────────────────────────────────
+
+        // Вырез-коробка проходит стену насквозь всюду, где её задевает: обе стороны стены входят в коробку там же, где линия. Иначе это ниша.
+        // Стена под повтором — так в каждой её копии.
+        public static bool IsThroughThickness(Component owner, BoxModel model, GeometryCutter cutter, IReadOnlyList<SplineWallPath> paths)
         {
-            const float tolerance = 0.01f;
+            var cutterBoxes = new List<MillimeterBox>();
 
-            for (var copy = 0; copy < wall.CopiesUp; copy++)
+            foreach (var box in BoxModelRebuilder.GetSolverBoxes(model))
+                if (box.Owner == cutter)
+                    cutterBoxes.Add(box.Box);
+
+            foreach (var ownerCopy in LiveBuilderArrayCopyPoses.CopiesOf(owner.transform))
             {
-                var copyBottom = copy * wall.CopyStep;
+                var wallToModel = model.transform.worldToLocalMatrix * LiveBuilderArrayCopyPoses.LocalToWorldOfCopy(owner.transform, ownerCopy);
 
-                if (bottom <= copyBottom + tolerance && top >= copyBottom + wall.Height - tolerance)
-                    return true;
+                if (!IsThroughThickness(owner, wallToModel, cutterBoxes, paths))
+                    return false;
             }
 
-            return false;
+            return true;
         }
 
+
+        // Коробки в осях boxSpace, wallToBox — из осей стены туда же. Дверь-ребёнок стены — в осях самой стены.
+        public static bool IsThroughThickness(Component owner, Matrix4x4 wallToBox, IReadOnlyList<MillimeterBox> boxes, IReadOnlyList<SplineWallPath> paths)
+        {
+            foreach (var box in boxes)
+                foreach (var path in paths)
+                {
+                    GetSideOffsets(owner, path, out var leftOffset, out var rightOffset);
+
+                    for (var segment = 0; segment < path.SegmentCount; segment++)
+                        if (!IsSegmentThrough(path, segment, leftOffset, rightOffset, wallToBox, box))
+                            return false;
+                }
+
+            return true;
+        }
+
+        private static void GetSideOffsets(Component owner, SplineWallPath path, out float leftOffset, out float rightOffset)
+        {
+            if (owner is SplineBuilding building)
+                SplineBuildingMeshBuilder.GetWallOffsets(building, path, out leftOffset, out rightOffset);
+            else
+                SplineWallMeshBuilder.GetSideOffsets((SplineWall)owner, out leftOffset, out rightOffset);
+        }
+
+        // Коробки отрезок не касается — годится; касается — линия и обе стороны входят в неё и выходят на одних долях отрезка.
+        // Стороны сверяются с коробкой, расширенной на миллиметр: сторона вровень с гранью коробки — тоже насквозь.
+        private static bool IsSegmentThrough(SplineWallPath path, int segment, float leftOffset, float rightOffset, Matrix4x4 wallToModel, MillimeterBox box)
+        {
+            const float sideMargin = 0.001f;
+            const float fractionTolerance = 0.002f;
+
+            var start = path.Points[segment];
+            var end = path.Points[segment + 1];
+            var side = Vector3.Cross(Vector3.up, path.DirectionOf(segment));
+            var boxMin = box.MinInMeters;
+            var boxMax = box.MaxInMeters;
+            var margin = new Vector3(sideMargin, 0f, sideMargin);
+
+            var isCenterInside = TryClipToRectangle(wallToModel.MultiplyPoint3x4(start), wallToModel.MultiplyPoint3x4(end), boxMin, boxMax,
+                out var centerFrom, out var centerTo);
+            var isLeftInside = TryClipToRectangle(wallToModel.MultiplyPoint3x4(start + side * leftOffset), wallToModel.MultiplyPoint3x4(end + side * leftOffset),
+                boxMin - margin, boxMax + margin, out var leftFrom, out var leftTo);
+            var isRightInside = TryClipToRectangle(wallToModel.MultiplyPoint3x4(start + side * rightOffset), wallToModel.MultiplyPoint3x4(end + side * rightOffset),
+                boxMin - margin, boxMax + margin, out var rightFrom, out var rightTo);
+
+            if (!isCenterInside && !isLeftInside && !isRightInside)
+                return true;
+
+            if (!isCenterInside || !isLeftInside || !isRightInside)
+                return false;
+
+            var tolerance = fractionTolerance / Mathf.Max(path.Distances[segment + 1] - path.Distances[segment], 1e-4f);
+            return Mathf.Abs(leftFrom - centerFrom) <= tolerance && Mathf.Abs(rightFrom - centerFrom) <= tolerance
+                   && Mathf.Abs(leftTo - centerTo) <= tolerance && Mathf.Abs(rightTo - centerTo) <= tolerance;
+        }
+
+
         // Часть отрезка внутри прямоугольника коробки в плане (X и Z), доли от 0 до 1. Отсечение Лианга — Барски.
-        private static bool TryClipToRectangle(Vector3 start, Vector3 end, Vector3 min, Vector3 max, out float from, out float to)
+        internal static bool TryClipToRectangle(Vector3 start, Vector3 end, Vector3 min, Vector3 max, out float from, out float to)
         {
             from = 0f;
             to = 1f;
@@ -228,11 +397,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Подпись ──────────────────────────────────────────────────────
 
-        // Всё, от чего зависит меш: точки линии, размеры, вырезающие коробки объекта вокруг, вырезы и где стоят стена и объект.
-        // Вырезы — те, что режут нынешний меш стены.
-        private static string SignatureOf(SplineWall wall)
+        // Подпись с вырезами, что режут нынешний меш стены (<see cref="SplineWallSignature"/>).
+        private static string SignatureOf(SplineWall wall, LiveBuilderBuildQuality quality)
         {
-            return SignatureOf(wall, GeometryCutterLookup.CuttersFor(wall, UncutWorldBoundsOf(wall)));
+            return SplineWallSignature.Of(wall, GeometryCutterLookup.CuttersFor(wall, UncutWorldBoundsOf(wall)), quality);
         }
 
         // Габарит до вырезов; не помнится (скрипты перезагрузились) — габарит готового меша.
@@ -241,141 +409,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return UncutBoundsByWall.TryGetValue(wall.GetEntityId(), out var uncutBounds)
                 ? GeometryCutterLookup.WorldBoundsOf(uncutBounds, wall.transform)
                 : GeometryCutterLookup.WorldBoundsOf(wall.GetComponent<MeshRenderer>());
-        }
-
-        // Всё, от чего зависит меш стены, — хешем, одинаковым на любом запуске и машине (<see cref="LiveBuilderStableHash"/>); в конце — вырезы.
-        private static string SignatureOf(SplineWall wall, List<GeometryCutter> cutters)
-        {
-            var hash = new Hash128();
-            hash.Append(GeometryVersion);
-            hash.Append(wall.Thickness);
-            hash.Append(wall.Height);
-            hash.Append((int)wall.Alignment);
-            hash.Append(wall.CopiesUp);
-            hash.Append(wall.CopyStep);
-            hash.Append(wall.CurveStep);
-            hash.Append(wall.CornerSegments);
-            hash.Append(BoxModelSideMaterials.KeyOf(wall.Material));
-            hash.Append(wall.HasCollider ? 1 : 0);
-            SplineWallBuildingSides.AppendBuildingKey(ref hash, wall);
-            LiveBuilderStableHash.AppendSplines(ref hash, wall.GetComponent<SplineContainer>());
-
-            // Пол и потолок — только если есть: у прежних стен подпись та же, пересборки нет.
-            if (wall.HasSlabs)
-            {
-                hash.Append(wall.HasFloor ? 1 : 0);
-                hash.Append(wall.HasCeiling ? 1 : 0);
-                hash.Append(wall.SlabThickness);
-                hash.Append(BoxModelSideMaterials.KeyOf(wall.FloorMaterial));
-                hash.Append(BoxModelSideMaterials.KeyOf(wall.CeilingMaterial));
-            }
-
-            var model = OuterModelOf(wall);
-
-            // Коробки — уже в осях стены: где стоит сама стена в объекте, подписи не важно. С полом и потолком — и те, что режут перекрытия.
-            if (model != null)
-            {
-                var cutBoxes = CutBoxesHashOf(model, wall, wall.HasSlabs);
-                hash.Append(ref cutBoxes);
-            }
-
-            return hash + GeometryCutterLookup.KeyOf(wall, cutters);
-        }
-
-        // Вырезающие коробки объекта, которые режут эту стену или здание, — для их подписи: правка добавляющих коробок, материалов и ступеней
-        // их не пересобирает, а сдвинул вырезающую коробку — пересоберёт. Перекрытия есть только у здания.
-        // Только коробки, что задевают габарит стены или здания, и их углы — в осях самой стены или здания, с округлением до 0,1 мм:
-        // коробка в другом конце объекта (копия здания с лестницей рядом) подпись не меняет, а здание, которое едет вместе со своей лестницей, не пересобирается.
-        // Что режет коробка — только если не «всё».
-        public static Hash128 CutBoxesHashOf(BoxModel model, Component owner, bool includesSlabCuts)
-        {
-            var hash = new Hash128();
-            var modelToOwner = LiveBuilderStableHash.RelativeMatrix(owner.transform, model.transform);
-            var ownerBounds = UncutLocalBoundsOf(owner);
-
-            foreach (var box in BoxModelRebuilder.GetSolverBoxes(model))
-            {
-                var isApplied = box.CutsWalls || includesSlabCuts && box.CutsSlabs;
-
-                if (!isApplied || !box.CutsTarget(owner))
-                    continue;
-
-                var min = modelToOwner.MultiplyPoint3x4(box.Box.MinInMeters);
-                var max = modelToOwner.MultiplyPoint3x4(box.Box.MaxInMeters);
-                var boxBounds = new Bounds(min, Vector3.zero);
-                boxBounds.Encapsulate(max);
-
-                // Коробка по осям объекта, а стена может стоять в нём повёрнутой: габарит — по всем восьми углам.
-                foreach (var corner in CornersOf(box.Box.MinInMeters, box.Box.MaxInMeters))
-                    boxBounds.Encapsulate(modelToOwner.MultiplyPoint3x4(corner));
-
-                if (!boxBounds.Intersects(ownerBounds))
-                    continue;
-
-                AppendQuantized(ref hash, min);
-                AppendQuantized(ref hash, max);
-
-                if (box.OwnerPart != null && box.CutTargets != LiveBuilderCutTargets.Everything)
-                    hash.Append((int)box.CutTargets);
-            }
-
-            return hash;
-        }
-
-        private static void AppendQuantized(ref Hash128 hash, Vector3 point)
-        {
-            LiveBuilderStableHash.AppendQuantized(ref hash, point.x);
-            LiveBuilderStableHash.AppendQuantized(ref hash, point.y);
-            LiveBuilderStableHash.AppendQuantized(ref hash, point.z);
-        }
-
-        private static Vector3[] CornersOf(Vector3 min, Vector3 max)
-        {
-            var corners = new Vector3[8];
-
-            for (var index = 0; index < 8; index++)
-                corners[index] = new Vector3((index & 1) == 0 ? min.x : max.x, (index & 2) == 0 ? min.y : max.y, (index & 4) == 0 ? min.z : max.z);
-
-            return corners;
-        }
-
-        // Где может быть стена или здание до вырезов, в их осях, — по точкам линии с усами, с запасом на толщину стен; по высоте — от низа линии
-        // до верха стены со всеми копиями вверх или до крыши здания. Считается из чисел, а не из меша: подпись не зависит от того, собран ли он.
-        private static Bounds UncutLocalBoundsOf(Component owner)
-        {
-            var container = owner.GetComponent<SplineContainer>();
-            var bounds = new Bounds();
-            var hasPoints = false;
-
-            foreach (var spline in container.Splines)
-            {
-                foreach (var knot in spline.Knots)
-                {
-                    Vector3 position = knot.Position;
-                    Quaternion rotation = knot.Rotation;
-
-                    foreach (var point in new[] { position, position + rotation * (Vector3)knot.TangentIn, position + rotation * (Vector3)knot.TangentOut })
-                    {
-                        if (hasPoints)
-                            bounds.Encapsulate(point);
-                        else
-                            bounds = new Bounds(point, Vector3.zero);
-
-                        hasPoints = true;
-                    }
-                }
-            }
-
-            var isBuilding = owner is SplineBuilding;
-            var thickness = isBuilding ? ((SplineBuilding)owner).WallThickness : ((SplineWall)owner).Thickness;
-            var top = isBuilding
-                ? ((SplineBuilding)owner).TotalHeight + ((SplineBuilding)owner).ParapetRise
-                : ((SplineWall)owner).Height + (((SplineWall)owner).CopiesUp - 1) * ((SplineWall)owner).CopyStep;
-            var margin = thickness + OwnerBoundsMargin;
-            var min = bounds.min - new Vector3(margin, OwnerBoundsMargin, margin);
-            var max = bounds.max + new Vector3(margin, top + OwnerBoundsMargin, margin);
-            bounds.SetMinMax(min, max);
-            return bounds;
         }
     }
 }

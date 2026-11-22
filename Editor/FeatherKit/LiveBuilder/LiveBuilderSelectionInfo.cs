@@ -5,7 +5,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Что за постройка Live Builder выделена и какого она размера — одно место для рамки с размерами в окне сцены (<see cref="LiveBuilderSelectionBounds"/>)
-    /// и строки о выделенном под палитрой окна. Размер — в осях самого объекта: у коробки, комнаты, лестницы и выреза — их собственные числа,
+    /// и строки о выделенном под палитрой окна. Размер — в осях самого объекта: у коробки, комнаты, лестницы, выреза и колонны — их собственные числа,
     /// у стены, здания и объекта из коробок — габарит собранного меша вместе со всем, что внутри.
     /// </summary>
     public readonly struct LiveBuilderSelectionInfo
@@ -45,14 +45,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Размер в метрах мира: ширина по X, высота по Y, глубина по Z осей объекта.
         public Vector3 Size => Vector3.Scale(LocalBounds.size, Frame.lossyScale);
 
-        // «Ш 4 · Г 3 · В 2,5 м» — ширина, глубина, высота.
+        // «W 4 · D 3 · H 2,5 m» — ширина, глубина, высота.
         public string SizeText
         {
             get
             {
                 var size = Size;
-                return "Ш " + LiveBuilderSceneText.FormatMeters(size.x) + " · Г " + LiveBuilderSceneText.FormatMeters(size.z) +
-                       " · В " + LiveBuilderSceneText.FormatMeters(size.y) + " м" + (IsInnerSize ? " внутри" : "");
+                return "W " + LiveBuilderSceneText.FormatMeters(size.x) + " · D " + LiveBuilderSceneText.FormatMeters(size.z) +
+                       " · H " + LiveBuilderSceneText.FormatMeters(size.y) + " m" + (IsInnerSize ? " inside" : "");
             }
         }
 
@@ -68,18 +68,24 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return false;
 
             if (selected.TryGetComponent<BoxModelPart>(out var part))
-                return TryDescribeBox(part.Mode == BoxModelPartMode.Add ? "Коробка" : "Вырезающая коробка", part.transform, part.Size, false, out info);
+                return TryDescribeBox(part.Mode == BoxModelPartMode.Add ? "Box" : "Legacy Cut Box", part.transform, part.Size, false, out info);
 
             if (selected.TryGetComponent<BoxModelRoom>(out var room))
-                return TryDescribeBox("Комната", room.transform, room.Size, true, out info);
+                return TryDescribeBox("Room", room.transform, room.Size, true, out info);
 
             if (selected.TryGetComponent<BoxModelStairs>(out var stairs))
-                return TryDescribeBox("Лестница", stairs.transform, stairs.Size, false, out info);
+                return TryDescribeBox("Stairs", stairs.transform, stairs.Size, false, out info);
 
             if (selected.TryGetComponent<GeometryCutter>(out var cutter))
             {
                 var center = cutter.ShapeOffset + Vector3.up * (cutter.Height / 2f);
-                info = new LiveBuilderSelectionInfo("Проём", selected, cutter.transform.localToWorldMatrix, new Bounds(center, new Vector3(cutter.Width, cutter.Height, cutter.Depth)));
+                info = new LiveBuilderSelectionInfo(GeometryCutterSolverBoxes.IsSolverPiece(cutter) ? "Cut Box" : "Cut", selected, cutter.transform.localToWorldMatrix, new Bounds(center, new Vector3(cutter.Width, cutter.Height, cutter.Depth)));
+                return true;
+            }
+
+            if (selected.TryGetComponent<LiveBuilderColumn>(out var column))
+            {
+                info = new LiveBuilderSelectionInfo("Column, sides: " + column.Sides, selected, column.transform.localToWorldMatrix, new Bounds(column.Size / 2f, column.Size));
                 return true;
             }
 
@@ -87,13 +93,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 selected = partBuilding.gameObject;
 
             if (selected.TryGetComponent<SplineBuilding>(out var building))
-                return TryDescribeMeshes(LiveBuilderRooms.IsContourRoom(building) ? "Комната" : "Здание, этажей: " + building.StoreyCount, selected, out info);
+                return TryDescribeMeshes("Building, storeys: " + building.StoreyCount, selected, out info);
 
             if (selected.TryGetComponent<SplineWall>(out var wall))
-                return TryDescribeMeshes(LiveBuilderRooms.IsContourRoom(wall) ? "Комната" : "Стена", selected, out info);
+                return TryDescribeMeshes("Wall", selected, out info);
 
             if (selected.TryGetComponent<BoxModel>(out var model))
-                return TryDescribeMeshes(model.transform.parent != null && model.transform.parent.GetComponentInParent<BoxModel>() != null ? "Группа" : "Объект из коробок",
+                return TryDescribeMeshes(model.transform.parent != null && model.transform.parent.GetComponentInParent<BoxModel>() != null ? "Group" : "Box Model",
                     selected, out info);
 
             return false;

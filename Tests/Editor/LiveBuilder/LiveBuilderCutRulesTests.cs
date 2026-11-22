@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FeatherKit.Tests.LiveBuilder
 {
     /// <summary>
-    /// Кого режут вырезающие коробки и проёмы: коробка — стены и здания своего объекта, которые задевает, порядок в списке не важен; пустота комнаты — не перегородки внутри неё;
+    /// Кого режут вырезающие коробки и проёмы: коробка — стены и здания своего объекта, которые задевает, порядок в списке не важен; пустота комнаты — и перегородки в ней;
     /// что режет — всё, только перекрытия или только стены; вырез внутри постройки — только свою группу, «всё вокруг» — и соседей.
     /// </summary>
     public class LiveBuilderCutRulesTests
@@ -53,9 +53,9 @@ namespace FeatherKit.Tests.LiveBuilder
         }
 
 
-        // Пустота комнаты не режет стену-перегородку внутри неё: у комнаты свои стены, перегородка в ней цела.
+        // Пустота комнаты режет и перегородку внутри неё — как любой вырез; перегородка во вложенном объекте цела.
         [Test]
-        public void RoomInterior_DoesNotCutPartitionInsideIt()
+        public void RoomInterior_CutsPartition_UnlessItIsInNestedObject()
         {
             var model = BoxModelFactory.CreateModel(Origin);
             var partition = testScene.CreateWall(model, new Vector3(1f, 0f, 3f), new Vector3(7f, 0f, 3f));
@@ -63,7 +63,18 @@ namespace FeatherKit.Tests.LiveBuilder
             BoxModelRebuilder.Rebuild(model);
             SplineWallRebuilder.Rebuild(partition);
 
-            Assert.IsFalse(LiveBuilderTestScene.IsOpen(Origin + new Vector3(4f, 1.5f, 1.5f), Vector3.forward, 3f), "перегородка внутри комнаты цела");
+            Assert.IsTrue(IsRoomPartitionOpen(), "перегородка прямо в объекте прорезана");
+
+            partition.transform.SetParent(BoxModelFactory.CreateGroup(model.transform).transform, true);
+            BoxModelRebuilder.ForgetCachedResults();
+            SplineWallRebuilder.Rebuild(partition);
+
+            Assert.IsFalse(IsRoomPartitionOpen(), "во вложенном объекте — цела");
+        }
+
+        private static bool IsRoomPartitionOpen()
+        {
+            return LiveBuilderTestScene.IsOpen(Origin + new Vector3(4f, 1.5f, 1.5f), Vector3.forward, 3f);
         }
 
 
@@ -167,7 +178,7 @@ namespace FeatherKit.Tests.LiveBuilder
             var model = BoxModelFactory.CreateModel(Origin);
             var building = testScene.CreateBuilding(model, 2, Vector3.zero, new Vector3(8f, 0f, 0f), new Vector3(8f, 0f, 8f), new Vector3(0f, 0f, 8f));
             var floor = building.FirstFloorWorldHeight - Origin.y;
-            var interior = BoxModelFactory.InteriorOf(building);
+            var interior = SplineBuildingStoreys.ContainerOf(building, 0).transform;
 
             var partition = testScene.CreateWall(model, new Vector3(4f, floor, 1f), new Vector3(4f, floor, 7f));
             var box = BoxModelFactory.CreatePart(model, new Vector3(3f, floor + 2f, 3f), new Vector3(5f, floor + 6f, 5f), BoxModelPartMode.Cut);
@@ -203,26 +214,26 @@ namespace FeatherKit.Tests.LiveBuilder
 
         // Стены A вдоль X и B вдоль Z крестом; вырез на перекрестье задевает обе.
         [Test]
-        public void CutterScope_OwnGroupInsideWall_EverythingOrAtRootCutsNeighbour()
+        public void CutterScope_OwnObjectInsideWall_EverythingCutsNeighbour_AtRootCutsNothing()
         {
             var wallA = testScene.CreateWall(Vector3.zero, new Vector3(10f, 0f, 0f));
             var wallB = testScene.CreateWall(new Vector3(5f, 0f, -5f), new Vector3(5f, 0f, 5f));
             var cutter = BoxModelFactory.CreateCutter(wallA.transform, Origin + new Vector3(5f, 0.5f, 0f), Quaternion.identity, new Vector2(1.5f, 2f), 2f);
             RebuildWalls(wallA, wallB);
 
-            Assert.IsTrue(IsWallAOpen(), "«авто» в стене A — режет A");
+            Assert.IsTrue(IsWallAOpen(), "«Own object» в стене A — режет A");
             Assert.IsFalse(IsWallBOpen(), "и не режет соседнюю B");
 
-            cutter.Scope = GeometryCutterScope.Everything;
+            cutter.Scope = GeometryCutterScope.EverythingItTouches;
             RebuildWalls(wallA, wallB);
 
             Assert.IsTrue(IsWallAOpen() && IsWallBOpen(), "«всё вокруг» — режет обе");
 
-            cutter.Scope = GeometryCutterScope.Automatic;
+            cutter.Scope = GeometryCutterScope.OwnObject;
             cutter.transform.SetParent(null, true);
             RebuildWalls(wallA, wallB);
 
-            Assert.IsTrue(IsWallAOpen() && IsWallBOpen(), "«авто» в корне — режет обе");
+            Assert.IsFalse(IsWallAOpen() || IsWallBOpen(), "«Own object» без постройки над ним — не режет ничего");
         }
 
         private static void RebuildWalls(params SplineWall[] walls)

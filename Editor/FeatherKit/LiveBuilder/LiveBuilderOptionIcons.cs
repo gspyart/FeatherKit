@@ -71,6 +71,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderOptionIcon.Boxes => LiveBuilderToolPalette.Get<LiveBuilderBoxTool>().IconLines,
                 LiveBuilderOptionIcon.Faces => FacesLines(),
                 LiveBuilderOptionIcon.NewObject => NewObjectLines(),
+                LiveBuilderOptionIcon.Room => RoomLines(),
+                LiveBuilderOptionIcon.Ramp => RampLines(),
+                LiveBuilderOptionIcon.Column => ColumnLines(),
                 LiveBuilderOptionIcon.Corner => CornerLines(),
                 LiveBuilderOptionIcon.Smooth => SmoothLines(),
                 LiveBuilderOptionIcon.Bezier => BezierLines(),
@@ -80,7 +83,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderOptionIcon.OpeningArch => OpeningArchLines(),
                 LiveBuilderOptionIcon.OpeningCircle => new List<Vector2[]> { Arc(new Vector2(12, 12), 7.5f, 0f, 360f) },
                 LiveBuilderOptionIcon.AtCursor => AtCursorLines(),
-                LiveBuilderOptionIcon.SeparateSteps => SeparateStepsLines(),
+                LiveBuilderOptionIcon.OpenSteps => OpenStepsLines(),
                 LiveBuilderOptionIcon.SolidSteps => LiveBuilderToolPalette.Get<LiveBuilderStairsTool>().IconLines,
                 LiveBuilderOptionIcon.ThisStorey => ThisStoreyLines(),
                 LiveBuilderOptionIcon.AllStoreysAbove => AllStoreysAboveLines(),
@@ -212,6 +215,39 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return new List<Vector2[]> { Points(12, 5, 12, 19), Points(5, 12, 19, 12) };
         }
 
+        // План комнаты с дверью: проём в стене и дуга створки.
+        private static List<Vector2[]> RoomLines()
+        {
+            return new List<Vector2[]> { Points(13, 4, 20, 4, 20, 20, 4, 20, 4, 4, 8, 4), Points(8, 4, 8, 9), Arc(new Vector2(8, 4), 5f, 90f, 0f) };
+        }
+
+        // Клин сбоку — пандус.
+        private static List<Vector2[]> RampLines()
+        {
+            return new List<Vector2[]> { Points(3, 19, 21, 19, 21, 6, 3, 19) };
+        }
+
+        // Цилиндр: эллипс сверху, бока и половина эллипса снизу.
+        private static List<Vector2[]> ColumnLines()
+        {
+            return new List<Vector2[]> { Ellipse(6f, 0f, 360f), Ellipse(18f, 0f, 180f), Points(6, 6, 6, 18), Points(18, 6, 18, 18) };
+        }
+
+        // Сплющенный по высоте круг радиуса 6 с центром (12, centerY); 0° — справа, 90° — к низу клетки.
+        private static Vector2[] Ellipse(float centerY, float fromDegrees, float toDegrees)
+        {
+            const int segments = 16;
+            var points = new Vector2[segments + 1];
+
+            for (var index = 0; index <= segments; index++)
+            {
+                var angle = Mathf.Deg2Rad * Mathf.Lerp(fromDegrees, toDegrees, index / (float)segments);
+                points[index] = new Vector2(12f + 6f * Mathf.Cos(angle), centerY + 2.4f * Mathf.Sin(angle));
+            }
+
+            return points;
+        }
+
 
         // ── Рисунки: точки ───────────────────────────────────────────────
 
@@ -263,7 +299,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Рисунки: лестница ────────────────────────────────────────────
 
         // Плиты ступеней по отдельности, под ними пусто.
-        private static List<Vector2[]> SeparateStepsLines()
+        private static List<Vector2[]> OpenStepsLines()
         {
             return new List<Vector2[]> { Rectangle(3, 17, 9, 20), Rectangle(9, 12, 15, 15), Rectangle(15, 7, 21, 10) };
         }

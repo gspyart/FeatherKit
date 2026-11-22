@@ -4,17 +4,19 @@ using UnityEditor;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Инспектор объекта из коробок: поля и число коробок. Всё, что делает инструмент, — в окне Live Builder (FeatherKit → Live Builder).
-    /// Плюс пункт меню GameObject → FeatherKit → Box Model — то же, что «Новый объект» в окне: объект рисуется мышью.
+    /// Инспектор объекта из коробок: поля и число коробок; он же — секция Construction панели. Рисуют и тянут коробки — инструменты Live Builder в окне сцены.
+    /// Плюс пункт меню GameObject → FeatherKit → Box Model — то же, что New у «Коробки»: объект рисуется мышью.
     /// </summary>
     [CustomEditor(typeof(BoxModel))]
+    [CanEditMultipleObjects]
     public class BoxModelEditor : Editor
     {
         public override void OnInspectorGUI()
         {
             DrawDefaultInspector();
-            EditorGUILayout.LabelField("Коробок", BoxModelRebuilder.CollectParts((BoxModel)target).Count.ToString());
-            EditorGUILayout.HelpBox("Рисовать и тянуть коробки — окно FeatherKit → Live Builder, в окне сцены — клавиша B.", MessageType.None);
+
+            if (targets.Length == 1)
+                EditorGUILayout.LabelField("Boxes", BoxModelRebuilder.CollectParts((BoxModel)target).Count.ToString());
         }
 
 

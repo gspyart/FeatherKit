@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using FeatherKit.LiveBuilder;
 using UnityEditor;
+using UnityEditor.ShortcutManagement;
 using UnityEngine;
 using static FeatherKit.EditorTools.LiveBuilder.LiveBuilderIconRasterizer;
 
@@ -14,19 +15,27 @@ namespace FeatherKit.EditorTools.LiveBuilder
     {
         private readonly LiveBuilderStairsGesture stairsGesture = new();
 
+        private LiveBuilderToolModes modes;
+
 
         // ── Описание ─────────────────────────────────────────────────────
 
         public override string Id => "Stairs";
 
-        public override string DisplayName => "Лестница";
+        public override string DisplayName => "Stairs";
 
-        public override string Tooltip => "Как кубик: протяни по полу длину и ширину, отпусти, мышью высоту, клик. Ступени подстраиваются сами";
+        public override string Tooltip => "Как кубик: протяни по полу длину и ширину, отпусти, мышью высоту, клик. Ступени подстраиваются сами. Вид — Open или Solid";
 
         public override int PaletteOrder => 5;
 
         // Профиль лестницы.
         public override List<Vector2[]> IconLines => new() { Points(3, 20, 3, 16, 8, 16, 8, 12, 13, 12, 13, 8, 18, 8, 18, 4, 21, 4, 21, 20, 3, 20) };
+
+        public override LiveBuilderToolModes Modes => modes ??= new LiveBuilderToolModes(
+            () => (int)LiveBuilderStairsSettings.Shape, index => LiveBuilderStairsSettings.Shape = (BoxModelStairsShape)index,
+            new LiveBuilderToolModeLabel("Straight", null, "Один марш"),
+            new LiveBuilderToolModeLabel("Switchback", null, "Протяни всю лестничную клетку: два марша туда-обратно и площадка на середине высоты; " +
+                                                             "поменяешь высоту этажа — пересчитается всё сразу"));
 
 
         // ── Что правит ───────────────────────────────────────────────────
@@ -34,35 +43,61 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public override bool PlacesIntoBuilding => true;
 
 
+        // ── Куда встанет новое ───────────────────────────────────────────
+
+        public override string IntoTarget => LiveBuilderIntoTarget.OfStorey();
+
+
         // ── Окно сцены ───────────────────────────────────────────────────
 
         public override bool IsBusy => stairsGesture.IsActive;
+
+        public override LiveBuilderDrawingReport DrawingReport => stairsGesture.Report();
 
         public override bool DrawsSurfaceHover => !stairsGesture.IsActive;
 
         public override bool DrawsSnapCursor => true;
 
-        public override string Hint => stairsGesture.IsActive ? stairsGesture.Hint : "Протяни по полу прямоугольник лестницы, потом мышью высоту. Клик — выделить";
+        public override string Hint => stairsGesture.IsActive
+            ? stairsGesture.Hint
+            : "Drag on the floor — stairs, then mouse — height " + LiveBuilderHintKeys.Key("click stairs") + " select " + LiveBuilderHintKeys.Esc + " Select tool";
 
-        public override string[] KeyHints { get; } = new[]
+        public override string[] KeyHints => new[]
         {
-            "протянуть — марш, потом мышью высоту; пока тянешь, «1,2 X 4» — точно",
-            "цифры + Enter — точная высота; клик или Enter — готово",
-            "Tab — повернуть подъём, Esc — отмена"
+            "While dragging: 1.2 " + LiveBuilderHintKeys.Bound(LiveBuilderShortcutIds.Times) + " 4 — exact size",
+            "Height: digits " + LiveBuilderHintKeys.Enter + " — exact",
+            LiveBuilderHintKeys.Bound(LiveBuilderShortcutIds.Rotate) + " — turn the rise, also on finished stairs"
         };
 
 
         // ── Окно: редкие настройки ───────────────────────────────────────
 
-        public override string MoreSettingsSummary => "толщина ступени, высота, ширина, перекрытие";
+        public override string MoreSettingsSummary => "step thickness, height, width, slab above";
 
         // Толщина ступени считается только у отдельных ступеней: у сплошной её нет.
         public override bool AreMoreSettingsChanged =>
-            (LiveBuilderStairsSettings.Style == BoxModelStairsStyle.SeparateSteps
+            (LiveBuilderStairsSettings.Style == BoxModelStairsStyle.Open
              && !Mathf.Approximately(LiveBuilderStairsSettings.StepThickness, LiveBuilderStairsSettings.FactoryStepThickness))
             || !LiveBuilderStairsSettings.IsStoreyHigh
             || !Mathf.Approximately(LiveBuilderStairsSettings.DefaultWidth, LiveBuilderStairsSettings.FactoryDefaultWidth)
             || !LiveBuilderStairsSettings.CutsAbove;
+
+
+        // ── Клавиша ──────────────────────────────────────────────────────
+
+        [Shortcut(LiveBuilderShortcutIds.ToolsPrefix + "Stairs", typeof(LiveBuilderIdleShortcutContext), KeyCode.Alpha6)]
+        private static void SelectByShortcut()
+        {
+            LiveBuilderToolPalette.SelectToolOrNextMode<LiveBuilderStairsTool>();
+        }
+
+
+        [Shortcut(LiveBuilderShortcutIds.ToolsPrefix + "Stairs" + LiveBuilderShortcutIds.PreviousModeSuffix, typeof(LiveBuilderIdleShortcutContext),
+            KeyCode.Alpha6, ShortcutModifiers.Shift)]
+        private static void SelectPreviousModeByShortcut()
+        {
+            LiveBuilderToolPalette.SelectToolOrPreviousMode<LiveBuilderStairsTool>();
+        }
 
 
         // ── Что правит: проверка ─────────────────────────────────────────
@@ -76,53 +111,43 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Окно ─────────────────────────────────────────────────────────
 
-        // Форма и вид ступеней новой лестницы — меняют каждый раз.
+        // Вид ступеней новой лестницы — меняют каждый раз; форма — режим инструмента.
         public override void DrawSettings()
         {
-            using (LiveBuilderWindowControls.Card("Вид"))
+            using (LiveBuilderWindowControls.Card("Look"))
             {
-                var isSwitchback = LiveBuilderWindowControls.Switch(
-                    new GUIContent("Форма", "Прямая — один марш. С площадкой — протяни всю лестничную клетку: два марша туда-обратно и площадка на середине высоты, " +
-                                            "поменяешь высоту этажа — пересчитается всё сразу"),
-                    LiveBuilderStairsSettings.Shape == BoxModelStairsShape.Switchback, "Прямая", "С площадкой");
-                LiveBuilderStairsSettings.Shape = isSwitchback ? BoxModelStairsShape.Switchback : BoxModelStairsShape.Straight;
-
                 var isSolid = LiveBuilderWindowControls.Switch(
-                    new GUIContent("Ступени", "Отдельные — плиты, под лестницей пусто. Сплошная — ступенчатый объём от пола"),
-                    LiveBuilderStairsSettings.Style == BoxModelStairsStyle.Solid, ("Отдельные", LiveBuilderOptionIcon.SeparateSteps), ("Сплошная", LiveBuilderOptionIcon.SolidSteps));
-                LiveBuilderStairsSettings.Style = isSolid ? BoxModelStairsStyle.Solid : BoxModelStairsStyle.SeparateSteps;
+                    new GUIContent("Steps", "Open — плиты ступеней, под лестницей пусто: улица, подвал. Solid — ступенчатый объём от пола"),
+                    LiveBuilderStairsSettings.Style == BoxModelStairsStyle.Solid, ("Open", LiveBuilderOptionIcon.OpenSteps), ("Solid", LiveBuilderOptionIcon.SolidSteps));
+                LiveBuilderStairsSettings.Style = isSolid ? BoxModelStairsStyle.Solid : BoxModelStairsStyle.Open;
             }
-
-            LiveBuilderWindowControls.Explanation("Как кубик: протянул прямоугольник — длина и ширина, низ — где начал; отпустил — мышью высота, клик — готово. Tab — повернуть. " +
-                                                  "С площадкой: прямоугольник — вся клетка, первый марш — с той стороны, откуда начал тянуть. " +
-                                                  "Готовую — ручки на гранях, Tab, «Повернуть» и «Развернуть»; на любой угол — поверни её объект.");
         }
 
 
         // Толщина ступени, с какой высоты начинать, ширина по умолчанию, пробивать ли перекрытие.
         public override void DrawMoreSettings()
         {
-            using (LiveBuilderWindowControls.Card("Размер"))
+            using (LiveBuilderWindowControls.Card("Size"))
             {
-                if (LiveBuilderStairsSettings.Style == BoxModelStairsStyle.SeparateSteps)
+                if (LiveBuilderStairsSettings.Style == BoxModelStairsStyle.Open)
                     LiveBuilderStairsSettings.StepThickness = EditorGUILayout.FloatField(
-                        new GUIContent("Толщина ступени, м", "0,2 — ступени сходятся углами; меньше — висят отдельно"), LiveBuilderStairsSettings.StepThickness);
+                        new GUIContent("Step Thickness, m", "0,2 — ступени сходятся углами; меньше — висят отдельно"), LiveBuilderStairsSettings.StepThickness);
 
                 LiveBuilderStairsSettings.IsStoreyHigh = !LiveBuilderWindowControls.Switch(
-                    new GUIContent("Высота сначала", "С какой высоты начинается выбор высоты мышью: с высоты этажа или со своей, например полэтажа 2 м. В здании — с его этажа"),
-                    !LiveBuilderStairsSettings.IsStoreyHigh, "Этаж", "Своя");
+                    new GUIContent("Start Height", "С какой высоты начинается выбор высоты мышью: с высоты этажа или со своей, например полэтажа 2 м. В здании — с его этажа"),
+                    !LiveBuilderStairsSettings.IsStoreyHigh, "Storey", "Own");
 
                 if (!LiveBuilderStairsSettings.IsStoreyHigh)
-                    LiveBuilderStairsSettings.CustomHeight = EditorGUILayout.FloatField(new GUIContent("Своя высота, м", "Высота, с которой начинается выбор мышью"),
+                    LiveBuilderStairsSettings.CustomHeight = EditorGUILayout.FloatField(new GUIContent("Own Height, m", "Высота, с которой начинается выбор мышью"),
                         LiveBuilderStairsSettings.CustomHeight);
 
                 LiveBuilderStairsSettings.DefaultWidth = EditorGUILayout.FloatField(
-                    new GUIContent("Ширина по умолчанию, м", "Если протянул почти без ширины — просто в сторону подъёма. Иначе ширина — какую протянул"),
+                    new GUIContent("Default Width, m", "Если протянул почти без ширины — просто в сторону подъёма. Иначе ширина — какую протянул"),
                     LiveBuilderStairsSettings.DefaultWidth);
 
                 LiveBuilderStairsSettings.CutsAbove = LiveBuilderWindowControls.Switch(
-                    new GUIContent("Перекрытие над", "Пробивать — режет перекрытие над маршем от 2,1 м над полом лестницы до её верха: проём в полу этажа выше готов сразу. Не пробивать — проём ставишь сам"),
-                    LiveBuilderStairsSettings.CutsAbove, "Не пробивать", "Пробивать");
+                    new GUIContent("Slab Above", "Cut — режет перекрытие над маршем от 2,1 м над полом лестницы до её верха: проём в полу этажа выше готов сразу. Keep — проём ставишь сам"),
+                    LiveBuilderStairsSettings.CutsAbove, "Keep", "Cut");
             }
         }
 
@@ -203,13 +228,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public override void DrawPreview()
         {
             stairsGesture.DrawPreview();
-        }
-
-
-        // С верхнего этажа лестнице идти некуда — копий выше на одну меньше.
-        public override string BuildingStoreyHint(LiveBuilderBuildingContext context)
-        {
-            return context.DescriptionOf(true);
         }
     }
 }

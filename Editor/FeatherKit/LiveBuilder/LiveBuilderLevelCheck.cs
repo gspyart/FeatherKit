@@ -23,8 +23,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
     /// <summary>
     /// Проверка уровня — всё подозрительное на сцене одним списком, а не только у выделенного: здание с перекрещённым контуром,
-    /// здание, повёрнутое внутри своего объекта, здание мимо этажей уровня по ошибке, привязка к этажу, которого у здания нет (объект спрятан).
-    /// Здание на платформе или на крыше стоит не на этаже уровня нарочно — это не ошибка. Ищет по кнопке во вкладке «Уровень».
+    /// здание, повёрнутое внутри своего объекта, здание мимо этажей уровня по ошибке.
+    /// Здание на платформе или на крыше стоит не на этаже уровня нарочно — это не ошибка. Ищет по кнопке Check Level в окне Live Builder.
     /// </summary>
     public static class LiveBuilderLevelCheck
     {
@@ -43,21 +43,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (building.gameObject.activeInHierarchy)
                     AddBuildingIssues(building, issues);
 
-            foreach (var link in stage.FindComponentsOfType<SplineBuildingStoreyLink>())
-                if (link.IsValid && !link.IsOnRoof && (link.Storey < 0 || link.Storey >= link.Building.StoreyCount))
-                    issues.Add(new LiveBuilderLevelIssue("«" + link.name + "» стоит на этаже " + (link.Storey + 1) + ", а у здания «" + link.Building.name +
-                                                         "» этажей " + link.Building.StoreyCount + ": спрятан, пока этаж не вернётся.", link.gameObject));
-
             return issues;
         }
 
         private static void AddBuildingIssues(SplineBuilding building, List<LiveBuilderLevelIssue> issues)
         {
             if (SplineBuildingMeshBuilder.IsContourBroken(building))
-                issues.Add(new LiveBuilderLevelIssue("Контур здания «" + building.name + "» пересекает сам себя: часть пола и крыши не построена.", building.gameObject));
+                issues.Add(new LiveBuilderLevelIssue("The outline of building '" + building.name + "' crosses itself: part of the floor and roof is not built.", building.gameObject));
 
             if (IsRotatedInsideModel(building))
-                issues.Add(new LiveBuilderLevelIssue("Здание «" + building.name + "» повёрнуто внутри своего объекта: лестницы и коробки интерьера разъедутся с ним.",
+                issues.Add(new LiveBuilderLevelIssue("Building '" + building.name + "' is rotated inside its object: stairs and interior boxes will drift away from it.",
                     building.gameObject));
 
             AddLevelStoreyIssue(building, issues);
@@ -72,16 +67,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var offset = SplineBuildingLevelAlignment.OffsetFromLevelFloorOf(building);
 
                 if (Mathf.Abs(offset) < NearMissDistance)
-                    issues.Add(new LiveBuilderLevelIssue("Здание «" + building.name + "» на " + Mathf.Max(1, Mathf.RoundToInt(Mathf.Abs(offset) * 100f)) + " см " +
-                                                         (offset > 0f ? "выше" : "ниже") + " пола этажа уровня — похоже на промах. " +
-                                                         "Выдели его: «Поставить на этажи уровня».", building.gameObject));
+                    issues.Add(new LiveBuilderLevelIssue("Building '" + building.name + "' is " + Mathf.Max(1, Mathf.RoundToInt(Mathf.Abs(offset) * 100f)) + " cm " +
+                                                         (offset > 0f ? "above" : "below") + " the level storey floor — looks like a miss. " +
+                                                         "Select it: Put On Level Storeys.", building.gameObject));
                 return;
             }
 
             if (!SplineBuildingLevelAlignment.HasLevelStoreyHeight(building))
-                issues.Add(new LiveBuilderLevelIssue("У здания «" + building.name + "» этаж " + LiveBuilderSceneText.FormatMeters(building.StoreyHeight) +
-                                                     " м, у уровня " + LiveBuilderSceneText.FormatMeters(LiveBuilderStoreys.StoreyHeight) +
-                                                     " м: выше первого этажа «этаж» в окне и в здании разойдутся.", building.gameObject));
+                issues.Add(new LiveBuilderLevelIssue("Building '" + building.name + "' has a " + LiveBuilderSceneText.FormatMeters(building.StoreyHeight) +
+                                                     " m storey, the level has " + LiveBuilderSceneText.FormatMeters(LiveBuilderStoreys.StoreyHeight) +
+                                                     " m: above storey 1 the window's storeys and the building's will not match.", building.gameObject));
         }
 
         // Здание повёрнуто внутри своего объекта из коробок: лестницы и коробки интерьера идут по осям объекта и разъедутся со зданием.

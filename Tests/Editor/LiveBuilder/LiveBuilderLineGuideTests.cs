@@ -21,7 +21,7 @@ namespace FeatherKit.Tests.LiveBuilder
             var isSnapped = Snap(Vector3.zero, null, new Vector3(5f, 0f, 0.2f), false, out var snapped, out var guide);
 
             Assert.IsTrue(isSnapped, "0,2 м от оси — 4 пикселя, прилипает");
-            Assert.AreEqual("по оси X", guide.Label);
+            Assert.AreEqual("X axis", guide.Label);
             Assert.That(Vector3.Distance(snapped, new Vector3(LiveBuilderGrid.Snap(5f, 0), 0f, 0f)), Is.LessThan(0.001f), "на оси, длина по сетке");
         }
 
@@ -41,7 +41,7 @@ namespace FeatherKit.Tests.LiveBuilder
             var isSnapped = Snap(Vector3.zero, new Vector3(-4f, 0f, -3f), new Vector3(4f, 0f, 3.05f), false, out _, out var guide);
 
             Assert.IsTrue(isSnapped, "почти на продолжении отрезка — прилипает");
-            Assert.AreEqual("продолжение отрезка", guide.Label);
+            Assert.AreEqual("segment extension", guide.Label);
             Assert.That(Vector3.Angle(guide.Direction, new Vector3(4f, 0f, 3f)), Is.LessThan(0.01f), "направление — как у отрезка");
         }
 

@@ -28,6 +28,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Все вырезы на линии — сцены или открытого префаба. Подпись каждой линии считаем один раз на проход. Ошибка в одном не останавливает остальные.
         public static void SyncAll()
         {
+            SyncAll(LiveBuilderRebuildScope.WholeScene);
+        }
+
+
+        // Только вырезы в области или на линии постройки из неё: черновой проход очереди.
+        public static void SyncAll(LiveBuilderRebuildScope scope)
+        {
             var lineHashes = new Dictionary<SplineContainer, int>();
             var stage = StageUtility.GetCurrentStageHandle();
 
@@ -35,7 +42,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 try
                 {
-                    if (cutter.FollowsWallLine && TryGetLine(cutter, lineHashes, out var pathOwner, out var container, out var lineHash))
+                    if (cutter.FollowsWallLine && TryGetLine(cutter, lineHashes, out var pathOwner, out var container, out var lineHash)
+                                               && (scope.Contains(cutter) || scope.Contains(pathOwner)))
                         SyncCutter(cutter, pathOwner, container, lineHash);
                 }
                 catch (System.Exception exception)
@@ -142,7 +150,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Толщина стены ────────────────────────────────────────────────
 
         // Стене или зданию поменяли толщину (числом или типом): вырез, который был глубже прежней стены, — сквозной;
-        // он снова насквозь новой — глубина и место поперёк, как ставит «Проём», поворот свой. Ниша (мельче стены) остаётся как была.
+        // он снова насквозь новой — глубина и место поперёк, как ставит «Cut», поворот свой. Ниша (мельче стены) остаётся как была.
         // Прежняя толщина не запомнена (вырез со старых сцен) — не трогаем: запомнится при следующем сдвиге линии или выреза.
         private static void FitToNewThickness(GeometryCutter cutter, Component pathOwner, SplineContainer container, int lineHash, float previousThickness,
             float thickness)

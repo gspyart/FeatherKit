@@ -113,6 +113,10 @@ namespace FeatherKit.Tests.LiveBuilder
             model.transform.localRotation = Quaternion.Euler(0f, 13f, 0f);
 
             var wall = testScene.CreateWall(model, Vector3.zero, new Vector3(10f, 0f, 0f));
+
+            // Текстура по миру при переносе законно меняет подпись — здесь проверяем только коробки и вырезы.
+            wall.TextureAlignment = LiveBuilderTextureAlignment.Object;
+            SplineWallRebuilder.Rebuild(wall);
             var signature = wall.BuiltSignature;
 
             for (var step = 1; step <= 12; step++)
@@ -139,7 +143,7 @@ namespace FeatherKit.Tests.LiveBuilder
             var isMeshUpToDate = typeof(BoxModelRebuilder).GetMethod("IsMeshUpToDate", BindingFlags.NonPublic | BindingFlags.Static);
 
             Assert.AreEqual(0, mesh.vertexCount, "объект целиком в вырезе — меш пустой");
-            Assert.IsTrue((bool)isMeshUpToDate.Invoke(null, new object[] { model, mesh }), "и уже готов");
+            Assert.IsTrue((bool)isMeshUpToDate.Invoke(null, new object[] { model, mesh, LiveBuilderBuildQuality.Final }), "и уже готов");
         }
 
 

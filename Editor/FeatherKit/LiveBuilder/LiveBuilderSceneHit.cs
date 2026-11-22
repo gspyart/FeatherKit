@@ -1,10 +1,11 @@
+using FeatherKit.LiveBuilder;
 using UnityEngine;
 
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Что под мышью — один разбор луча на все инструменты Live Builder: грань объекта из коробок (<see cref="BoxModelPicker"/>),
-    /// ближайший видимый коллайдер и, если это стена по линии или здание, они сами (<see cref="LiveBuilderPathOwners"/>),
+    /// ближайший видимый коллайдер и, если это стена по линии, здание или колонна, они сами (<see cref="LiveBuilderPathOwners"/>),
     /// резчик дыры под лучом — вырез или вырезающая коробка в здании (<see cref="GeometryCutterPicker"/>). И кто из них ближе к камере.
     /// Спрятанное разрезом над этажом не ловится.
     /// </summary>
@@ -15,8 +16,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         private LiveBuilderSceneHit(bool hasBoxSurface, BoxModelSurfaceHit boxSurface, bool hasVisibleHit, RaycastHit visibleHit,
-            Component pathOwner, bool hasGeometryCutter, GeometryCutterRayHit geometryCutterHit)
+            Component pathOwner, LiveBuilderColumn column, bool hasGeometryCutter, GeometryCutterRayHit geometryCutterHit)
         {
+            Column = column;
             HasBoxSurface = hasBoxSurface;
             BoxSurface = boxSurface;
             HasVisibleHit = hasVisibleHit;
@@ -37,6 +39,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Стена по линии или здание, если ближайший коллайдер — их. Иначе — null.
         public Component PathOwner { get; }
 
+        // Колонна, если ближайший коллайдер — её. Иначе — null.
+        public LiveBuilderColumn Column { get; }
+
         // Резчик дыры, в чью коробку входит луч, и где луч его пересекает.
         public bool HasGeometryCutter { get; }
         public GeometryCutterRayHit GeometryCutterHit { get; }
@@ -46,6 +51,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // Стена по линии или здание ближе грани объекта из коробок.
         public bool IsPathOwnerCloser => PathOwner != null && (!HasBoxSurface || VisibleHit.distance < BoxSurface.Distance - Tolerance);
+
+        // Колонна ближе грани объекта из коробок.
+        public bool IsColumnCloser => Column != null && (!HasBoxSurface || VisibleHit.distance < BoxSurface.Distance - Tolerance);
 
         // Видна дыра резчика: клик по ней или её откосу — он (<see cref="GeometryCutterRayHit.IsVisibleBefore"/>).
         // Ближе всего — геометрия самого объекта, на котором стоит вырез (балкон, прорезающий дверь в стене), — она, а не вырез:
@@ -77,9 +85,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var hasBoxSurface = BoxModelPicker.TryPickSurface(worldRay, out var boxSurface);
             var hasVisibleHit = BoxModelPicker.TryRaycastVisible(worldRay, float.MaxValue, out var visibleHit);
             var pathOwner = hasVisibleHit ? LiveBuilderPathOwners.OwnerOf(visibleHit.collider) : null;
+            var column = hasVisibleHit ? visibleHit.collider.GetComponent<LiveBuilderColumn>() : null;
             var hasGeometryCutter = GeometryCutterPicker.TryPick(worldRay, out var geometryCutterHit);
 
-            return new LiveBuilderSceneHit(hasBoxSurface, boxSurface, hasVisibleHit, visibleHit, pathOwner, hasGeometryCutter, geometryCutterHit);
+            return new LiveBuilderSceneHit(hasBoxSurface, boxSurface, hasVisibleHit, visibleHit, pathOwner, column, hasGeometryCutter, geometryCutterHit);
         }
     }
 }

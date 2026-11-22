@@ -21,7 +21,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var min = info.LocalBounds.min;
             var max = info.LocalBounds.max;
-            var color = LiveBuilderTabBar.ColorOf(LiveBuilderTabColor.Selection);
+            var color = LiveBuilderAccentColors.ColorOf(LiveBuilderAccentColor.Selection);
             var size = info.Size;
 
             // Рамка видна и сквозь стены: здание целиком всё равно что-то закрывает.
@@ -65,7 +65,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (length < 0.001f)
                 return;
 
-            LiveBuilderSceneText.DrawLabel(frame.MultiplyPoint3x4((from + to) / 2f), LiveBuilderSceneText.FormatMeters(length) + " м");
+            LiveBuilderSceneText.DrawLabel(frame.MultiplyPoint3x4((from + to) / 2f), LiveBuilderSceneText.FormatMeters(length) + " m");
         }
     }
 }

@@ -9,7 +9,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Пишет файлы мешей Live Builder (<see cref="BoxModelMeshStorage"/>) на диск вместе со сценой и префабом —
-    /// иначе сцена сохранена, а файл меша остался старым. Объекты из коробок, стены по линии и части зданий; чужие меши не трогает.
+    /// иначе сцена сохранена, а файл меша остался старым. Объекты из коробок, колонны, стены по линии и части зданий; чужие меши не трогает.
     /// Меши сцены, которые ещё лежат в общей папке несохранённых сцен, при сохранении переезжают копией в папку сцены:
     /// иначе копия постройки в новой несохранённой сцене считала бы общий файл своим и перезаписала его.
     /// Развёртка под запекание — при этой записи и перед запеканием света: пересборка её стирает, а запекание могло начаться до сохранения.
@@ -31,15 +31,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
             foreach (var mesh in MeshFilesUnder(root))
             {
                 BoxModelMeshStorage.AddLightmapUVs(mesh);
-                AssetDatabase.SaveAssetIfDirty(mesh);
+                BoxModelMeshStorage.SaveMeshFile(mesh);
             }
         }
 
 
         // ── События редактора ────────────────────────────────────────────
 
+        // Черновики — сначала начисто: на диск идёт только чистовое.
         private static void OnSceneSaving(Scene scene, string path)
         {
+            LiveBuilderDraftBuilds.FinishEverythingPending();
             MoveFallbackMeshesNextTo(scene, path);
 
             foreach (var root in scene.GetRootGameObjects())
@@ -92,6 +94,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static void OnPrefabSaving(GameObject prefabRoot)
         {
+            LiveBuilderDraftBuilds.FinishEverythingPending();
             SaveMeshFiles(prefabRoot);
         }
 
@@ -99,6 +102,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Запекание берёт меши как есть: всем мешам Live Builder в открытых сценах — развёртку, если её стёрла пересборка.
         private static void OnBakeStarted()
         {
+            LiveBuilderDraftBuilds.FinishEverythingPending();
+
             for (var index = 0; index < SceneManager.sceneCount; index++)
             {
                 var scene = SceneManager.GetSceneAt(index);
@@ -133,6 +138,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             foreach (var wall in root.GetComponentsInChildren<SplineWall>(true))
                 AddFilter(filters, wall);
+
+            foreach (var column in root.GetComponentsInChildren<LiveBuilderColumn>(true))
+                AddFilter(filters, column);
 
             foreach (var part in root.GetComponentsInChildren<SplineBuildingPart>(true))
                 AddFilter(filters, part);

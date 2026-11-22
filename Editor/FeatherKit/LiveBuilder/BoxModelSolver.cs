@@ -41,6 +41,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public IReadOnlyList<int> FaceSources { get; }
 
 
+        // Тот же кусок, номер коробки каждой грани переведён по карте: был k — стал sourceMap[k].
+        public BoxModelCell WithSources(IReadOnlyList<int> sourceMap)
+        {
+            var sources = new int[BoxFaces.Count];
+
+            for (var face = 0; face < BoxFaces.Count; face++)
+                sources[face] = sourceMap[FaceSources[face]];
+
+            return new BoxModelCell(Box, sources);
+        }
+
+
         // Тот же кусок, обрезанный по оси до [from, to]. Сдвинутая грань — грань разреза: её создала коробка cutterIndex.
         public BoxModelCell Slice(int axis, int from, int to, int cutterIndex)
         {
@@ -72,9 +84,73 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Считает, что остаётся от коробок объекта: идёт по ним по порядку, вырезающая выкусывает объём из уже набранного,
     /// добавляющая сперва выкусывает своё место, потом кладёт себя целиком — поэтому что ниже в списке, то главнее.
     /// Результат — набор непересекающихся коробок: из прямоугольников дыр и мусорных треугольников не бывает.
+    /// Считает весь список заново — эталон для кеша по коробкам (<see cref="BoxModelSolverCache"/>) и для разовых расчётов.
     /// </summary>
     public static class BoxModelSolver
     {
+        // Эталон нового правила: сначала все добавляющие, потом все вырезы; вырез режет только куски тех добавляющих, кого пускает canCut.
+        // Номера граней — по исходному списку.
+        public static List<BoxModelCell> Solve(IReadOnlyList<BoxModelPartShape> parts, BoxModelCutRule rule, BoxModelCutFilter canCut = null)
+        {
+            if (rule == BoxModelCutRule.LaterBoxesCut)
+                return Solve(parts);
+
+            var cells = new List<BoxModelCell>();
+            var cellOwners = new List<int>();
+
+            foreach (var partIndex in AddsThenCuts(parts))
+            {
+                var part = parts[partIndex];
+
+                if (part.Box.IsEmpty)
+                    continue;
+
+                var isAdd = part.Mode == BoxModelPartMode.Add;
+                var remaining = new List<BoxModelCell>(cells.Count);
+                var remainingOwners = new List<int>(cells.Count);
+
+                for (var cellIndex = 0; cellIndex < cells.Count; cellIndex++)
+                {
+                    var owner = cellOwners[cellIndex];
+
+                    if (isAdd || canCut == null || canCut(partIndex, owner))
+                        KeepOutside(cells[cellIndex], part.Box, partIndex, remaining);
+                    else
+                        remaining.Add(cells[cellIndex]);
+
+                    while (remainingOwners.Count < remaining.Count)
+                        remainingOwners.Add(owner);
+                }
+
+                cells = remaining;
+                cellOwners = remainingOwners;
+
+                if (isAdd)
+                {
+                    cells.Add(new BoxModelCell(part.Box, partIndex));
+                    cellOwners.Add(partIndex);
+                }
+            }
+
+            return cells;
+        }
+
+        private static List<int> AddsThenCuts(IReadOnlyList<BoxModelPartShape> parts)
+        {
+            var order = new List<int>(parts.Count);
+
+            for (var index = 0; index < parts.Count; index++)
+                if (parts[index].Mode == BoxModelPartMode.Add)
+                    order.Add(index);
+
+            for (var index = 0; index < parts.Count; index++)
+                if (parts[index].Mode != BoxModelPartMode.Add)
+                    order.Add(index);
+
+            return order;
+        }
+
+
         public static List<BoxModelCell> Solve(IReadOnlyList<BoxModelPartShape> parts)
         {
             var cells = new List<BoxModelCell>();
@@ -103,7 +179,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // Кладёт в result то, что от куска осталось снаружи коробки cutter: по каждой оси отрезает слой до неё и после неё.
         // Что осталось в конце — целиком внутри cutter и выбрасывается.
-        private static void KeepOutside(BoxModelCell cell, MillimeterBox cutter, int cutterIndex, List<BoxModelCell> result)
+        public static void KeepOutside(BoxModelCell cell, MillimeterBox cutter, int cutterIndex, List<BoxModelCell> result)
         {
             if (!cell.Box.Overlaps(cutter))
             {

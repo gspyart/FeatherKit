@@ -73,6 +73,51 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Линия ребра и точка на ней, в миллиметрах: по ней ищется кусок того же ребра встык.
+        private readonly struct BoxModelEdgeEndKey : System.IEquatable<BoxModelEdgeEndKey>
+        {
+            private readonly int faceAxis;
+            private readonly bool isFacePositive;
+            private readonly int faceCoordinate;
+            private readonly int sideAxis;
+            private readonly bool isSidePositive;
+            private readonly int sideCoordinate;
+            private readonly int along;
+
+
+            public BoxModelEdgeEndKey(int faceAxis, bool isFacePositive, int faceCoordinate, int sideAxis, bool isSidePositive, int sideCoordinate, int along)
+            {
+                this.faceAxis = faceAxis;
+                this.isFacePositive = isFacePositive;
+                this.faceCoordinate = faceCoordinate;
+                this.sideAxis = sideAxis;
+                this.isSidePositive = isSidePositive;
+                this.sideCoordinate = sideCoordinate;
+                this.along = along;
+            }
+
+
+            // IEquatable
+            public bool Equals(BoxModelEdgeEndKey other)
+            {
+                return faceAxis == other.faceAxis && isFacePositive == other.isFacePositive && faceCoordinate == other.faceCoordinate && sideAxis == other.sideAxis
+                       && isSidePositive == other.isSidePositive && sideCoordinate == other.sideCoordinate && along == other.along;
+            }
+
+
+            public override bool Equals(object other)
+            {
+                return other is BoxModelEdgeEndKey key && Equals(key);
+            }
+
+
+            public override int GetHashCode()
+            {
+                return System.HashCode.Combine(faceAxis, isFacePositive, faceCoordinate, sideAxis, isSidePositive, sideCoordinate, along);
+            }
+        }
+
+
         // Фаска у объекта задана.
         public static bool HasBevel(BoxModel model)
         {
@@ -81,7 +126,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Срезать выпуклые рёбра готового меша. size — срез, м; segments — из скольких кусков.
-        public static void Apply(Mesh mesh, IReadOnlyList<BoxModelSurface> surfaces, float size, int segments)
+        public static void Apply(Mesh mesh, IReadOnlyList<BoxModelSurface> surfaces, float size, int segments, LiveBuilderFaceUnwrapper unwrapper = null)
         {
             if (size < MinBevel || mesh.vertexCount == 0)
                 return;
@@ -91,7 +136,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (edges.Count == 0)
                 return;
 
-            var polygons = MeshSubtraction.Read(mesh);
+            var polygons = new MeshSubtractionPolygons(MeshSubtraction.Read(mesh)) { Unwrapper = unwrapper };
 
             foreach (var edge in edges)
             {
@@ -103,11 +148,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var crossSection = CrossSectionOf(edge, bevel, Mathf.Max(1, segments));
                 var edgeToMesh = EdgeToMesh(edge);
                 var length = edge.AlongTo - edge.AlongFrom;
-                polygons = MeshSubtraction.SubtractNear(polygons, BoxModelEdgeCutting.BoundsOf(crossSection, length, edgeToMesh),
+                polygons.SubtractNear(BoxModelEdgeCutting.BoundsOf(crossSection, length, edgeToMesh),
                     near => MeshSubtraction.PrismPolygons(crossSection, 0f, length, edgeToMesh, MeshSubtraction.MostCommonSubmesh(near)));
             }
 
-            MeshSubtraction.Write(mesh, polygons, mesh.subMeshCount);
+            MeshSubtraction.Write(mesh, polygons.InOrder(), mesh.subMeshCount);
         }
 
 
@@ -118,6 +163,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static List<BoxModelConvexEdge> FindConvexEdges(IReadOnlyList<BoxModelSurface> surfaces)
         {
             var edges = new List<BoxModelConvexEdge>();
+            var surfacesByPlane = SurfacesByPlane(surfaces);
 
             foreach (var surface in surfaces)
             {
@@ -127,27 +173,40 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var axisV = BoxFaces.SurfaceAxisV(surface.Face);
                 var area = surface.Area;
 
-                AddEdges(edges, surfaces, surface, faceAxis, faceSign, axisU, area.xMax, 1, axisV, area.yMin, area.yMax, area.width);
-                AddEdges(edges, surfaces, surface, faceAxis, faceSign, axisU, area.xMin, -1, axisV, area.yMin, area.yMax, area.width);
-                AddEdges(edges, surfaces, surface, faceAxis, faceSign, axisV, area.yMax, 1, axisU, area.xMin, area.xMax, area.height);
-                AddEdges(edges, surfaces, surface, faceAxis, faceSign, axisV, area.yMin, -1, axisU, area.xMin, area.xMax, area.height);
+                AddEdges(edges, surfacesByPlane, surface, faceAxis, faceSign, axisU, area.xMax, 1, axisV, area.yMin, area.yMax, area.width);
+                AddEdges(edges, surfacesByPlane, surface, faceAxis, faceSign, axisU, area.xMin, -1, axisV, area.yMin, area.yMax, area.width);
+                AddEdges(edges, surfacesByPlane, surface, faceAxis, faceSign, axisV, area.yMax, 1, axisU, area.xMin, area.xMax, area.height);
+                AddEdges(edges, surfacesByPlane, surface, faceAxis, faceSign, axisV, area.yMin, -1, axisU, area.xMin, area.xMax, area.height);
             }
 
             return edges;
         }
 
-        // Один край поверхности (в миллиметрах): поперёк — по sideAxis на sideValue, вдоль — по alongAxis от alongMin до alongMax.
-        private static void AddEdges(List<BoxModelConvexEdge> edges, IReadOnlyList<BoxModelSurface> surfaces, BoxModelSurface surface, int faceAxis, int faceSign,
-            int sideAxis, int sideValue, int sideSign, int alongAxis, int alongMin, int alongMax, int surfaceWidth)
+        // Поверхности по грани и плоскости, в прежнем порядке: соседа ребра ищем среди них, а не среди всех.
+        private static Dictionary<(int Face, int Plane), List<BoxModelSurface>> SurfacesByPlane(IReadOnlyList<BoxModelSurface> surfaces)
         {
-            if (faceAxis > sideAxis)
+            var surfacesByPlane = new Dictionary<(int Face, int Plane), List<BoxModelSurface>>();
+
+            foreach (var surface in surfaces)
+            {
+                if (!surfacesByPlane.TryGetValue((surface.Face, surface.Plane), out var onPlane))
+                    surfacesByPlane[(surface.Face, surface.Plane)] = onPlane = new List<BoxModelSurface>();
+
+                onPlane.Add(surface);
+            }
+
+            return surfacesByPlane;
+        }
+
+        // Один край поверхности (в миллиметрах): поперёк — по sideAxis на sideValue, вдоль — по alongAxis от alongMin до alongMax.
+        private static void AddEdges(List<BoxModelConvexEdge> edges, Dictionary<(int Face, int Plane), List<BoxModelSurface>> surfacesByPlane,
+            BoxModelSurface surface, int faceAxis, int faceSign, int sideAxis, int sideValue, int sideSign, int alongAxis, int alongMin, int alongMax, int surfaceWidth)
+        {
+            if (faceAxis > sideAxis || !surfacesByPlane.TryGetValue((BoxFaces.Index(sideAxis, sideSign > 0), sideValue), out var sideSurfaces))
                 return;
 
-            foreach (var other in surfaces)
+            foreach (var other in sideSurfaces)
             {
-                if (BoxFaces.Axis(other.Face) != sideAxis || BoxFaces.IsPositive(other.Face) != sideSign > 0 || other.Plane != sideValue)
-                    continue;
-
                 GetRange(other, faceAxis, out var otherFaceMin, out var otherFaceMax);
                 GetRange(other, alongAxis, out var otherAlongMin, out var otherAlongMax);
 
@@ -174,22 +233,68 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Куски одного ребра от разных коробок встык — одно ребро: на стыке двух клиньев вычитание оставило бы щепку.
+        // Кусок встык ищется по линии и концу словарём; из подходящих берётся первый по порядку — как при переборе.
         private static List<BoxModelConvexEdge> JoinTouching(List<BoxModelConvexEdge> edges)
         {
             edges.Sort((first, second) => first.AlongFrom.CompareTo(second.AlongFrom));
             var joined = new List<BoxModelConvexEdge>();
+            var numbersByEnd = new Dictionary<BoxModelEdgeEndKey, List<int>>();
 
             foreach (var edge in edges)
             {
-                var previous = joined.FindIndex(other => other.IsOnSameLine(edge) && Mathf.Abs(other.AlongTo - edge.AlongFrom) < JoinTolerance);
+                var previous = FirstEndingAt(numbersByEnd, joined, edge);
 
                 if (previous >= 0)
+                {
+                    numbersByEnd[EndKeyOf(joined[previous], joined[previous].AlongTo)].Remove(previous);
                     joined[previous] = joined[previous].JoinedWith(edge);
+                    AddEnd(numbersByEnd, joined[previous], previous);
+                }
                 else
+                {
                     joined.Add(edge);
+                    AddEnd(numbersByEnd, edge, joined.Count - 1);
+                }
             }
 
             return joined;
+        }
+
+        // Номер первого соединённого ребра на той же линии, что кончается там, где начинается edge; нет — -1.
+        private static int FirstEndingAt(Dictionary<BoxModelEdgeEndKey, List<int>> numbersByEnd, List<BoxModelConvexEdge> joined, BoxModelConvexEdge edge)
+        {
+            if (!numbersByEnd.TryGetValue(EndKeyOf(edge, edge.AlongFrom), out var numbers))
+                return -1;
+
+            foreach (var number in numbers)
+                if (joined[number].IsOnSameLine(edge) && Mathf.Abs(joined[number].AlongTo - edge.AlongFrom) < JoinTolerance)
+                    return number;
+
+            return -1;
+        }
+
+        // Номера в списке конца — по возрастанию: первый подходящий и есть первый по порядку.
+        private static void AddEnd(Dictionary<BoxModelEdgeEndKey, List<int>> numbersByEnd, BoxModelConvexEdge edge, int number)
+        {
+            var key = EndKeyOf(edge, edge.AlongTo);
+
+            if (!numbersByEnd.TryGetValue(key, out var numbers))
+                numbersByEnd[key] = numbers = new List<int>();
+
+            var index = numbers.BinarySearch(number);
+            numbers.Insert(index >= 0 ? index : ~index, number);
+        }
+
+        private static BoxModelEdgeEndKey EndKeyOf(BoxModelConvexEdge edge, float along)
+        {
+            return new BoxModelEdgeEndKey(edge.FaceAxis, edge.FaceSign > 0f, ToMillimeters(edge.FaceCoordinate), edge.SideAxis, edge.SideSign > 0f,
+                ToMillimeters(edge.SideCoordinate), ToMillimeters(along));
+        }
+
+        // Все координаты рёбер — из целых миллиметров: ближе допуска стыка они, только если это тот же миллиметр.
+        private static int ToMillimeters(float meters)
+        {
+            return Mathf.RoundToInt(meters * 1000f);
         }
 
 

@@ -10,7 +10,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Где строишь, если внутри здания по контуру (<see cref="SplineBuilding"/>): здание под мышью и этаж — тот, что выбран в окне
     /// (этажи уровня и здания — одни и те же: здание стоит низом на этаже уровня, его этажи идут с тем же шагом). Отсюда пол этажа,
     /// сколько до потолка и сколько этажей выше. Стена, комната, лестница и проём сами берут высоты здания,
-    /// а «Только этот» или «И этажи выше» решает, встанет ли новое на одном этаже или на всех выше разом.
+    /// а кнопка To top решает, встанет ли новое на одном этаже или на всех выше разом.
     /// Здесь же — к какому зданию отнести новое: внутри чьих стен оно, частью какого здания стала коробка, на которой рисуешь, на чьей крыше стоит.
     /// Прилипание к стенам здания — <see cref="SplineBuildingWallSnapping"/>, здание и этажи уровня — <see cref="SplineBuildingLevelAlignment"/>.
     /// </summary>
@@ -66,7 +66,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Сколько этажей с этого и выше, считая этот.
         public int StoreysAbove => Building.StoreyCount - Storey;
 
-        // Сколько копий вверх у нового: этот этаж — одна, «И этажи выше» — до верхнего этажа.
+        // Сколько копий вверх у нового: этот этаж — одна, To top — до верхнего этажа.
         public int CopyCount => IsOnAllStoreys ? StoreysAbove : 1;
 
         // Высота пола этого этажа над контуром здания, в его осях, м.
@@ -183,14 +183,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Части здания ─────────────────────────────────────────────────
 
-        // Здание, частью которого стала коробка, комната или лестница: привязана к его этажам сама или вместе с группой либо лежит в его интерьере. Нет — null.
+        // Здание, частью которого стала коробка, комната или лестница: лежит в его этаже или интерьере, привязана к его этажам. Нет — null.
         public static SplineBuilding BuildingOfPiece(Component piece)
         {
-            if (piece == null)
-                return null;
-
-            var link = piece.GetComponentInParent<SplineBuildingStoreyLink>(true);
-            return link != null && link.IsValid ? link.Building : piece.GetComponentInParent<SplineBuilding>(true);
+            return piece != null ? SplineBuildingStoreys.BuildingOf(piece.transform) : null;
         }
 
 
@@ -298,23 +294,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             InnerContoursCache[building] = (hash, contours);
             return contours;
-        }
-
-
-        // ── Подсказка ─────────────────────────────────────────────────────
-
-        // Подсказка внизу окна сцены. У лестницы копии — без верхнего этажа: с него идти некуда.
-        public string DescriptionOf(bool skipsTopStorey)
-        {
-            var group = BoxModelFactory.SelectedGroupIn(Building);
-
-            // Выделена группа здания — новое встаёт в неё и повторяется по этажам вместе с ней.
-            if (group != null)
-                return "Здание «" + Building.name + "» · в группу «" + group.name + "»";
-
-            var copiesAbove = StoreysAbove - 1 - (skipsTopStorey ? 1 : 0);
-            return "Здание «" + Building.name + "», его этаж " + (Storey + 1) + " из " + Building.StoreyCount + " · " +
-                   (IsOnAllStoreys && copiesAbove > 0 ? "этот и ещё " + copiesAbove + " выше" : "только этот этаж");
         }
 
 

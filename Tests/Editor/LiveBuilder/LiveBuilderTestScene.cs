@@ -21,13 +21,30 @@ namespace FeatherKit.Tests.LiveBuilder
 
         private readonly Scene previousActiveScene;
         private readonly Scene scene;
+        private readonly bool isUntitledSceneReplaced;
 
 
         public LiveBuilderTestScene()
         {
             previousActiveScene = SceneManager.GetActiveScene();
-            scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+
+            // Запуск тестов сам открывает безымянную сцену, а рядом с несохранённой безымянной Unity новую не откроет.
+            isUntitledSceneReplaced = HasUntitledScene();
+            scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, isUntitledSceneReplaced ? NewSceneMode.Single : NewSceneMode.Additive);
             SceneManager.SetActiveScene(scene);
+        }
+
+        private static bool HasUntitledScene()
+        {
+            for (var index = 0; index < SceneManager.sceneCount; index++)
+            {
+                var openScene = SceneManager.GetSceneAt(index);
+
+                if (string.IsNullOrEmpty(openScene.path))
+                    return true;
+            }
+
+            return false;
         }
 
 
@@ -120,10 +137,18 @@ namespace FeatherKit.Tests.LiveBuilder
                     AddMeshFile(meshFiles, meshCollider.sharedMesh);
             }
 
-            if (previousActiveScene.IsValid())
-                SceneManager.SetActiveScene(previousActiveScene);
+            if (isUntitledSceneReplaced)
+            {
+                // Последнюю сцену не закрыть — заменяем пустой.
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+            else
+            {
+                if (previousActiveScene.IsValid())
+                    SceneManager.SetActiveScene(previousActiveScene);
 
-            EditorSceneManager.CloseScene(scene, true);
+                EditorSceneManager.CloseScene(scene, true);
+            }
 
             foreach (var path in meshFiles)
                 AssetDatabase.DeleteAsset(path);

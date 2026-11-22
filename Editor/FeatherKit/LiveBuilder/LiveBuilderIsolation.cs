@@ -89,7 +89,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             AddModelsOfVisible<BoxModelPart>(stage, models);
             AddModelsOfVisible<BoxModelRoom>(stage, models);
             AddModelsOfVisible<BoxModelStairs>(stage, models);
-            AddModelsOfVisible<BoxModelRepeat>(stage, models);
+            AddModelsOfVisible<LiveBuilderArray>(stage, models);
 
             return models;
         }

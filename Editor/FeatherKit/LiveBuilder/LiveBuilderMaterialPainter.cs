@@ -26,7 +26,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (slots.Count == 0)
                 return null;
 
-            return slots.Count == 1 ? slots[0].Description : "граней коробки: " + slots.Count;
+            return slots.Count == 1 ? slots[0].Description : "box faces: " + slots.Count;
         }
 
 

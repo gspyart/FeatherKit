@@ -36,7 +36,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public static string DisplayName(BoxModelSelectionMode mode)
         {
-            return mode == BoxModelSelectionMode.Faces ? "Грани" : "Коробки";
+            return mode == BoxModelSelectionMode.Faces ? "Faces" : "Objects";
         }
     }
 }

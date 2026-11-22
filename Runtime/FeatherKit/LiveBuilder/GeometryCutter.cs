@@ -7,46 +7,43 @@ namespace FeatherKit.LiveBuilder
     /// <summary>Форма выреза: прямоугольник (со скруглёнными углами — арка) или круг (овал, если ширина и высота разные).</summary>
     public enum GeometryCutterShape
     {
-        [InspectorName("Прямоугольник")] Box,
-        [InspectorName("Круг")] Circle
+        [InspectorName("Box")] Box,
+        [InspectorName("Circle")] Circle
     }
 
 
     /// <summary>
-    /// Где проём режет, как составные группы в Chisel. Авто — внутри ближайшей постройки над проёмом (объект из коробок, стена по линии или здание):
-    /// её саму и постройки, вложенные в неё, но не вложенные группы — другие объекты из коробок; в корне уровня — всё, что пересекает:
-    /// дверь-префаб в корне уровня режет стену, которой касается, а та же дверь внутри стены — только эту стену. Всё вокруг — всё, что пересекает, через любые группы.
-    /// «Своя группа» осталась ради старых сцен и работает как «Авто»; в инспекторе её не выбрать.
+    /// Где вырез режет, как составные группы в Chisel. Правило — LiveBuilderCutRules в редакторе.
+    /// - OwnObject — ближайшая постройка над вырезом (объект из коробок, стена, здание) и всё в ней, кроме вложенных объектов из коробок
+    /// - EverythingItTouches — всё, чего касается, через любые объекты
+    /// - LegacyOwnGroup — старое «Своя группа», работает как OwnObject; в инспекторе не выбрать
     /// </summary>
     public enum GeometryCutterScope
     {
-        [InspectorName("Авто")] Automatic,
-        [InspectorName("Авто (было «Своя группа»)")] OwnGroup,
-        [InspectorName("Всё вокруг")] Everything
+        [InspectorName("Own object")] OwnObject = 0,
+        [InspectorName("Own object (legacy)")] LegacyOwnGroup = 1,
+        [InspectorName("Everything it touches")] EverythingItTouches = 2
     }
 
 
     /// <summary>
-    /// Проём (вырез): объём, который прорезает всё построенное Live Builder, что он пересекает, — объекты из коробок, стены по линии, здания.
-    /// В отличие от вырезающей коробки, поворачивается как угодно: окно в косой стене, круглое окно, арка, пролом под углом.
-    /// Форма — на плоскости XY выреза, протянута вдоль его Z: опора — низ посередине, ширина по X, высота вверх по Y, глубина по Z в обе стороны.
-    /// Стенки дыры строятся сами. Не режет свои дочерние объекты и свой префаб: дверь или окно-префаб с вырезом внутри
-    /// прорезает стену, куда его поставили, а свою раму — нет. Режет только в редакторе: в игру попадает уже прорезанный меш.
-    /// Что режет — всё, только перекрытия или только стены (<see cref="LiveBuilderCutTargets"/>); где — <see cref="GeometryCutterScope"/>.
-    /// «Копии вверх» — тот же вырез на этажах выше: окно на все этажи одним объектом.
-    /// Вырез в стене по линии или в здании может помнить своё место на линии: двигаешь точки — он едет со своим отрезком и поворачивается за ним.
-    /// Своего меша у выреза нет, поэтому размер для модификатора Array (ряд окон «от края») он сообщает сам — ширина, высота, глубина.
+    /// Единственный вырез Live Builder — любой формы под любым углом: дверь, окно, арка, ниша, зал внутри объекта из коробок.
+    /// - форма на плоскости XY выреза, протянута вдоль Z; стенки дыры строятся сами, материалы — общий и по сторонам
+    /// - где режет — <see cref="GeometryCutterScope"/>, что — <see cref="LiveBuilderCutTargets"/>; свои дочерние объекты и свой префаб не режет
+    /// - помнит место на линии стены или контура здания: двигаешь точки — едет со своим отрезком
+    /// - размер для модификатора Array (ряд окон «от края»); режет только в редакторе — в игру попадает готовый меш
     /// </summary>
-    [FDescription("Проём: прорезает постройки Live Builder, которые пересекает, под любым углом. Опора — низ посередине, глубина — по синей оси.")]
+    [FDescription("Вырез: прорезает постройки Live Builder, которые пересекает, под любым углом. Коробка по осям объекта режет его точно, " +
+                  "остальное — вычитанием из меша. Глубина — по синей оси.")]
     [AddComponentMenu("FeatherKit/Live Builder/Geometry Cutter")]
     [DisallowMultipleComponent]
     [SelectionBase]
-    public class GeometryCutter : MonoBehaviour, IStoreyCopies, IArrayCopySize
+    public class GeometryCutter : MonoBehaviour, IArrayCopySize
     {
         // Самая маленькая сторона выреза, м: тоньше — уже не дыра, а щель в расчёте.
         public const float MinSize = 0.02f;
 
-        [Header("Форма")]
+        [Header("Shape")]
         [Tooltip("Прямоугольник — со скруглёнными углами получается арка. Круг — круглое или овальное окно.")]
         [SerializeField] private GeometryCutterShape shape = GeometryCutterShape.Box;
 
@@ -67,7 +64,7 @@ namespace FeatherKit.LiveBuilder
         [SerializeField] private Vector3 shapeOffset;
 
         [Space]
-        [Header("Скругление")]
+        [Header("Corner Rounding")]
         [Tooltip("Радиус двух верхних углов, м. Половина ширины — полукруглая арка. 0 — прямые углы.")]
         [Min(0f)]
         [SerializeField] private float topCornerRadius;
@@ -84,35 +81,36 @@ namespace FeatherKit.LiveBuilder
         [Range(6, 64)]
         [SerializeField] private int circleSegments = 24;
 
-        [Space]
-        [Header("Копии вверх")]
-        [Tooltip("Сколько всего таких проёмов друг над другом, вместе с этим. 1 — один; окно на все 5 этажей — 5. В здании задаёт привязка («На этажах»).")]
-        [Range(1, 60)]
-        [SerializeField] private int copiesUp = 1;
-
-        [Tooltip("Шаг копий вверх, м — обычно высота этажа: 4.")]
-        [Min(0.1f)]
-        [SerializeField] private float copyStep = 4f;
+        // Старые копии вверх: их читает только миграция — переводит в повтор (LiveBuilderArray).
+        [SerializeField, HideInInspector] private int copiesUp = 1;
+        [SerializeField, HideInInspector] private float copyStep = 4f;
 
         [Space]
-        [Header("Что режет")]
+        [Header("Cutting")]
         [Tooltip("Что прорезает. Всё — объекты из коробок, стены и здания целиком. " +
                  "Только перекрытия — пол, перекрытия и крышу зданий: шахта, дыра под лестницу. Только стены — стены по линии и стены зданий.")]
         [SerializeField] private LiveBuilderCutTargets cutTargets = LiveBuilderCutTargets.Everything;
 
-        [Tooltip("Авто — внутри постройки режет только её и вложенное в неё (во вложенные группы не заходит), в корне уровня — всё, что пересекает. " +
-                 "Всё вокруг — всё, что пересекает, где бы ни лежал, через любые группы.")]
-        [SerializeField] private GeometryCutterScope scope = GeometryCutterScope.Automatic;
+        [Tooltip("Own object — ближайшая постройка над вырезом и всё в ней, во вложенные объекты из коробок не заходит. " +
+                 "Everything it touches — всё, чего касается, через любые объекты.")]
+        [SerializeField] private GeometryCutterScope scope = GeometryCutterScope.OwnObject;
 
         [Space]
-        [Header("Вид")]
+        [Header("Look")]
         [Tooltip("Материал стенок дыры. Пусто — материал того, что режем.")]
         [SerializeField] private Material revealMaterial;
 
+        [Tooltip("Свой материал у пола, потолка и стен дыры — как у сторон коробки. Пусто — материал стенок выше.")]
+        [SerializeField] private GeometryCutterSideMaterials sideMaterials = new();
+
+        [Tooltip("Сдвиг, масштаб и поворот текстуры на стенках дыры — те же места, что у материалов: All, пол, потолок, стены, каждая стена. " +
+                 "Нет строки — как есть.")]
+        [SerializeField] private LiveBuilderTextureFitList<BoxModelSideSlot> textureFits = new();
+
         [Space]
-        [Header("Место в стене")]
+        [Header("Place in Wall")]
         [Tooltip("Двигаешь точки стены по линии или контура здания, в котором лежит проём, — он едет со своим отрезком и поворачивается за ним. " +
-                 "Выключено — стоит, где поставили. Проёмы на стенах инструменты «Проём» и «Коробка» ставят включёнными.")]
+                 "Выключено — стоит, где поставили. Проёмы на стенах инструменты Cut и Box ставят включёнными.")]
         [SerializeField] private bool followsWallLine;
 
         // Место на линии стены: какой сплайн и где на нём — номер точки с долей до следующей (2,4 — между второй и третьей). Пишет редактор.
@@ -180,13 +178,14 @@ namespace FeatherKit.LiveBuilder
 
         public int CircleSegments => circleSegments;
 
-        public int CopiesUp
+        // Только для миграции старых данных.
+        public int LegacyCopiesUp
         {
             get => copiesUp;
-            set => copiesUp = Mathf.Clamp(value, 1, 60);
+            set => copiesUp = Mathf.Max(1, value);
         }
 
-        public float CopyStep
+        public float LegacyCopyStep
         {
             get => copyStep;
             set => copyStep = Mathf.Max(0.1f, value);
@@ -209,6 +208,10 @@ namespace FeatherKit.LiveBuilder
             get => revealMaterial;
             set => revealMaterial = value;
         }
+
+        public GeometryCutterSideMaterials SideMaterials => sideMaterials ??= new GeometryCutterSideMaterials();
+
+        public LiveBuilderTextureFitList<BoxModelSideSlot> TextureFits => textureFits ??= new LiveBuilderTextureFitList<BoxModelSideSlot>();
 
         // IArrayCopySize: копии массива «от края» встают по ширине, высоте и глубине выреза, с его масштабом.
         public Vector3 ArrayCopySize => Vector3.Scale(new Vector3(width, height, depth), transform.lossyScale);

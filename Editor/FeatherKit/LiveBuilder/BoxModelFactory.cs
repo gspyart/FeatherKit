@@ -7,13 +7,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Создаёт объекты Live Builder с Undo, по правилам набора — материал и группа из настроек проекта, статика:
-    /// объекты из коробок и пустые группы, коробки, комнаты и лестницы в них, стены по линии, здания по контуру и проёмы в них.
+    /// объекты из коробок и пустые группы, коробки, вырез-коробки, комнаты и лестницы в них, стены по линии, здания по контуру и вырезы в них.
     /// </summary>
     public static class BoxModelFactory
     {
-        private const string InteriorGroupName = "Interior";
-
-
         private static LiveBuilderProjectSettings Settings => LiveBuilderProjectSettings.instance;
 
 
@@ -32,6 +29,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var model = modelObject.AddComponent<BoxModel>();
             model.DefaultMaterial = LoadDefaultMaterial();
+            model.DataVersion = BoxModel.CurrentDataVersion;
+            model.TextureAlignment = LiveBuilderTextureAlignment.World;
 
             // Иначе Ctrl+Z убирает коробку или здание, а пустой объект остаётся.
             Undo.RegisterCreatedObjectUndo(modelObject, "Create Box Model");
@@ -61,13 +60,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var group = groupObject.AddComponent<BoxModel>();
             group.DefaultMaterial = LoadDefaultMaterial();
+            group.DataVersion = BoxModel.CurrentDataVersion;
+            group.TextureAlignment = LiveBuilderTextureAlignment.World;
 
             Undo.RegisterCreatedObjectUndo(groupObject, "Create Group");
             return group;
         }
 
-        // Группа ищется только в сцене самого объекта: при нескольких открытых сценах объект не уезжает в чужую.
-        private static void PutIntoLevelGeometry(GameObject modelObject)
+        // Группа ищется только в сцене самого объекта: при нескольких открытых сценах объект не уезжает в чужую. Ею же ставится новая колонна.
+        internal static void PutIntoLevelGeometry(GameObject modelObject)
         {
             if (Settings.NewObjectsGroup.Length == 0)
                 return;
@@ -97,7 +98,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Коробка в конце списка объекта — главнее всех прежних. Углы — в осях объекта, м.
+        // Коробка в конце списка объекта. Углы — в осях объекта, м. Вырезающий режим — только для старых данных и тестов: новый вырез — CreateCutterBox.
         public static BoxModelPart CreatePart(BoxModel model, Vector3 localMin, Vector3 localMax, BoxModelPartMode mode)
         {
             var partObject = new GameObject(mode == BoxModelPartMode.Add ? BoxModelPieceTidying.AddPartName : BoxModelPieceTidying.CutPartName) { tag = BoxModelPieceTidying.EditorOnlyTag };
@@ -114,6 +115,36 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return part;
         }
 
+        // Вырез-коробка в конце списка объекта: углы — в осях объекта, м, опора — угол, как у коробки. Режет объект точно (<see cref="GeometryCutterSolverBoxes"/>).
+        public static GeometryCutter CreateCutterBox(BoxModel model, Vector3 localMin, Vector3 localMax)
+        {
+            var cutterObject = new GameObject(BoxModelPieceTidying.CutPartName) { tag = BoxModelPieceTidying.EditorOnlyTag };
+            Undo.RegisterCreatedObjectUndo(cutterObject, "Create Cut Box");
+
+            var cutterTransform = cutterObject.transform;
+            cutterTransform.SetParent(model.transform, false);
+            cutterTransform.SetAsLastSibling();
+            cutterTransform.localPosition = Vector3.Min(localMin, localMax);
+
+            var cutter = cutterObject.AddComponent<GeometryCutter>();
+            ShapeAsBox(cutter, Abs(localMax - localMin));
+            GeometryCutterDefaults.Apply(cutter);
+            return cutter;
+        }
+
+
+        // Форма вырез-коробки: размер по осям выреза, опора — угол с наименьшими координатами, а не низ посередине.
+        public static void ShapeAsBox(GeometryCutter cutter, Vector3 size)
+        {
+            cutter.Shape = GeometryCutterShape.Box;
+            cutter.Width = size.x;
+            cutter.Height = size.y;
+            cutter.Depth = size.z;
+            cutter.TopCornerRadius = 0f;
+            cutter.BottomCornerRadius = 0f;
+            cutter.ShapeOffset = new Vector3(cutter.Width / 2f, 0f, cutter.Depth / 2f);
+        }
+
         private static Vector3 Abs(Vector3 value)
         {
             return new Vector3(Mathf.Abs(value.x), Mathf.Abs(value.y), Mathf.Abs(value.z));
@@ -121,7 +152,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Комната в конце списка объекта: угол пола и внутренний размер — в осях объекта, м. Толщины и материалы — из настроек инструмента.
-        public static BoxModelRoom CreateRoom(BoxModel model, Vector3 localMin, Vector3 size, bool hasWalls)
+        // Без оболочки (пустота в доме из коробок) — ни стен, ни пола, ни потолка; с ней — стены, а пол и потолок по настройкам.
+        public static BoxModelRoom CreateRoom(BoxModel model, Vector3 localMin, Vector3 size, bool hasShell)
         {
             var roomObject = new GameObject("Room") { tag = BoxModelPieceTidying.EditorOnlyTag };
             Undo.RegisterCreatedObjectUndo(roomObject, "Create Room");
@@ -133,14 +165,36 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var room = roomObject.AddComponent<BoxModelRoom>();
             room.Size = size;
-            room.HasWalls = hasWalls;
+            room.HasWalls = hasShell;
             room.WallThickness = LiveBuilderRoomSettings.WallThickness;
             room.SlabThickness = LiveBuilderRoomSettings.SlabThickness;
-            room.HasFloor = LiveBuilderRoomSettings.HasFloor;
-            room.HasCeiling = LiveBuilderRoomSettings.HasCeiling;
+            room.HasFloor = hasShell && LiveBuilderRoomSettings.HasFloor;
+            room.HasCeiling = hasShell && LiveBuilderRoomSettings.HasCeiling;
             room.FloorMaterial = LiveBuilderRoomSettings.FloorMaterial;
             room.WallMaterial = LiveBuilderRoomSettings.WallMaterial;
             room.CeilingMaterial = LiveBuilderRoomSettings.CeilingMaterial;
+            return room;
+        }
+
+
+        // Комната в здании: в его объекте, в этаже (или выделенной группе здания), до потолка этажа; «И этажи выше» — повтор, как у перегородки.
+        // Стены толщиной перегородки, пол и потолок — перекрытия здания. Угол — в осях здания. У здания нет объекта из коробок — null.
+        public static BoxModelRoom CreateRoomInBuilding(LiveBuilderBuildingContext context, Vector3 buildingLocalMin, Vector2 planSize)
+        {
+            var model = context.Model;
+
+            if (model == null)
+                return null;
+
+            var building = context.Building;
+            var localMin = model.transform.InverseTransformPoint(building.transform.TransformPoint(buildingLocalMin));
+            var room = CreateRoom(model, localMin, new Vector3(planSize.x, building.ClearHeight, planSize.y), true);
+            var partitionType = LiveBuilderWallSettings.PartitionWallType;
+            room.WallThickness = partitionType != null ? partitionType.Thickness : LiveBuilderWallSettings.PartitionThickness;
+            room.HasFloor = false;
+            room.HasCeiling = false;
+
+            SplineBuildingInteriorPlacement.PutOnStorey(room.transform, building, LiveBuilderBuildingContext.IsOnAllStoreys, false, "Create Room");
             return room;
         }
 
@@ -196,12 +250,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var container = wallObject.AddComponent<SplineContainer>();
             container.Spline.Clear();
 
-            return wallObject.AddComponent<SplineWall>();
+            var wall = wallObject.AddComponent<SplineWall>();
+            wall.TextureAlignment = LiveBuilderTextureAlignment.World;
+            return wall;
         }
 
 
-        // Перегородка в здании без точек: в его объекте, в группе интерьера (или в выделенной группе здания), толщиной и типом перегородки,
-        // привязана к его этажам («только этот» или «И этажи выше» — как выбрано в окне). Высоту и копии потом берёт от здания сверка привязки.
+        // Перегородка в здании без точек: в его объекте, в этаже (или в выделенной группе здания), толщиной и типом перегородки;
+        // «только этот» или «И этажи выше» — как выбрано в окне. Высоту потом берёт от этажа сверка этажей.
         public static SplineWall CreatePartition(LiveBuilderBuildingContext context, Vector3 worldPosition, string name)
         {
             var building = context.Building;
@@ -210,18 +266,19 @@ namespace FeatherKit.EditorTools.LiveBuilder
             wall.Thickness = LiveBuilderWallSettings.PartitionThickness;
             wall.Material = LiveBuilderWallSettings.Material;
             wall.WallType = LiveBuilderWallSettings.PartitionWallType;
-            Undo.SetTransformParent(wall.transform, InteriorTargetOf(building), true, "Create Partition");
-            SplineBuildingLinkSync.Attach(wall.gameObject, building, LiveBuilderBuildingContext.IsOnAllStoreys);
+            SplineBuildingInteriorPlacement.PutOnStorey(wall.transform, building, LiveBuilderBuildingContext.IsOnAllStoreys, false, "Create Partition");
             return wall;
         }
 
 
-        // Новое здание без точек — по настройкам инструмента; высота этажа — общая, из этажей окна.
+        // Новое здание без точек — по настройкам инструмента, с этажами-контейнерами; стоит на этаже уровня, если низ на его полу, высота этажа — уровня.
         public static SplineBuilding CreateBuilding(BoxModel parentModel, Vector3 worldPosition, Quaternion worldRotation)
         {
             var building = CreateBuildingObject(parentModel, worldPosition, worldRotation, "Spline Building");
+            building.DataVersion = SplineBuilding.CurrentDataVersion;
+            building.TextureAlignment = LiveBuilderTextureAlignment.World;
             building.StoreyCount = LiveBuilderBuildingSettings.StoreyCount;
-            building.StoreyHeight = LiveBuilderStoreys.StoreyHeight;
+            SplineBuildingLevelSync.PlaceOnLevel(building);
             building.WallThickness = LiveBuilderBuildingSettings.WallThickness;
             building.WallType = LiveBuilderBuildingSettings.WallType;
             building.ContourSide = LiveBuilderBuildingSettings.ContourSide;
@@ -238,24 +295,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return building;
         }
 
-
-        // Комната по контуру в пустоте — здание в один этаж: чем считается контур — по настройке «Линия по стенам», пол и потолок по форме.
-        // Толщины и материалы — из настроек «Комнаты», как у прямоугольной: снаружи — серый набора, изнутри — стены, пол, потолок комнаты.
-        public static SplineBuilding CreateContourRoom(BoxModel parentModel, Vector3 worldPosition, Quaternion worldRotation)
-        {
-            var room = CreateBuildingObject(parentModel, worldPosition, worldRotation, "Contour Room");
-            room.StoreyCount = 1;
-            room.StoreyHeight = LiveBuilderStoreys.StoreyHeight;
-            room.WallThickness = LiveBuilderRoomSettings.WallThickness;
-            room.ContourSide = LiveBuilderRoomWalls.ContourSideFor(LiveBuilderRoomSettings.WallSide);
-            room.SlabThickness = LiveBuilderRoomSettings.SlabThickness;
-            room.HasFloor = LiveBuilderRoomSettings.HasFloor;
-            room.HasRoof = LiveBuilderRoomSettings.HasCeiling;
-            room.InnerWallMaterial = LiveBuilderRoomSettings.WallMaterial;
-            room.FloorMaterial = LiveBuilderRoomSettings.FloorMaterial;
-            room.CeilingMaterial = LiveBuilderRoomSettings.CeilingMaterial;
-            return room;
-        }
 
         // Объект здания со сплайном без точек: в объекте из коробок, а без него — в группе уровня.
         private static SplineBuilding CreateBuildingObject(BoxModel parentModel, Vector3 worldPosition, Quaternion worldRotation, string name)
@@ -286,31 +325,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Группа «Interior» здания — перегородки и лестницы, поставленные в нём: едут и удаляются вместе со зданием.
-        public static Transform InteriorOf(SplineBuilding building)
-        {
-            var interior = building.transform.Find(InteriorGroupName);
-
-            if (interior != null)
-                return interior;
-
-            var interiorObject = new GameObject(InteriorGroupName);
-            Undo.RegisterCreatedObjectUndo(interiorObject, "Create Building Interior");
-            interiorObject.transform.SetParent(building.transform, false);
-            GameObjectUtility.SetStaticEditorFlags(interiorObject, GameObjectUtility.GetStaticEditorFlags(building.gameObject));
-            return interiorObject.transform;
-        }
-
-
-        // Куда класть поставленное в здание: в его группу, в которой выделенное, — как Default Parent в Unity и активная коллекция в Blender;
-        // иначе — в «Interior».
-        public static Transform InteriorTargetOf(SplineBuilding building)
-        {
-            var group = SelectedGroupIn(building);
-            return group != null ? group.transform : InteriorOf(building);
-        }
-
-
         // Группа внутри этого здания, в которой выделенное: выделена сама группа или что-то в ней. Нет такой — null.
         public static BoxModel SelectedGroupIn(SplineBuilding building)
         {
@@ -334,13 +348,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Есть ли у здания группа «Interior» — до того, как InteriorOf её создаст.
-        public static bool HasInterior(SplineBuilding building)
-        {
-            return building.transform.Find(InteriorGroupName) != null;
-        }
-
-
         // Вырез: опора — низ посередине, в мире; в постройке, которую режет, — едет вместе с ней. Только для редактора: в игру идёт прорезанный меш.
         public static GeometryCutter CreateCutter(Transform owner, Vector3 worldBottomCenter, Quaternion worldRotation, Vector2 size, float depth)
         {
@@ -355,6 +362,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             cutter.Width = size.x;
             cutter.Height = size.y;
             cutter.Depth = depth;
+            GeometryCutterDefaults.Apply(cutter);
 
             Undo.RegisterCreatedObjectUndo(cutterObject, "Create Cutter");
             return cutter;

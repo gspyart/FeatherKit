@@ -105,7 +105,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (GUIUtility.hotControl == control && Event.current.type == EventType.Repaint)
                 LiveBuilderSceneText.DrawLabel(faceCenter + direction * size * 4f,
-                    (axisNames != null ? axisNames[axis] : "XYZ"[axis].ToString()) + " " + LiveBuilderSceneText.FormatMeters(max[axis] - min[axis]) + " м");
+                    (axisNames != null ? axisNames[axis] : "XYZ"[axis].ToString()) + " " + LiveBuilderSceneText.FormatMeters(max[axis] - min[axis]) + " m");
 
             if (!EditorGUI.EndChangeCheck())
                 return false;

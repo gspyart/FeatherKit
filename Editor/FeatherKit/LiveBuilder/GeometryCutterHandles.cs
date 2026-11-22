@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEngine;
@@ -9,11 +10,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// (<see cref="LiveBuilderFaceHandles"/>: противоположная грань стоит, размер — целыми клетками сетки), стрелки в середине — перенос дыры в осях выреза.
     /// Ручки правят только дыру — размер и сдвиг формы, сам объект стоит: визуал внутри выреза не едет. Объект целиком — штатным переносом (W) и поворотом (E) Unity.
     /// Shift + тянуть стрелки — копия выреза целиком, с визуалом: второе окно рядом.
-    /// Ручки — на той копии вверх, что ближе к середине окна сцены: окно на пятом этаже правится там, где его видно.
+    /// Ручки — на той копии (вверх или повтора), что ближе к середине окна сцены: окно на пятом этаже правится там, где его видно.
     /// </summary>
     public static class GeometryCutterHandles
     {
-        private static readonly string[] AxisNames = { "ширина", "высота", "глубина" };
+        private static readonly string[] AxisNames = { "width", "height", "depth" };
 
         // Пока тянешь ручку — копия та же, даже если другая стала ближе к середине окна.
         private static GeometryCutter heldCutter;
@@ -22,30 +23,31 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public static void Draw(GeometryCutter cutter)
         {
-            var copyLift = Vector3.up * (CopyInView(cutter) * cutter.CopyStep);
+            var copies = GeometryCutterCopy.AllOf(cutter);
+            var copyLift = copies.Count > 0 ? copies[CopyInView(cutter, copies)].RepeatOffset : Vector3.zero;
 
-            DrawOutlines(cutter);
+            DrawOutlines(cutter, copies);
             DrawSizeHandles(cutter, copyLift);
             DrawMoveHandle(cutter, copyLift);
         }
 
-        // Копия вверх, на которую смотришь: её середина ближе всех к середине окна сцены.
-        private static int CopyInView(GeometryCutter cutter)
+        // Копия, на которую смотришь: её середина ближе всех к середине окна сцены. Номер — в списке всех копий.
+        private static int CopyInView(GeometryCutter cutter, List<GeometryCutterCopy> copies)
         {
             if (GUIUtility.hotControl != 0 && heldCutter == cutter)
-                return Mathf.Min(heldCopy, cutter.CopiesUp - 1);
+                return Mathf.Min(heldCopy, copies.Count - 1);
 
             var camera = Camera.current;
 
-            if (camera == null || cutter.CopiesUp <= 1)
+            if (camera == null || copies.Count <= 1)
                 return 0;
 
             var best = 0;
             var bestDistance = float.MaxValue;
 
-            for (var copy = 0; copy < cutter.CopiesUp; copy++)
+            for (var copy = 0; copy < copies.Count; copy++)
             {
-                var center = GeometryCutterOutline.CopyToWorld(cutter, copy).MultiplyPoint3x4(new Vector3(0f, cutter.Height / 2f, 0f));
+                var center = copies[copy].ToWorld.MultiplyPoint3x4(new Vector3(0f, cutter.Height / 2f, 0f));
                 var viewport = camera.WorldToViewportPoint(center);
                 var distance = (new Vector2(viewport.x, viewport.y) - new Vector2(0.5f, 0.5f)).sqrMagnitude;
 
@@ -62,7 +64,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
         // Рамка формы спереди и сзади у каждой копии — поверх стен: видно, что выделено, даже где значок закрыт.
-        private static void DrawOutlines(GeometryCutter cutter)
+        private static void DrawOutlines(GeometryCutter cutter, List<GeometryCutterCopy> copies)
         {
             if (Event.current.type != EventType.Repaint)
                 return;
@@ -80,9 +82,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             Handles.color = GeometryCutterGizmos.CutterColor;
 
-            for (var copy = 0; copy < cutter.CopiesUp; copy++)
+            foreach (var copy in copies)
             {
-                using (new Handles.DrawingScope(GeometryCutterOutline.CopyToWorld(cutter, copy)))
+                using (new Handles.DrawingScope(copy.ToWorld))
                 {
                     Handles.DrawAAPolyLine(3f, front);
                     Handles.DrawAAPolyLine(3f, back);

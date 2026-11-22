@@ -26,6 +26,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         Boxes,
         Faces,
         NewObject,
+        Room,
+        Ramp,
+        Column,
 
         // Точки линии и контура
         Corner,
@@ -41,7 +44,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         AtCursor,
 
         // Лестница
-        SeparateSteps,
+        OpenSteps,
         SolidSteps,
 
         // Этажи здания

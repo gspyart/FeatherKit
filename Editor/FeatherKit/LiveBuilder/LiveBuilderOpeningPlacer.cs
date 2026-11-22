@@ -6,7 +6,7 @@ using UnityEngine.Splines;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Клик инструментом «Проём»: наводишь на стену — рамка проёма выбранного размера (<see cref="LiveBuilderOpeningPresets"/>) и формы, клик — проём насквозь.
+    /// Клик инструментом «Cut»: наводишь на стену — рамка проёма выбранного размера (<see cref="LiveBuilderOpeningPresets"/>) и формы, клик — проём насквозь.
     /// Место — по настройке «Место»: «Где навёл» — серединой ровно под мышью, «По сетке» — низом по сетке, а вдоль стены край проёма, ближний к краю стены
     /// (углу, краю соседнего проёма; <see cref="LiveBuilderFaceEdges"/>), — на сетке, отсчитанной от этого края: проём встаёт вровень с углом или через целые клетки.
     /// По высоте этажи есть только у здания (и его перегородок): там низ — от пола его этажа, выбранного в окне (если он у здания есть,
@@ -14,7 +14,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// (у копий вверх — низа копии под мышью), у объекта из коробок — пола этажа уровня.
     /// - стена объекта из коробок — прямоугольник: вырезающая коробка в конце списка, глубиной ровно в толщину стены; арка и круг — вырез в объекте
     /// - стена по линии и здание по контуру — вырез (<see cref="GeometryCutter"/>) в них: прямой, вдоль стены в этом месте, насквозь с запасом,
-    ///   едет за точками линии; у здания — к его этажам, с «И этажи выше» — копии вверх до крыши
+    ///   едет за точками линии; у здания — к его этажам, с To top — копии вверх до крыши; Shift + клик — ряд вдоль стороны (<see cref="LiveBuilderCutRow"/>)
     /// </summary>
     public sealed class LiveBuilderOpeningPlacer
     {
@@ -65,18 +65,34 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public bool HasTarget => targetModel != null || targetPathOwner != null;
 
+        // Во что встанет проём: стена по линии, здание или объект из коробок; не навёл на стену — null.
+        public Component TargetWall => targetPathOwner != null ? targetPathOwner : targetModel;
+
         public string Hint => HasTarget
-            ? "Клик — проём «" + LiveBuilderOpeningPresets.Selected.DisplayName + "»" + CopiesHint + ". Протяни — свой размер"
-            : "Наведи на стену — рамка проёма «" + LiveBuilderOpeningPresets.Selected.DisplayName + "». Протяни по любой поверхности — свой размер";
+            ? "Click — cut '" + LiveBuilderOpeningPresets.Selected.DisplayName + "'" + CopiesHint + RowHint + " " + LiveBuilderHintKeys.Key("drag") + " own size"
+            : "Point at a wall — cut '" + LiveBuilderOpeningPresets.Selected.DisplayName + "' " + LiveBuilderHintKeys.Key("drag") + " own size on any surface";
 
         // Сколько проёмов встанет одним кликом: в здании или его перегородке с «И этажи выше» — этот и все этажи выше.
-        private int CopiesForTarget => LiveBuilderPathOwners.LinkedBuildingOf(targetPathOwner) != null && LiveBuilderBuildingContext.IsOnAllStoreys ? storeysAbove : 1;
+        private int CopiesForTarget => IsRepeatedOnStoreysAbove ? storeysAbove : 1;
+
+        // Новый проём встанет и на этажи выше: в здании с «И этажи выше», если стену под ним уже не повторяют по этажам.
+        private bool IsRepeatedOnStoreysAbove
+        {
+            get
+            {
+                var building = LiveBuilderPathOwners.StoreysBuildingOf(targetPathOwner);
+                return building != null && LiveBuilderBuildingContext.IsOnAllStoreys
+                       && !(targetPathOwner is SplineWall && SplineBuildingInteriorPlacement.IsRepeatedOnStoreys(targetPathOwner.transform, building));
+            }
+        }
+
+        private string RowHint => targetPathOwner != null ? " " + LiveBuilderHintKeys.Shift + " + click — a row along this side" : "";
 
         private string CopiesHint => CopiesForTarget > 1
-            ? " на этом и ещё " + (CopiesForTarget - 1) + " этажах выше"
+            ? " on this and " + (CopiesForTarget - 1) + " storeys above"
             : "";
 
-        // Прямоугольник в объекте из коробок — вырезающая коробка; арка и круг — вырез.
+        // Прямоугольник в объекте из коробок — вырез-коробка; арка и круг — вырез по центру стены.
         private static bool IsRectangle => LiveBuilderCutterSettings.Shape == LiveBuilderCutterShape.Rectangle;
 
 
@@ -186,16 +202,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (nearestPath == null)
                 return;
 
-            var floorLocal = wall is SplineWall splineWall ? CopyFloorOf(splineWall, nearestPath, along, localPoint.y) : 0f;
+            var floorLocal = wall is SplineWall ? nearestPath.BaseHeightAt(along) : 0f;
             var hasStoreys = wall is SplineBuilding;
             storeysAbove = 1;
 
-            // Перегородка в здании: проём привяжется к зданию — «И этажи выше» считается от этажа копии под мышью, как и при создании.
-            if (wall.TryGetComponent<SplineBuildingStoreyLink>(out var wallLink) && wallLink.IsValid)
+            // Перегородка в здании: проём встанет к его этажам — «И этажи выше» считается от этажа копии под мышью, как и при создании.
+            if (wall is SplineWall && SplineBuildingStoreys.TryGetStoreyOf(wall.transform, out var wallBuilding, out var wallStorey))
             {
-                var copy = Mathf.RoundToInt((floorLocal - nearestPath.BaseHeightAt(along)) / Mathf.Max(0.1f, wallLink.Building.StoreyHeight));
-                storeysAbove = Mathf.Max(1, wallLink.Building.StoreyCount - (wallLink.Storey + copy));
-                buildingStoreyHeight = wallLink.Building.StoreyHeight;
+                var copy = Mathf.RoundToInt((floorLocal - nearestPath.BaseHeightAt(along)) / Mathf.Max(0.1f, wallBuilding.StoreyHeight));
+                storeysAbove = Mathf.Max(1, wallBuilding.StoreyCount - (wallStorey + copy));
+                buildingStoreyHeight = wallBuilding.StoreyHeight;
                 hasStoreys = true;
             }
 
@@ -218,15 +234,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var bottom = hasStoreys ? floorLocal + size.Sill : BottomUnderMouse(localPoint.y, size.Height, floorLocal);
             targetPathOwner = wall;
             FitCutterToWall(wall, nearestPath, alongFrom, size.Width, bottom, out cutterLocalBottom, out cutterLocalRotation, out cutterDepth);
-        }
-
-        // Низ стены по линии под мышью, в её осях: низ линии, а у стены с копиями вверх — низ той копии, на которую навёл.
-        // Не пол этажа уровня: стена может стоять на подиуме или в здании со своим полом.
-        private static float CopyFloorOf(SplineWall wall, SplineWallPath path, float along, float localHeight)
-        {
-            var baseHeight = path.BaseHeightAt(along);
-            var copy = Mathf.Clamp(Mathf.FloorToInt((localHeight - baseHeight) / wall.CopyStep + 0.001f), 0, wall.CopiesUp - 1);
-            return baseHeight + copy * wall.CopyStep;
         }
 
         // Левый край проёма вдоль стены: там, где середина под мышью, или по сетке — по настройке «Место».
@@ -323,23 +330,23 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Клик ─────────────────────────────────────────────────────────
 
-        // Кладёт проём и выделяет его. Под мышью не стена — ничего.
-        public void Commit()
+        // Кладёт проём и выделяет его. Под мышью не стена — ничего. Ряд вдоль стороны — только в стене по линии и здании: у них есть линия.
+        public void Commit(bool isRow)
         {
             if (targetModel != null)
                 CommitInModel();
             else if (targetPathOwner != null)
-                CommitInPathWall();
+                CommitInPathWall(isRow);
         }
 
-        // Прямоугольник — вырезающая коробка объекта; арка и круг — вырез в нём, по центру толщины стены.
+        // Прямоугольник — вырез-коробка объекта, режет его точно; арка и круг — вырез в нём, по центру толщины стены.
         private void CommitInModel()
         {
             if (IsRectangle)
             {
-                var part = BoxModelFactory.CreatePart(targetModel, cutMin, cutMax, BoxModelPartMode.Cut);
-                part.name = "Opening";
-                Selection.activeGameObject = part.gameObject;
+                var cutterBox = BoxModelFactory.CreateCutterBox(targetModel, cutMin, cutMax);
+                cutterBox.name = "Opening";
+                Selection.activeGameObject = cutterBox.gameObject;
             }
             else
             {
@@ -353,23 +360,26 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 Selection.activeGameObject = cutter.gameObject;
             }
 
-            BoxModelRebuilder.Rebuild(targetModel);
+            BoxModelRebuilder.Rebuild(targetModel, LiveBuilderBuildQuality.Draft);
         }
 
         // Вырез в стене или здании: едет за точками линии, в здании — к его этажам.
-        private void CommitInPathWall()
+        private void CommitInPathWall(bool isRow)
         {
             var size = LiveBuilderOpeningPresets.Selected;
             var owner = targetPathOwner.transform;
             var worldRotation = owner.rotation * cutterLocalRotation;
             var cutter = CreateCutter(owner, owner.TransformPoint(cutterLocalBottom), worldRotation, new Vector2(size.Width, size.Height), cutterDepth);
             LiveBuilderCutterGesture.AttachToOwner(cutter, worldRotation * Vector3.forward);
+
+            if (isRow)
+                LiveBuilderCutRow.Repeat(cutter);
             Selection.activeGameObject = cutter.gameObject;
 
             if (targetPathOwner is SplineBuilding ownBuilding)
-                SplineBuildingRebuilder.Rebuild(ownBuilding);
+                SplineBuildingRebuilder.Rebuild(ownBuilding, LiveBuilderBuildQuality.Draft);
             else
-                SplineWallRebuilder.Rebuild((SplineWall)targetPathOwner);
+                SplineWallRebuilder.Rebuild((SplineWall)targetPathOwner, LiveBuilderBuildQuality.Draft);
         }
 
         private static GeometryCutter CreateCutter(Transform owner, Vector3 worldBottom, Quaternion worldRotation, Vector2 size, float depth)
@@ -410,7 +420,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                         Quaternion.LookRotation(wallAxis == 0 ? Vector3.right : Vector3.forward, Vector3.up), Vector3.one), new Vector2(width, size.y), size[wallAxis]);
 
                 LiveBuilderSceneText.DrawLabel(cutMax, LiveBuilderSceneText.FormatMeters(width) + " × " + LiveBuilderSceneText.FormatMeters(size.y) +
-                                                       " м, толщина " + LiveBuilderSceneText.FormatMeters(size[wallAxis]) + " м");
+                                                       " m, thickness " + LiveBuilderSceneText.FormatMeters(size[wallAxis]) + " m");
             }
         }
 
@@ -431,8 +441,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 if (copy == 0)
                     LiveBuilderSceneText.DrawLabel(copyToWorld.MultiplyPoint3x4(new Vector3(size.Width / 2f, size.Height, 0f)),
-                        LiveBuilderSceneText.FormatMeters(size.Width) + " × " + LiveBuilderSceneText.FormatMeters(size.Height) + " м" +
-                        (CopiesForTarget > 1 ? ", × " + CopiesForTarget + " этажа" : ""));
+                        LiveBuilderSceneText.FormatMeters(size.Width) + " × " + LiveBuilderSceneText.FormatMeters(size.Height) + " m" +
+                        (CopiesForTarget > 1 ? ", × " + CopiesForTarget + " storeys" : ""));
             }
         }
 

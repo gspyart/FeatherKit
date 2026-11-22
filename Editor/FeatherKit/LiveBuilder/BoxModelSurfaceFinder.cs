@@ -27,6 +27,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Находит наружные поверхности объекта из коробок: часть грани, к которой вплотную прижат другой кусок, внутри и не рисуется —
     /// на стыках нет лишних граней и мерцания. Соседние прямоугольники одной плоскости от одной коробки сливаются в один.
+    /// Считает весь объект заново — эталон для кеша по плоскостям (<see cref="BoxModelSurfaceCache"/>) и для разовых расчётов.
     /// </summary>
     public static class BoxModelSurfaceFinder
     {
@@ -67,14 +68,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Грань куска ──────────────────────────────────────────────────
 
-        private static int PlaneOf(MillimeterBox box, int face)
+        internal static int PlaneOf(MillimeterBox box, int face)
         {
             var axis = BoxFaces.Axis(face);
             return BoxFaces.IsPositive(face) ? box.Max[axis] : box.Min[axis];
         }
 
 
-        private static RectInt AreaOf(MillimeterBox box, int face)
+        internal static RectInt AreaOf(MillimeterBox box, int face)
         {
             var axisU = BoxFaces.SurfaceAxisU(face);
             var axisV = BoxFaces.SurfaceAxisV(face);
@@ -85,7 +86,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // ── Вычитание прямоугольников ────────────────────────────────────
 
         // Из каждого прямоугольника убирает cover: остаётся до четырёх полос вокруг него.
-        private static List<RectInt> Subtract(List<RectInt> areas, RectInt cover)
+        internal static List<RectInt> Subtract(List<RectInt> areas, RectInt cover)
         {
             var result = new List<RectInt>(areas.Count);
 
@@ -117,7 +118,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        private static bool Overlaps(RectInt a, RectInt b)
+        internal static bool Overlaps(RectInt a, RectInt b)
         {
             return a.xMin < b.xMax && b.xMin < a.xMax && a.yMin < b.yMax && b.yMin < a.yMax;
         }
@@ -145,10 +146,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             foreach (var group in groups)
             {
                 var areas = group.Value;
-
-                while (TryMergeAnyPair(areas))
-                {
-                }
+                MergeAreas(areas);
 
                 foreach (var area in areas)
                     merged.Add(new BoxModelSurface(group.Key.face, group.Key.plane, area, group.Key.source));
@@ -157,6 +155,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return merged;
         }
 
+
+        // Прямоугольники одной плоскости от одной коробки — слитые попарно, пока есть что сливать.
+        internal static void MergeAreas(List<RectInt> areas)
+        {
+            while (TryMergeAnyPair(areas))
+            {
+            }
+        }
 
         private static bool TryMergeAnyPair(List<RectInt> areas)
         {

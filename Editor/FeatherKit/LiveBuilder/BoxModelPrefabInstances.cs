@@ -281,6 +281,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     if (!SplineWallRebuilder.TryUsePrefabGeometry(wall))
                         SplineWallRebuilder.Rebuild(wall);
 
+                foreach (var column in contents.GetComponentsInChildren<LiveBuilderColumn>(true))
+                    if (!LiveBuilderColumnRebuilder.TryUsePrefabGeometry(column))
+                        LiveBuilderColumnRebuilder.Rebuild(column);
+
                 foreach (var building in contents.GetComponentsInChildren<SplineBuilding>(true))
                     if (!SplineBuildingRebuilder.TryUsePrefabGeometry(building))
                         SplineBuildingRebuilder.Rebuild(building);

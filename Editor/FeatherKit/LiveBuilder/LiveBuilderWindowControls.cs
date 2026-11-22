@@ -4,9 +4,10 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Общие элементы окна Live Builder, чтобы всё выглядело одинаково: карточка с тихим заголовком, переключатель из кнопок (со значками или словами),
-    /// кнопка-значок «вкл / выкл», плитка инструмента, свёрнутое «Ещё» с редкими настройками, пояснение (видно, пока на вкладке нажата «?»),
-    /// плашка посчитанного числа, разделитель, поле материала. Вкладки окна — в <see cref="LiveBuilderTabBar"/>. Цвета — под светлую и тёмную тему редактора.
+    /// Общие элементы окна и панели Live Builder, чтобы всё выглядело одинаково: карточка с тихим заголовком, раздел-свёртка с полосой цвета зоны,
+    /// переключатель из кнопок (со значками или словами), кнопка-значок «вкл / выкл», плитка инструмента, свёрнутое «More» с редкими настройками,
+    /// плашка посчитанного числа, разделитель, поле материала. Цвета — под светлую и тёмную тему редактора, цвета зон — <see cref="LiveBuilderAccentColors"/>.
+    /// В панели окна сцены (<see cref="InPanel"/>) — её ширина, карточки без рамки.
     /// </summary>
     public static class LiveBuilderWindowControls
     {
@@ -15,6 +16,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private const string MoreSectionPreferencePrefix = "FeatherKit.LiveBuilder.More.";
         private const float MoreSectionHeight = 20f;
+
+        private const string FoldoutSectionPreferencePrefix = "FeatherKit.LiveBuilder.Section.";
+        private const float FoldoutSectionHeight = 22f;
+        private const float FoldoutSectionAccentWidth = 3f;
 
         // Насколько бледная выключенная кнопка-значок: 1 — как включённая.
         private const float OffToggleAlpha = 0.45f;
@@ -28,17 +33,22 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static GUIStyle moreTitleStyle;
         private static GUIStyle moreSummaryStyle;
         private static GUIStyle valueChipStyle;
+        private static GUIStyle foldoutSectionBodyStyle;
+        private static GUIStyle panelCardStyle;
 
-
-        // ── Показ пояснений ──────────────────────────────────────────────
-
-        // Видны ли пояснения: окно ставит перед рисованием вкладки — нажата ли на ней «?», и снимает после.
-        public static bool IsShowingExplanations { get; set; }
+        // Ширина панели окна сцены, пока она рисуется; 0 — рисует окно.
+        private static float panelWidth;
 
 
         // ── Цвета ────────────────────────────────────────────────────────
 
         public static Color AccentColor => EditorGUIUtility.isProSkin ? new Color(0.35f, 0.6f, 1f) : new Color(0.1f, 0.38f, 0.82f);
+
+        // Ширина, в которую рисуют: в панели окна сцены — её (currentViewWidth там — ширина всего окна сцены), иначе — окна.
+        public static float AvailableWidth => panelWidth > 0f ? panelWidth : EditorGUIUtility.currentViewWidth;
+
+        // Рисует панель окна сцены: карточки там — без рамки и заголовка, место дорого.
+        public static bool IsInPanel => panelWidth > 0f;
 
 
         private static Color CardColor => EditorGUIUtility.isProSkin ? new Color(0.25f, 0.25f, 0.25f) : new Color(0.84f, 0.84f, 0.84f);
@@ -86,10 +96,39 @@ namespace FeatherKit.EditorTools.LiveBuilder
             clipping = TextClipping.Clip
         };
 
+        private static GUIStyle FoldoutSectionBodyStyle => foldoutSectionBodyStyle ??= new GUIStyle { padding = new RectOffset(8, 4, 4, 8) };
+
+        private static GUIStyle PanelCardStyle => panelCardStyle ??= new GUIStyle { margin = new RectOffset(0, 0, 1, 1) };
+
+
+        // ── Панель окна сцены ────────────────────────────────────────────
+
+        // Всё внутри using рисуется в панель окна сцены этой ширины.
+        public static PanelScope InPanel(float width)
+        {
+            return new PanelScope(width);
+        }
+
+        public readonly struct PanelScope : System.IDisposable
+        {
+            private readonly float previousWidth;
+
+            public PanelScope(float width)
+            {
+                previousWidth = panelWidth;
+                panelWidth = width;
+            }
+
+            public void Dispose()
+            {
+                panelWidth = previousWidth;
+            }
+        }
+
 
         // ── Карточка ─────────────────────────────────────────────────────
 
-        // Группа настроек в рамке с тихим серым заголовком. Использовать в using: всё внутри — содержимое карточки.
+        // Группа настроек в рамке с тихим серым заголовком; в панели окна сцены — просто группа. Использовать в using: всё внутри — содержимое карточки.
         public static CardScope Card(string title)
         {
             return new CardScope(title);
@@ -99,6 +138,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             public CardScope(string title)
             {
+                if (IsInPanel)
+                {
+                    EditorGUILayout.BeginVertical(PanelCardStyle);
+                    return;
+                }
+
                 var rect = EditorGUILayout.BeginVertical(CardStyle);
 
                 if (Event.current.type == EventType.Repaint)
@@ -110,6 +155,69 @@ namespace FeatherKit.EditorTools.LiveBuilder
             public void Dispose()
             {
                 EditorGUILayout.EndVertical();
+            }
+        }
+
+
+        // ── Раздел-свёртка ───────────────────────────────────────────────
+
+        // Заголовок раздела с полосой цвета зоны; что раскрыто — помнится по key. Использовать в using, содержимое рисовать, только если IsOpen.
+        public static FoldoutSectionScope FoldoutSection(string key, string title, string summary, LiveBuilderAccentColor zone, bool isOpenByDefault = true)
+        {
+            var preferenceKey = FoldoutSectionPreferencePrefix + key;
+            var isOpen = EditorPrefs.GetBool(preferenceKey, isOpenByDefault);
+            var rect = GUILayoutUtility.GetRect(0f, FoldoutSectionHeight, GUILayout.ExpandWidth(true));
+
+            if (Event.current.type == EventType.Repaint)
+                DrawFoldoutSectionLook(rect, title, summary, zone, isOpen);
+
+            // Содержимое появится или пропадёт — этот проход окна прерываем, иначе IMGUI путается в разметке.
+            if (GUI.Button(rect, GUIContent.none, GUIStyle.none))
+            {
+                EditorPrefs.SetBool(preferenceKey, !isOpen);
+                GUIUtility.ExitGUI();
+            }
+
+            return new FoldoutSectionScope(isOpen);
+        }
+
+        private static void DrawFoldoutSectionLook(Rect rect, string title, string summary, LiveBuilderAccentColor zone, bool isOpen)
+        {
+            var isHovered = rect.Contains(Event.current.mousePosition);
+            EditorGUI.DrawRect(rect, LiveBuilderAccentColors.TintOf(zone, isHovered ? 0.2f : 0.1f));
+            EditorGUI.DrawRect(new Rect(rect.x, rect.y, FoldoutSectionAccentWidth, rect.height), LiveBuilderAccentColors.ColorOf(zone));
+
+            var arrowRect = new Rect(rect.x + FoldoutSectionAccentWidth + 4f, rect.y + (rect.height - 13f) / 2f, 13f, 13f);
+            EditorStyles.foldout.Draw(arrowRect, GUIContent.none, false, false, isOpen, false);
+
+            var titleContent = new GUIContent(title);
+            var titleWidth = MoreTitleStyle.CalcSize(titleContent).x;
+            MoreTitleStyle.Draw(new Rect(arrowRect.xMax + 3f, rect.y, titleWidth, rect.height), titleContent, false, false, false, false);
+
+            if (string.IsNullOrEmpty(summary))
+                return;
+
+            var summaryX = arrowRect.xMax + 3f + titleWidth + 6f;
+            MoreSummaryStyle.Draw(new Rect(summaryX, rect.y, rect.xMax - summaryX - 4f, rect.height), summary, false, false, false, false);
+        }
+
+
+        public readonly struct FoldoutSectionScope : System.IDisposable
+        {
+            public FoldoutSectionScope(bool isOpen)
+            {
+                IsOpen = isOpen;
+
+                if (isOpen)
+                    EditorGUILayout.BeginVertical(FoldoutSectionBodyStyle);
+            }
+
+            public bool IsOpen { get; }
+
+            public void Dispose()
+            {
+                if (IsOpen)
+                    EditorGUILayout.EndVertical();
             }
         }
 
@@ -147,7 +255,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static bool CanFitTexts(GUIContent label, (string Text, LiveBuilderOptionIcon Icon)[] options)
         {
             // 30 — поля окна и вкладки и полоса прокрутки.
-            var available = EditorGUIUtility.currentViewWidth - (label != GUIContent.none ? EditorGUIUtility.labelWidth : 0f) - 30f;
+            var available = AvailableWidth - (label != GUIContent.none ? EditorGUIUtility.labelWidth : 0f) - 30f;
             var widest = 0f;
 
             foreach (var option in options)
@@ -274,10 +382,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // ── Свёрнутое «Ещё» ──────────────────────────────────────────────
+        // ── Свёрнутое «More» ─────────────────────────────────────────────
 
-        // Строка «Ещё» перед редкими настройками; возвращает, рисовать ли их. key — под ним помнится, раскрыто ли; summary — что внутри, серым.
-        // Есть изменённые, не как по умолчанию (hasNonDefaultValues), — раскрыто всегда и помечено «изменено»: спрятанное не удивит.
+        // Строка «More» перед редкими настройками; возвращает, рисовать ли их. key — под ним помнится, раскрыто ли; summary — что внутри, серым.
+        // Есть изменённые, не как по умолчанию (hasNonDefaultValues), — раскрыто всегда и помечено «changed»: спрятанное не удивит.
         public static bool MoreSection(string key, bool hasNonDefaultValues, string summary)
         {
             var preferenceKey = MoreSectionPreferencePrefix + key;
@@ -298,7 +406,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return !isOpen;
         }
 
-        // Стрелка, «Ещё» и серым — что внутри. Изменено — вместо стрелки точка цвета акцента: свернуть всё равно нельзя.
+        // Стрелка, «More» и серым — что внутри. Изменено — вместо стрелки точка цвета акцента: свернуть всё равно нельзя.
         private static void DrawMoreSectionLook(Rect rect, bool isOpen, bool hasNonDefaultValues, string summary)
         {
             if (!hasNonDefaultValues && rect.Contains(Event.current.mousePosition))
@@ -311,11 +419,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
             else
                 EditorStyles.foldout.Draw(arrowRect, GUIContent.none, false, false, isOpen, false);
 
-            var title = new GUIContent("Ещё");
+            var title = new GUIContent("More");
             var titleWidth = MoreTitleStyle.CalcSize(title).x;
             MoreTitleStyle.Draw(new Rect(arrowRect.xMax + 3f, rect.y, titleWidth, rect.height), title, false, false, false, false);
 
-            var detail = new GUIContent(hasNonDefaultValues ? "изменено · " + summary : summary);
+            var detail = new GUIContent(hasNonDefaultValues ? "changed · " + summary : summary);
             var detailX = arrowRect.xMax + 3f + titleWidth + 4f;
             MoreSummaryStyle.Draw(new Rect(detailX, rect.y, rect.xMax - detailX, rect.height), detail, false, false, false, false);
         }
@@ -323,15 +431,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Пояснения ────────────────────────────────────────────────────
 
-        // Как пользоваться — длинное пояснение: видно, только пока на вкладке нажата «?» (<see cref="IsShowingExplanations"/>), иначе его нет совсем.
-        public static void Explanation(string text)
-        {
-            if (IsShowingExplanations)
-                Note(text);
-        }
-
-
-        // Мелкий серый текст-пояснение — всегда виден. Длинное «как пользоваться» — в Explanation.
+        // Мелкий серый текст-пояснение.
         public static void Note(string text)
         {
             GUILayout.Label(text, EditorStyles.wordWrappedMiniLabel);
@@ -340,7 +440,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Плитка инструмента ───────────────────────────────────────────
 
-        // Значок, подпись и клавиша; выбранная залита цветом вкладки «Инструмент», значок и подпись — белые. Возвращает, нажали ли.
+        // Значок, подпись и клавиша; выбранная залита синим цветом инструмента, значок и подпись — белые. Возвращает, нажали ли.
         public static bool ToolTile(Rect rect, LiveBuilderTool tool, bool isSelected)
         {
             var isHovered = rect.Contains(Event.current.mousePosition);
@@ -354,7 +454,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static void DrawToolTileLook(Rect rect, LiveBuilderTool tool, bool isSelected, bool isHovered)
         {
-            var fill = isSelected ? LiveBuilderTabBar.ColorOf(LiveBuilderTabColor.Tool) : isHovered ? HoverColor : TileColor;
+            var fill = isSelected ? LiveBuilderAccentColors.ColorOf(LiveBuilderAccentColor.Tool) : isHovered ? HoverColor : TileColor;
             GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, fill, 0f, 4f);
 
             if (!isSelected)

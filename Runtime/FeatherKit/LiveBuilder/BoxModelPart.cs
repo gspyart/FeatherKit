@@ -4,54 +4,50 @@ using UnityEngine;
 
 namespace FeatherKit.LiveBuilder
 {
-    /// <summary>Что коробка делает с объектом: добавляет объём или вырезает дыру.</summary>
+    /// <summary>Что коробка делает с объектом: добавляет объём или (старые данные) вырезает дыру — новый вырез только <see cref="GeometryCutter"/>.</summary>
     public enum BoxModelPartMode
     {
-        [InspectorName("Добавить")] Add,
-        [InspectorName("Вырезать")] Cut
+        [InspectorName("Add")] Add,
+        [InspectorName("Cut (legacy)")] Cut
     }
 
 
     /// <summary>
-    /// Одна коробка объекта из коробок (<see cref="BoxModel"/>): добавляет объём или вырезает дыру.
-    /// Опора — угол с наименьшими координатами по всем осям объекта, размер — в метрах. Коробки не поворачиваются: всегда по осям объекта.
-    /// Материал можно задать всей коробке или отдельно низу, верху и бокам — у вырезающей это пол, потолок и стены дыры.
-    /// У добавляющей рёбра можно скосить (<see cref="BoxModelEdgeChamfer"/>): пандус, склон, скат крыши.
-    /// Вырезающая режет стены по линии и здания своего объекта, которые задевает, — порядок в списке объектов не важен; что именно — стены, перекрытия или всё — <see cref="LiveBuilderCutTargets"/>.
-    /// В игре не нужна: объект коробки помечен EditorOnly и в сборку не попадает.
+    /// Одна коробка объекта из коробок (<see cref="BoxModel"/>): только добавляет объём, вырез — <see cref="GeometryCutter"/>.
+    /// - опора — угол с наименьшими координатами по осям объекта, размер в метрах; не поворачивается
+    /// - материал всей коробки или отдельно низу, верху и бокам; рёбра можно скосить (<see cref="BoxModelEdgeChamfer"/>): пандус, скат крыши
+    /// - «вырезающий» режим и «Режет» — только у старых данных: читает их старое правило до обновления и само обновление
+    /// - в игре не нужна: объект помечен EditorOnly, остаётся только собранный меш
     /// </summary>
-    [FDescription("Коробка объекта из коробок: добавляет объём или вырезает дыру. Опора — угол с наименьшими координатами, размер — в метрах. " +
-                  "Поворачивать нельзя. В игру не попадает — остаётся только собранный меш.")]
+    [FDescription("Коробка объекта из коробок: добавляет объём. Опора — угол с наименьшими координатами, размер — в метрах. " +
+                  "Поворачивать нельзя. Вырез — компонент Geometry Cutter. В игру не попадает — остаётся только собранный меш.")]
     [AddComponentMenu("FeatherKit/Live Builder/Box Model Part")]
     [DisallowMultipleComponent]
     [SelectionBase]
     public class BoxModelPart : MonoBehaviour
     {
-        [Tooltip("Добавить объём или вырезать дыру.")]
-        [SerializeField] private BoxModelPartMode mode = BoxModelPartMode.Add;
-
-        [Tooltip("Только у вырезающей: что она режет из стен по линии и зданий в этом объекте. Свои коробки объекта режет всегда. " +
-                 "Только перекрытия — дыра под лестницу или шахту: стены и перегородки не трогает. Только стены — проём, пол и потолок целы.")]
-        [SerializeField] private LiveBuilderCutTargets cutTargets = LiveBuilderCutTargets.Everything;
+        // Старые данные: вырезающая коробка и что она режет. Новые коробки только добавляют; читают старое правило и обновление данных.
+        [SerializeField, HideInInspector] private BoxModelPartMode mode = BoxModelPartMode.Add;
+        [SerializeField, HideInInspector] private LiveBuilderCutTargets cutTargets = LiveBuilderCutTargets.Everything;
 
         [Tooltip("Размер коробки по осям объекта, м.")]
         [SerializeField] private Vector3 size = new(3f, 3f, 3f);
 
-        [Header("Материалы")]
-        [Tooltip("Материал граней этой коробки. Пусто — материал объекта. У вырезающей — материал стенок дыры.")]
+        [Header("Materials")]
+        [Tooltip("Материал граней этой коробки. Пусто — материал объекта.")]
         [SerializeField] private Material material;
 
-        [Tooltip("Материал низа. У вырезающей коробки — пол комнаты. Пусто — общий материал коробки.")]
+        [Tooltip("Материал низа. Пусто — общий материал коробки.")]
         [SerializeField] private Material bottomMaterial;
 
-        [Tooltip("Материал верха. У вырезающей коробки — потолок комнаты. Пусто — общий материал коробки.")]
+        [Tooltip("Материал верха. Пусто — общий материал коробки.")]
         [SerializeField] private Material topMaterial;
 
-        [Tooltip("Материал четырёх боков, если у бока нет своего ниже. У вырезающей коробки — стены комнаты. Пусто — общий материал коробки.")]
+        [Tooltip("Материал четырёх боков, если у бока нет своего ниже. Пусто — общий материал коробки.")]
         [SerializeField] private Material sideMaterial;
 
         [Space]
-        [Header("Бока по отдельности")]
+        [Header("Each Side")]
         [Tooltip("Бок справа, по +X объекта. Пусто — материал боков. Перетащил материал на этот бок в окне сцены — он ляжет сюда.")]
         [SerializeField] private Material rightMaterial;
 
@@ -64,6 +60,12 @@ namespace FeatherKit.LiveBuilder
         [Tooltip("Бок сзади, по −Z объекта. Пусто — материал боков.")]
         [SerializeField] private Material backMaterial;
 
+        [Space]
+        [Header("Texture Fit")]
+        [Tooltip("Сдвиг, масштаб и поворот текстуры на сторонах коробки — те же места, что у материалов: All, низ, верх, бока, каждый бок. " +
+                 "Нет строки — как есть. Своя у стороны главнее, чем у боков, а та — чем у всей коробки.")]
+        [SerializeField] private LiveBuilderTextureFitList<BoxModelSideSlot> textureFits = new();
+
         // Скосы рёбер. Правятся ручками на рёбрах в окне сцены и в окне Live Builder, поэтому в инспекторе не видны.
         [SerializeField, HideInInspector] private List<BoxModelEdgeChamfer> chamfers = new();
 
@@ -74,7 +76,7 @@ namespace FeatherKit.LiveBuilder
             set => mode = value;
         }
 
-        // Что вырезающая коробка режет из стен и зданий объекта; у добавляющей не важно.
+        // Старые данные: что вырезающая коробка режет из стен и зданий объекта.
         public LiveBuilderCutTargets CutTargets
         {
             get => cutTargets;
@@ -136,6 +138,8 @@ namespace FeatherKit.LiveBuilder
         }
 
         public IReadOnlyList<BoxModelEdgeChamfer> Chamfers => chamfers;
+
+        public LiveBuilderTextureFitList<BoxModelSideSlot> TextureFits => textureFits ??= new LiveBuilderTextureFitList<BoxModelSideSlot>();
 
 
         // ── Скосы ────────────────────────────────────────────────────────

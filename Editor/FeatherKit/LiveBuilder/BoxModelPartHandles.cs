@@ -115,6 +115,28 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Вырез-коробка — как вырезающая коробка: тянешь грань — она ходит по сетке, опора выреза остаётся в его углу.
+        public static void DrawHandles(BoxModel model, GeometryCutter cutterBox)
+        {
+            var size = new Vector3(cutterBox.Width, cutterBox.Height, cutterBox.Depth);
+            DrawBoundsHandle(model, cutterBox, cutterBox.transform, size, CutColor, newSize => BoxModelFactory.ShapeAsBox(cutterBox, newSize));
+        }
+
+
+        // Ручки коробки — только у выреза-коробки с опорой в углу и осями объекта: такие ставят инструменты. Остальным — ручки выреза.
+        public static bool HasBoxHandles(BoxModel model, GeometryCutter cutter)
+        {
+            const float tolerance = 0.0001f;
+
+            if (model == null || !GeometryCutterSolverBoxes.IsSolverPieceOf(cutter, model))
+                return false;
+
+            var cornerOffset = new Vector3(cutter.Width / 2f, 0f, cutter.Depth / 2f);
+            var relativeRotation = Quaternion.Inverse(model.transform.rotation) * cutter.transform.rotation;
+            return (cutter.ShapeOffset - cornerOffset).sqrMagnitude < tolerance * tolerance && Quaternion.Angle(relativeRotation, Quaternion.identity) < 0.01f;
+        }
+
+
         // То же для комнаты — по её внутреннему размеру.
         public static void DrawHandles(BoxModel model, BoxModelRoom room)
         {
@@ -126,7 +148,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Число ступеней — от высоты, глубина ступени — под длину марша.
         public static void DrawHandles(BoxModel model, BoxModelStairs stairs)
         {
-            var axisNames = stairs.RunAxis == 0 ? new[] { "длина", "высота", "ширина" } : new[] { "ширина", "высота", "длина" };
+            var axisNames = stairs.RunAxis == 0 ? new[] { "length", "height", "width" } : new[] { "width", "height", "length" };
             DrawStairsDirection(model, stairs);
 
             DrawBoundsHandle(model, stairs, stairs.transform, stairs.Size, AddColor, size =>
@@ -164,10 +186,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 Handles.DrawAAPolyLine(4f, head + side, end, head - side);
             }
 
-            var landing = stairs.IsSwitchback ? " · площадка " + LiveBuilderSceneText.FormatMeters(stairs.LandingDepth) + " м на середине" : "";
-            LiveBuilderSceneText.DrawLabel(model.transform.TransformPoint(min + size), stairs.StepCount + " ступеней · подъём " +
-                                                                                       LiveBuilderSceneText.FormatMeters(stairs.Height / stairs.StepCount) + " · глубина " +
-                                                                                       LiveBuilderSceneText.FormatMeters(stairs.StepDepth) + " м" + landing);
+            var landing = stairs.IsSwitchback ? " · landing " + LiveBuilderSceneText.FormatMeters(stairs.LandingDepth) + " m halfway" : "";
+            LiveBuilderSceneText.DrawLabel(model.transform.TransformPoint(min + size), stairs.StepCount + " steps · rise " +
+                                                                                       LiveBuilderSceneText.FormatMeters(stairs.Height / stairs.StepCount) + " · tread " +
+                                                                                       LiveBuilderSceneText.FormatMeters(stairs.StepDepth) + " m" + landing);
         }
 
 

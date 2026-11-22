@@ -7,6 +7,7 @@ namespace FeatherKit.Tests.LiveBuilder
     /// Нажимает инструмент Live Builder из проверок так же, как окно сцены (<see cref="LiveBuilderSceneTool"/>): нажатие, протягивание, отпускание,
     /// клавиши и Esc — лучами в мире, без окна сцены и камеры. Протягивание начинается, как в окне, только после нажатия; Esc, который инструмент
     /// не забрал, бросает начатое (<see cref="LiveBuilderTool.Cancel"/>). Мышью задавать глубину и высоту нельзя — у них нет камеры; их набирают цифрами.
+    /// Действие закончено — черновики доводятся сразу (<see cref="LiveBuilderDraftBuilds.FinishAll"/>), как будто прошли 0,3 с: проверки бьют лучом по коллайдеру.
     /// </summary>
     public sealed class LiveBuilderToolDriver
     {
@@ -32,6 +33,7 @@ namespace FeatherKit.Tests.LiveBuilder
             if (!isTaken)
                 tool.OnMouseUp(MouseEvent(EventType.MouseUp, isShiftHeld));
 
+            FinishDraftsIfDone();
             return isTaken;
         }
 
@@ -40,10 +42,14 @@ namespace FeatherKit.Tests.LiveBuilder
         public void Drag(Ray fromRay, Ray toRay)
         {
             if (tool.OnMouseDown(fromRay, MouseEvent(EventType.MouseDown, false)))
+            {
+                FinishDraftsIfDone();
                 return;
+            }
 
             tool.OnMouseDrag(fromRay, toRay, true);
             tool.OnMouseUp(MouseEvent(EventType.MouseUp, false));
+            FinishDraftsIfDone();
         }
 
 
@@ -60,6 +66,7 @@ namespace FeatherKit.Tests.LiveBuilder
         public void Release()
         {
             tool.OnMouseUp(MouseEvent(EventType.MouseUp, false));
+            FinishDraftsIfDone();
         }
 
 
@@ -74,13 +81,13 @@ namespace FeatherKit.Tests.LiveBuilder
         // Клавиша, как в окне сцены: сначала инструменту; Esc, который он не забрал, бросает начатое. Возвращает, забрал ли инструмент клавишу.
         public bool Press(KeyCode key)
         {
-            if (tool.OnKeyDown(new Event { type = EventType.KeyDown, keyCode = key }))
-                return true;
+            var isTaken = tool.OnKeyDown(new Event { type = EventType.KeyDown, keyCode = key });
 
-            if (key == KeyCode.Escape && tool.IsBusy)
+            if (!isTaken && key == KeyCode.Escape && tool.IsBusy)
                 tool.Cancel();
 
-            return false;
+            FinishDraftsIfDone();
+            return isTaken;
         }
 
 
@@ -104,6 +111,12 @@ namespace FeatherKit.Tests.LiveBuilder
 
 
         // ── Помощники ────────────────────────────────────────────────────
+
+        private void FinishDraftsIfDone()
+        {
+            if (!tool.IsBusy)
+                LiveBuilderDraftBuilds.FinishAll();
+        }
 
         private static Event MouseEvent(EventType type, bool isShiftHeld)
         {

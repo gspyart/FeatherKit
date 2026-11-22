@@ -49,12 +49,14 @@ namespace FeatherKit.Tests.LiveBuilder
 
 
         [Test]
-        public void CutterCopiesUp_CutsEveryCopy()
+        public void CutterRepeatedUp_CutsEveryCopy()
         {
             var wall = testScene.CreateWall(Vector3.zero, new Vector3(10f, 0f, 0f));
             var window = CreateWindow(wall, 4f, 2f, 1.5f);
-            window.CopiesUp = 2;
-            window.CopyStep = 2f;
+            var array = window.gameObject.AddComponent<LiveBuilderArray>();
+            array.CountY = 2;
+            array.StepY = 2f;
+            array.StepYIsStoreyHeight = false;
             SplineWallRebuilder.Rebuild(wall);
 
             Assert.IsTrue(LiveBuilderTestScene.IsOpen(Origin + new Vector3(5f, 2.75f, -2f), Vector3.forward, 4f), "копия выше — тоже дыра");
@@ -85,6 +87,10 @@ namespace FeatherKit.Tests.LiveBuilder
             var wall = testScene.CreateWall(Vector3.zero, new Vector3(10f, 0f, 0f));
             CreateWindow(wall, 1f, 2f, 1.5f);
             CreateWindow(wall, 6f, 2f, 1.5f);
+
+            // Текстура по миру при переносе законно меняет подпись — здесь проверяем только вырезы.
+            wall.TextureAlignment = LiveBuilderTextureAlignment.Object;
+            SplineWallRebuilder.Rebuild(wall);
             var signature = wall.BuiltSignature;
 
             for (var step = 1; step <= 12; step++)
@@ -165,7 +171,7 @@ namespace FeatherKit.Tests.LiveBuilder
         // ── Здание ───────────────────────────────────────────────────────
 
         [Test]
-        public void CutterInBuilding_LinkedToAllStoreys()
+        public void CutterInBuilding_RepeatedOnAllStoreys()
         {
             var building = testScene.CreateBuilding(3, Vector3.zero, new Vector3(8f, 0f, 0f), new Vector3(8f, 0f, 8f), new Vector3(0f, 0f, 8f));
             var paths = SplineWallPath.FromContainer(building.GetComponent<SplineContainer>(), building.CurveStep);
@@ -174,10 +180,10 @@ namespace FeatherKit.Tests.LiveBuilder
 
             var window = BoxModelFactory.CreateCutter(building.transform, building.transform.TransformPoint(bottom), building.transform.rotation * rotation, new Vector2(2f, 1.5f), depth);
             window.FollowsWallLine = true;
-            SplineBuildingLinkSync.Attach(window.gameObject, building, true);
-            SplineBuildingRebuilder.Rebuild(building);
+            SplineBuildingInteriorPlacement.PutCutterOnStorey(window, building, true);
+            LiveBuilderRebuildQueue.RunFinalPassNow();
 
-            Assert.AreEqual(3, window.CopiesUp, "копий — по числу этажей");
+            Assert.AreEqual(3, LiveBuilderArrayCopyPoses.CutterCopiesOf(window).Count, "копий — по числу этажей");
 
             for (var storey = 0; storey < 3; storey++)
             {

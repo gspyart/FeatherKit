@@ -5,7 +5,6 @@ using System.Text;
 using FeatherKit.LevelDesign;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 
 namespace FeatherKit.EditorTools
@@ -24,8 +23,6 @@ namespace FeatherKit.EditorTools
     {
         // Скрыты в иерархии и инспекторе, не сохраняются ни в сцену, ни в сборку.
         private const HideFlags PreviewFlags = HideFlags.HideAndDontSave;
-
-        private const string ProBuilderMeshTypeName = "UnityEngine.ProBuilder.ProBuilderMesh";
 
 
         // Копии появились, переехали или ушли: то, что от них зависит (вырезы копий режут стены), пора сверить.
@@ -78,23 +75,7 @@ namespace FeatherKit.EditorTools
         private static GameObject CreateCopy(ArrayModifier array)
         {
             var original = array.gameObject;
-            var parent = original.transform.parent;
-            GameObject copy;
-
-            if (PrefabUtility.IsOutermostPrefabInstanceRoot(original))
-            {
-                var prefab = PrefabUtility.GetCorrespondingObjectFromSource(original);
-                copy = parent != null ? (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent) : (GameObject)PrefabUtility.InstantiatePrefab(prefab, original.scene);
-
-                PrefabUtility.SetPropertyModifications(copy, PrefabUtility.GetPropertyModifications(original));
-            }
-            else
-            {
-                copy = Object.Instantiate(original, parent);
-
-                if (parent == null)
-                    SceneManager.MoveGameObjectToScene(copy, original.scene);
-            }
+            var copy = ObjectCopyFactory.Instantiate(original, original.transform.parent);
 
             // У копии модификатора нет — даже если он в самом префабе.
             foreach (var copyArray in copy.GetComponents<ArrayModifier>())
@@ -103,88 +84,10 @@ namespace FeatherKit.EditorTools
             var marker = copy.AddComponent<ArrayPreviewCopy>();
             marker.Owner = array;
             SetFlagsInHierarchy(copy, PreviewFlags);
-            DetachSceneMeshes(copy);
-            BuildGeneratedMeshes(original, copy);
-            CopyMissingMeshes(original, copy);
+            ObjectCopyFactory.GiveOwnMeshes(original, copy, PreviewFlags);
 
             array.PreviewCopies.Add(copy);
             return copy;
-        }
-
-        // Меш не из файла — собранный для оригинала (ProBuilder): копии нужен свой, иначе сборка копии писала бы в меш оригинала.
-        private static void DetachSceneMeshes(GameObject copy)
-        {
-            foreach (var filter in copy.GetComponentsInChildren<MeshFilter>(true))
-                if (filter.sharedMesh != null && !EditorUtility.IsPersistent(filter.sharedMesh))
-                    filter.sharedMesh = null;
-        }
-
-        // Меш, которого нет в файле, а его собирает компонент, — ProBuilder: у скрытой копии он сам его не собирает.
-        // Просим собрать копии свой меш (MakeUnique): клон помнит меш оригинала, и обычная сборка писала бы в него.
-        // ProBuilder зовём по имени: FeatherKit от него не зависит. Собранный меш — копии, живёт и уходит вместе с ней.
-        private static void BuildGeneratedMeshes(GameObject original, GameObject copy)
-        {
-            var originalMeshes = MeshesOf(original);
-
-            foreach (var component in copy.GetComponentsInChildren<Component>(true))
-            {
-                if (component == null || component.GetType().FullName != ProBuilderMeshTypeName)
-                    continue;
-
-                InvokeWithDefaults(component, "MakeUnique");
-
-                if (component.TryGetComponent<MeshFilter>(out var filter) && filter.sharedMesh != null
-                                                                           && !EditorUtility.IsPersistent(filter.sharedMesh) && !originalMeshes.Contains(filter.sharedMesh))
-                    filter.sharedMesh.hideFlags = PreviewFlags;
-            }
-        }
-
-        private static HashSet<Mesh> MeshesOf(GameObject root)
-        {
-            var meshes = new HashSet<Mesh>();
-
-            foreach (var filter in root.GetComponentsInChildren<MeshFilter>(true))
-                if (filter.sharedMesh != null)
-                    meshes.Add(filter.sharedMesh);
-
-            return meshes;
-        }
-
-        private static void InvokeWithDefaults(Component component, string methodName)
-        {
-            foreach (var method in component.GetType().GetMethods())
-            {
-                if (method.Name != methodName)
-                    continue;
-
-                var parameters = method.GetParameters();
-
-                if (!System.Array.TrueForAll(parameters, parameter => parameter.HasDefaultValue))
-                    continue;
-
-                method.Invoke(component, System.Array.ConvertAll(parameters, parameter => parameter.DefaultValue));
-                return;
-            }
-        }
-
-        // Остальные пустые меши (собирает не ProBuilder) — своя копия меша оригинала. Части совпадают по порядку в иерархии.
-        private static void CopyMissingMeshes(GameObject original, GameObject copy)
-        {
-            var originalFilters = original.GetComponentsInChildren<MeshFilter>(true);
-            var copyFilters = copy.GetComponentsInChildren<MeshFilter>(true);
-
-            for (var index = 0; index < copyFilters.Length && index < originalFilters.Length; index++)
-            {
-                var originalMesh = originalFilters[index].sharedMesh;
-
-                if (copyFilters[index].sharedMesh != null || originalMesh == null)
-                    continue;
-
-                var ownMesh = Object.Instantiate(originalMesh);
-                ownMesh.name = originalMesh.name;
-                ownMesh.hideFlags = PreviewFlags;
-                copyFilters[index].sharedMesh = ownMesh;
-            }
         }
 
         // Место и поворот — от самого объекта, масштаб — его; имя по номеру. Меняется только то, что отличается.

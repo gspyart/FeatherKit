@@ -56,27 +56,51 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Запись ───────────────────────────────────────────────────────
 
-        // fill кладёт в меш геометрию и отдаёт материалы его частей. Вырезы — known, а нет их — те, что режут собранную геометрию.
-        // Файл — свой у постройки (fileName — имя нового файла; пусто — имя объекта).
-        // Новый файл встаёт на объект сразу, до сборки: упала сборка — следующий проход возьмёт этот же файл, а не заведёт ещё один.
-        public static LiveBuilderMeshWriteResult Write(Component owner, string fileName, System.Func<Mesh, Material[]> fill, List<GeometryCutter> knownCutters = null)
+        // Файл встаёт на объект сразу, до сборки: упала сборка — следующий проход возьмёт этот же файл, а не заведёт ещё один.
+        // Черновик с подписью до вырезов uncutKey, пока двигают проём, режет заготовку (<see cref="GeometryCutterDragBlanks"/>) — тогда и без fill.
+        public static LiveBuilderMeshWriteResult Write(Component owner, string fileName, System.Func<Mesh, Material[]> fill, List<GeometryCutter> knownCutters = null,
+            LiveBuilderBuildQuality quality = LiveBuilderBuildQuality.Final, string uncutKey = null)
         {
             var filter = owner.GetComponent<MeshFilter>();
-            ReleaseIfNotOwn(owner, filter);
-            var mesh = BoxModelMeshStorage.GetOrCreateMeshFile(owner, fileName);
-            var isNewMesh = filter.sharedMesh != mesh;
+            Mesh mesh;
+            bool isNewMesh;
 
-            if (isNewMesh)
+            using (LiveBuilderRebuildProfiler.Measure(LiveBuilderRebuildStage.MeshFile))
             {
-                filter.sharedMesh = mesh;
-                EditorUtility.SetDirty(filter);
-                LiveBuilderSyncEdits.RecordPrefabInstance(filter);
+                ReleaseIfNotOwn(owner, filter);
+                mesh = BoxModelMeshStorage.GetOrCreateMeshFile(owner, fileName);
+                isNewMesh = filter.sharedMesh != mesh;
+
+                if (isNewMesh)
+                {
+                    filter.sharedMesh = mesh;
+                    EditorUtility.SetDirty(filter);
+                    LiveBuilderSyncEdits.RecordPrefabInstance(filter);
+                }
             }
 
-            var materials = fill(mesh);
-            var cutters = knownCutters ?? GeometryCutterLookup.CuttersFor(owner, GeometryCutterLookup.WorldBoundsOf(mesh, owner.transform));
-            materials = GeometryCutterApplier.Cut(mesh, owner.transform, cutters, materials);
+            var usesDragBlank = quality == LiveBuilderBuildQuality.Draft && uncutKey != null && GeometryCutterDragBlanks.HasMovingCutters;
+            List<GeometryCutter> cutters = null;
+            Material[] materials = null;
+            bool isCutFromBlank;
 
+            using (LiveBuilderRebuildProfiler.Measure(LiveBuilderRebuildStage.Cutters))
+                isCutFromBlank = usesDragBlank && GeometryCutterDragBlanks.TryCutFromBlank(owner, mesh, uncutKey, knownCutters, out cutters, out materials);
+
+            if (!isCutFromBlank)
+            {
+                materials = fill(mesh);
+
+                using (LiveBuilderRebuildProfiler.Measure(LiveBuilderRebuildStage.Cutters))
+                {
+                    cutters = knownCutters ?? GeometryCutterLookup.CuttersFor(owner, GeometryCutterLookup.WorldBoundsOf(mesh, owner.transform));
+                    materials = usesDragBlank
+                        ? GeometryCutterDragBlanks.CutAndRememberBlank(owner, mesh, uncutKey, cutters, materials)
+                        : GeometryCutterApplier.Cut(mesh, owner.transform, cutters, materials);
+                }
+            }
+
+            GeometryCutterLastTargets.Remember(owner, cutters);
             EditorUtility.SetDirty(mesh);
             BoxModelMeshStorage.RequestSave(mesh);
 

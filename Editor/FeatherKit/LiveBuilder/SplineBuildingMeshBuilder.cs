@@ -30,25 +30,19 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static readonly HashSet<EntityId> BuildingsWarnedAboutContour = new();
 
 
-        // Геометрия каждой части здания: стены и пол каждого этажа, крыша. Стены этажа — от низа его плиты до низа плиты следующего,
-        // у верхнего — до верха крыши; так спрятанный этаж сверху закрыт срезом стен.
+        // Геометрия частей здания, которые просит isPartNeeded (null — всех): стены и пол каждого этажа, крыша.
+        // Стены этажа — от низа его плиты до низа плиты следующего, у верхнего — до верха крыши; так спрятанный этаж сверху закрыт срезом стен.
         public static List<SplineBuildingPartGeometry> BuildParts(SplineBuilding building, IReadOnlyList<SplineWallPath> paths,
-            IReadOnlyList<List<SplineWallHole>> wallHolesByPath, IReadOnlyList<SplineBuildingSlabHole> slabHoles)
+            IReadOnlyList<List<SplineWallHole>> wallHolesByPath, IReadOnlyList<SplineBuildingSlabHole> slabHoles,
+            System.Func<SplineBuildingPartKind, int, bool> isPartNeeded = null)
         {
             var parts = new List<SplineBuildingPartGeometry>();
-            var storeyCount = building.StoreyCount;
 
-            for (var storey = 0; storey < storeyCount; storey++)
-            {
-                parts.Add(new SplineBuildingPartGeometry(SplineBuildingPartKind.Walls, storey));
+            foreach (var (kind, storey) in PartsOf(building))
+                if (isPartNeeded == null || isPartNeeded(kind, storey))
+                    parts.Add(new SplineBuildingPartGeometry(kind, storey));
 
-                if (storey > 0 || building.HasFloor)
-                    parts.Add(new SplineBuildingPartGeometry(SplineBuildingPartKind.Floor, storey));
-            }
-
-            if (building.HasRoof)
-                parts.Add(new SplineBuildingPartGeometry(SplineBuildingPartKind.Roof, 0));
-
+            var slabParts = parts.FindAll(part => part.Kind != SplineBuildingPartKind.Walls);
             var isContourComplete = true;
 
             for (var index = 0; index < paths.Count; index++)
@@ -57,40 +51,66 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var insideSign = InsideSignOf(path);
                 GetWallOffsets(building, insideSign, out var leftOffset, out var rightOffset);
 
-                for (var storey = 0; storey < storeyCount; storey++)
+                foreach (var part in parts)
                 {
-                    var isTopStorey = storey == storeyCount - 1;
+                    if (part.Kind != SplineBuildingPartKind.Walls)
+                        continue;
+
+                    var isTopStorey = part.Storey == building.StoreyCount - 1;
                     var submeshes = new SplineWallFaceSubmeshes(insideSign > 0f ? InnerWallSubmesh : OuterWallSubmesh,
                         insideSign > 0f ? OuterWallSubmesh : InnerWallSubmesh, isTopStorey ? RoofSubmesh : OuterWallSubmesh, OuterWallSubmesh);
-                    var bottom = storey == 0 ? 0f : FloorTopOf(building, storey) - building.SlabThickness;
-                    // Верхний этаж — до крыши, а с парапетом стены продолжаются над ней бортиком.
-                    var top = isTopStorey ? building.TotalHeight + building.ParapetRise : FloorTopOf(building, storey + 1) - building.SlabThickness;
-                    SplineWallMeshBuilder.AddWalls(Find(parts, SplineBuildingPartKind.Walls, storey).Geometry, path, wallHolesByPath[index],
-                        leftOffset, rightOffset, bottom, top, submeshes);
+                    SplineWallMeshBuilder.AddWalls(part.Geometry, path, wallHolesByPath[index], leftOffset, rightOffset,
+                        WallsBottomOf(building, part.Storey), WallsTopOf(building, part.Storey), submeshes);
                 }
 
                 var innerOffset = insideSign > 0f ? rightOffset : leftOffset;
-                isContourComplete &= AddSlabs(parts, building, path, innerOffset, slabHoles);
+
+                if (slabParts.Count > 0)
+                    isContourComplete &= AddSlabs(slabParts, building, path, innerOffset, slabHoles);
             }
 
-            ReportBrokenContour(building, isContourComplete);
+            // Плиты у здания есть, но их не строили — контур не разрезали: прежнее предупреждение остаётся как было.
+            if (slabParts.Count > 0 || !HasSlabs(building))
+                ReportBrokenContour(building, isContourComplete);
+
             return parts;
         }
+
 
         // Контур не разрезался на треугольники целиком — часть плит пропала: сказать один раз, со ссылкой на здание.
         private static void ReportBrokenContour(SplineBuilding building, bool isContourComplete)
         {
-            var hasSlabs = building.HasFloor || building.HasRoof || building.StoreyCount > 1;
-
-            if (isContourComplete || !hasSlabs)
+            if (isContourComplete || !HasSlabs(building))
             {
                 BuildingsWarnedAboutContour.Remove(building.GetEntityId());
                 return;
             }
 
             if (BuildingsWarnedAboutContour.Add(building.GetEntityId()))
-                Debug.LogWarning("Live Builder: контур здания «" + building.name + "» пересекает сам себя — часть пола и крыши не построена.", building);
+                Debug.LogWarning("Live Builder: the contour of building '" + building.name + "' crosses itself, part of the floor and roof is not built.", building);
         }
+
+        private static bool HasSlabs(SplineBuilding building)
+        {
+            return building.HasFloor || building.HasRoof || building.StoreyCount > 1;
+        }
+
+
+        // Какие части должны быть у здания по его числам, по порядку: стены и пол каждого этажа, крыша.
+        public static IEnumerable<(SplineBuildingPartKind Kind, int Storey)> PartsOf(SplineBuilding building)
+        {
+            for (var storey = 0; storey < building.StoreyCount; storey++)
+            {
+                yield return (SplineBuildingPartKind.Walls, storey);
+
+                if (storey > 0 || building.HasFloor)
+                    yield return (SplineBuildingPartKind.Slab, storey);
+            }
+
+            if (building.HasRoof)
+                yield return (SplineBuildingPartKind.Roof, 0);
+        }
+
 
         // Контур здания пересекает сам себя — по его точкам, сразу, или пол не разрезался целиком при сборке. Для предупреждения в инспекторе.
         public static bool IsContourBroken(SplineBuilding building)
@@ -119,15 +139,24 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Низ стен этажа над контуром, м: у первого — от линии контура, у остальных — от низа плиты этажа.
+        public static float WallsBottomOf(SplineBuilding building, int storey)
+        {
+            return storey == 0 ? 0f : FloorTopOf(building, storey) - building.SlabThickness;
+        }
+
+
+        // Верх стен этажа над контуром, м: у верхнего — до крыши, а с парапетом стены продолжаются над ней бортиком.
+        public static float WallsTopOf(SplineBuilding building, int storey)
+        {
+            return storey == building.StoreyCount - 1 ? building.TotalHeight + building.ParapetRise : FloorTopOf(building, storey + 1) - building.SlabThickness;
+        }
+
+
         // Верх пола этажа над контуром, м.
         private static float FloorTopOf(SplineBuilding building, int storey)
         {
             return building.FloorTopHeight + storey * building.StoreyHeight;
-        }
-
-        private static SplineBuildingPartGeometry Find(List<SplineBuildingPartGeometry> parts, SplineBuildingPartKind kind, int storey)
-        {
-            return parts.Find(part => part.Kind == kind && (kind == SplineBuildingPartKind.Roof || part.Storey == storey));
         }
 
 
@@ -219,34 +248,41 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Перекрытия ───────────────────────────────────────────────────
 
-        // Пол снизу, перекрытия между этажами, крыша сверху — плиты по внутренней стороне стен, каждая в свою часть.
-        // Возвращает, разрезался ли контур на треугольники целиком.
-        private static bool AddSlabs(List<SplineBuildingPartGeometry> parts, SplineBuilding building, SplineWallPath path, float innerOffset,
+        // Плиты частей: пол снизу, перекрытия между этажами, крыша сверху — по внутренней стороне стен. Возвращает, разрезался ли контур на треугольники целиком.
+        private static bool AddSlabs(List<SplineBuildingPartGeometry> slabParts, SplineBuilding building, SplineWallPath path, float innerOffset,
             IReadOnlyList<SplineBuildingSlabHole> slabHoles)
         {
             var outline = ContourOf(path, innerOffset);
             var baseHeight = path.BaseHeightAt(0f);
             var triangles = PlanPolygons.Triangulate(outline, out var isContourComplete);
-            var slab = building.SlabThickness;
 
-            if (building.HasFloor)
-                AddSlab(Find(parts, SplineBuildingPartKind.Floor, 0).Geometry, outline, triangles, slabHoles, baseHeight, baseHeight + building.FloorTopHeight,
-                    FloorSubmesh, -1);
-
-            for (var storey = 1; storey < building.StoreyCount; storey++)
+            foreach (var part in slabParts)
             {
-                var top = baseHeight + FloorTopOf(building, storey);
-                AddSlab(Find(parts, SplineBuildingPartKind.Floor, storey).Geometry, outline, triangles, slabHoles, top - slab, top, FloorSubmesh, CeilingSubmesh);
-            }
-
-            if (building.HasRoof)
-            {
-                var roofTop = baseHeight + building.TotalHeight;
-                AddSlab(Find(parts, SplineBuildingPartKind.Roof, 0).Geometry, outline, triangles, slabHoles, roofTop - slab, roofTop, RoofSubmesh, CeilingSubmesh);
+                var (bottom, top) = SlabHeightsOf(building, part.Kind, part.Storey, baseHeight);
+                var bottomSubmesh = part.Kind == SplineBuildingPartKind.Slab && part.Storey == 0 ? -1 : CeilingSubmesh;
+                AddSlab(part.Geometry, outline, triangles, slabHoles, bottom, top, part.Kind == SplineBuildingPartKind.Roof ? RoofSubmesh : FloorSubmesh, bottomSubmesh);
             }
 
             return isContourComplete;
         }
+
+
+        // Низ и верх плиты части — пола, перекрытия или крыши — над нулём здания, если линия контура на высоте baseHeight.
+        public static (float Bottom, float Top) SlabHeightsOf(SplineBuilding building, SplineBuildingPartKind kind, int storey, float baseHeight)
+        {
+            if (kind == SplineBuildingPartKind.Roof)
+            {
+                var roofTop = baseHeight + building.TotalHeight;
+                return (roofTop - building.SlabThickness, roofTop);
+            }
+
+            if (storey == 0)
+                return (baseHeight, baseHeight + building.FloorTopHeight);
+
+            var top = baseHeight + FloorTopOf(building, storey);
+            return (top - building.SlabThickness, top);
+        }
+
 
         // Плита: верх и низ — треугольники контура за вычетом дыр, которые проходят через эту плиту, и торцы по краям дыр (частью меша 0).
         // Низ −1 — без нижней стороны. Общая у перекрытий здания и пола с потолком замкнутой стены (<see cref="SplineWallMeshBuilder"/>).
@@ -260,8 +296,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 pieces.Add(new List<Vector2>(triangle));
 
             foreach (var hole in slabHoles)
-                // С допуском в миллиметр: вырез вровень с плитой (до потолка) не пробивает соседнее перекрытие из-за погрешности.
-                if (hole.Bottom < top - 0.001f && hole.Top > bottom + 0.001f)
+                if (IsHoleThrough(hole, bottom, top))
                 {
                     pieces = PlanPolygons.SubtractConvex(pieces, hole.Corners);
                     holesThrough.Add(new List<Vector2>(hole.Corners));
@@ -280,6 +315,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 }
         }
 
+        // С допуском в миллиметр: вырез вровень с плитой (до потолка) не пробивает соседнее перекрытие из-за погрешности.
+        public static bool IsHoleThrough(SplineBuildingSlabHole hole, float bottom, float top)
+        {
+            return hole.Bottom < top - 0.001f && hole.Top > bottom + 0.001f;
+        }
+
         // Торцы плиты по краям дыры holeIndex — там, где край идёт по плите: не по пустоте за стенами и не по соседней дыре,
         // которая заходит на эту. Лицом внутрь дыры.
         private static void AddHoleEdges(SplineWallGeometry geometry, List<Vector2> outline, List<List<Vector2>> holes, int holeIndex, float bottom, float top)
@@ -290,6 +331,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (PlanPolygons.SignedArea(corners) < 0f)
                 corners.Reverse();
+
+            geometry.SetTextureAxes(SplineWallTextureAxes.HoleEdge());
 
             for (var index = 0; index < corners.Count; index++)
             {
@@ -312,6 +355,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private static void AddFlatTriangle(SplineWallGeometry geometry, Vector2 first, Vector2 second, Vector2 third, float height, Vector3 normal, int submesh)
         {
+            geometry.SetTextureAxes(SplineWallTextureAxes.Plan(SplineWallFaceKind.Flat));
             geometry.AddTriangle(FlatVertex(first, height, normal), FlatVertex(second, height, normal), FlatVertex(third, height, normal), submesh);
         }
 

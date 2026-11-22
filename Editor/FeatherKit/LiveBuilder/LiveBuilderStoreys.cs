@@ -3,6 +3,7 @@ using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
 
 namespace FeatherKit.EditorTools.LiveBuilder
 {
@@ -107,7 +108,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Номер текущего этажа для людей — как в жизни и у зданий: первый этаж — 1, подвалы — −1, −2. Сам этаж хранится с нуля.
         public static int CurrentStoreyNumber
         {
-            get => currentStorey >= 0 ? currentStorey + 1 : currentStorey;
+            get => NumberOf(currentStorey);
             set => CurrentStorey = value > 0 ? value - 1 : value;
         }
 
@@ -180,7 +181,32 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // ── Нумерация ────────────────────────────────────────────────────
+
+        // Номер этажа уровня для людей по этажу с нуля — одна нумерация на уровень и здания: 0 → 1, −1 → −1 (подвал без нулевого).
+        public static int NumberOf(int storey)
+        {
+            return storey >= 0 ? storey + 1 : storey;
+        }
+
+
         // ── Этажи уровня в сцене ─────────────────────────────────────────
+
+        // Высота этажа уровня этой сцены, м: из самой сцены, а нет их там — свои числа. Здания сверяются со своей сценой, а не с активной.
+        public static float StoreyHeightIn(Scene scene)
+        {
+            var sceneStoreys = LiveBuilderLevelStoreysInScene.FindIn(scene);
+            return sceneStoreys != null ? sceneStoreys.StoreyHeight : personalStoreyHeight;
+        }
+
+
+        // Пол первого этажа уровня этой сцены в мире, м.
+        public static float GroundLevelIn(Scene scene)
+        {
+            var sceneStoreys = LiveBuilderLevelStoreysInScene.FindIn(scene);
+            return sceneStoreys != null ? sceneStoreys.GroundLevel : personalGroundLevel;
+        }
+
 
         // Положить этажи уровня в активную сцену с нынешними числами — у всех, кто её откроет, этажи будут те же. Уже там — ничего не меняет.
         public static void StoreInScene()

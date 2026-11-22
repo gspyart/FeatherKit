@@ -40,12 +40,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Показан ли контур: выделено одно здание, стена или комната по контуру.
         public static bool IsShown => LiveBuilderContourSelection.Owner != null;
 
+        // Клавиши ←↑→↓, двойной клик и C — в шпаргалке (<see cref="LiveBuilderSceneKeys"/>).
         public static string Hint => LiveBuilderContourSelection.Knots.Count > 0
-            ? "Выбрано точек: " + LiveBuilderContourSelection.Knots.Count + ". Тяни точку или ручки переноса в середине — двигать все" +
-              (LiveBuilderContourSelection.Owner is SplineWall ? " (вверх тоже)" : "") + ", клавиши ←↑→↓ — на шаг сетки, Delete — убрать, " +
-              "двойной клик — угол, плавно или Безье, у угла — голубая ручка: скругление, Esc — снять выбор"
-            : "Точки контура: тяни — двигать, «+» — новая точка, рамка по пустому месту или Shift+клик — выбрать несколько, двойной клик — угол, плавно или Безье" +
-              (LiveBuilderContourSelection.Owner is SplineWall ? ", C — замкнуть или разомкнуть" : "");
+            ? LiveBuilderContourSelection.Knots.Count + " points selected — drag one to move all " + LiveBuilderHintKeys.Key("Delete") + " remove " +
+              LiveBuilderHintKeys.Key("blue handle") + " round the corner " + LiveBuilderHintKeys.Esc + " deselect points"
+            : "Drag a point — move " + LiveBuilderHintKeys.Key("+") + " new point " + LiveBuilderHintKeys.Shift + " + click — select several";
 
         // Тянут точку, ус, рамку или стрелки выбранных — мышь занята правкой контура.
         public bool IsGestureActive => drag.IsDragging || boxSelect.IsSelecting || moveHandle.IsDragging;

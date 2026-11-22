@@ -2,17 +2,15 @@ using System.Collections.Generic;
 using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.Splines;
 
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Инструмент «Комната»: протянул прямоугольник на полу — комната (<see cref="BoxModelRoom"/>) на высоту этажа (этаж минус перекрытие).
-    /// Внутри дома (пол под потолком того же объекта или сплошной объём) — без стен вокруг: комната вырезается в его объёме.
-    /// В пустоте — со стенами, полом и потолком вокруг: куда встают стены от нарисованного — наружу, внутрь или по центру — по настройке «Линия по стенам».
-    /// Толщины и материалы — из <see cref="LiveBuilderRoomSettings"/>; потом всё это — числа самой комнаты. Пока тянешь, объект уже показан с комнатой.
-    /// В здании по контуру — не коробки, а одна замкнутая перегородка-комната (стена по линии): стороны, что легли на его стены, не строятся,
-    /// но остаются в контуре — поменяешь потом форму комнаты или здания, они пересчитаются. Высота — до потолка его этажа, на этом этаже или на всех выше.
+    /// Режим Room «Коробки»: протянул прямоугольник на полу — комната (<see cref="BoxModelRoom"/>) на высоту этажа (этаж минус перекрытие).
+    /// - в пустоте — со стенами, полом и потолком вокруг; куда встают стены от нарисованного — по настройке «Линия по стенам»
+    /// - в доме из коробок — только пустота: стены — то, что осталось от его объёма
+    /// - в здании — в его этаж: стены толщиной перегородки, на его стенах не строятся; пол и потолок — его перекрытия
+    /// Пока тянешь, объект уже показан с комнатой; толщины и материалы — из <see cref="LiveBuilderRoomSettings"/>.
     /// </summary>
     public sealed class LiveBuilderRoomGesture
     {
@@ -26,19 +24,26 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public bool IsActive => rectangle.IsActive;
 
         public string Hint => rectangle.TypedText.Length > 0
-            ? "Набрано " + rectangle.TypedText + " м: X — вторая сторона; отпусти — комната ровно такая. Backspace — стереть цифру, Esc — стереть набор"
-            : rectangle.BuildingContext != null
-                ? "Тяни — комната, встанут только недостающие перегородки; «4 X 3» — точно. Отпусти — готово"
-                : rectangle.IsInsideModel
-                    ? "Тяни — размер комнаты, она вырежется в доме; «4 X 3» — точно. Отпусти — готово. Esc — отмена"
-                    : "Тяни — комната, стены встанут " + WallSideText + "; «4 X 3» — точно. Отпусти — готово. Esc — отмена";
+            ? "Typed " + rectangle.TypedText + " m " + LiveBuilderHintKeys.Bound(LiveBuilderShortcutIds.Times) + " other side " + LiveBuilderHintKeys.Key("release") +
+              " exactly this " + LiveBuilderHintKeys.Esc + " clear typing"
+            : (rectangle.BuildingContext != null
+                  ? "Drag — a room, walls only where the building has none, release — done "
+                  : rectangle.IsInsideModel
+                      ? "Drag — a room cut into the house, release — done "
+                      : "Drag — a room, walls go " + WallSideText + ", release — done ") +
+              LiveBuilderHintKeys.Key("4 X 3") + " exact " + LiveBuilderHintKeys.Esc + " cancel";
 
         private static string WallSideText => LiveBuilderRoomSettings.WallSide switch
         {
-            LiveBuilderRoomWallSide.Inward => "внутрь",
-            LiveBuilderRoomWallSide.Centered => "по центру линии",
-            _ => "снаружи"
+            LiveBuilderRoomWallSide.Inward => "inward",
+            LiveBuilderRoomWallSide.Centered => "centered on the line",
+            _ => "outside"
         };
+
+        // Стены комнаты в здании — как перегородка: тип или своя толщина.
+        private static float PartitionThickness => LiveBuilderWallSettings.PartitionWallType != null
+            ? LiveBuilderWallSettings.PartitionWallType.Thickness
+            : LiveBuilderWallSettings.PartitionThickness;
 
 
         // ── Жест ─────────────────────────────────────────────────────────
@@ -66,7 +71,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return;
             }
 
-            var boxes = BuildBoxes();
+            var boxes = BuildPreviewBoxes();
             preview.Show(rectangle.TargetModel, mesh => BoxModelRebuilder.FillPreviewMesh(mesh, rectangle.TargetModel, boxes));
         }
 
@@ -92,7 +97,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var model = rectangle.TargetModel;
             var min = RoomMin();
             var size = RoomSize();
-            var hasWalls = !rectangle.IsInsideModel;
 
             if (model == null)
             {
@@ -101,9 +105,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 min = shell;
             }
 
-            var room = BoxModelFactory.CreateRoom(model, min, size, hasWalls);
+            var room = BoxModelFactory.CreateRoom(model, min, size, !rectangle.IsInsideModel);
             Selection.activeGameObject = room.gameObject;
-            BoxModelRebuilder.Rebuild(model);
+            BoxModelRebuilder.Rebuild(model, LiveBuilderBuildQuality.Draft);
             Cancel();
         }
 
@@ -115,26 +119,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // ── Коробки комнаты ──────────────────────────────────────────────
+        // ── Комната в пустоте и в доме ───────────────────────────────────
 
-        // Для предпросмотра, в осях рамки: стены вокруг (в пустоте) и сама комната — вырезающая коробка от пола до потолка.
-        private List<BoxModelSolverBox> BuildBoxes()
+        // Для предпросмотра, в осях рамки: те же пустота и оболочка, что даст комната (<see cref="BoxModelRoomShell"/>).
+        private List<BoxModelSolverBox> BuildPreviewBoxes()
         {
-            var boxes = new List<BoxModelSolverBox>();
-            var min = RoomMin();
-            var size = RoomSize();
-            var materials = new BoxModelSideMaterials(null, LiveBuilderRoomSettings.FloorMaterial, LiveBuilderRoomSettings.CeilingMaterial,
+            var hasShell = !rectangle.IsInsideModel;
+            var sides = BoxModelRoomShell.SidesFor(hasShell, hasShell && LiveBuilderRoomSettings.HasFloor, hasShell && LiveBuilderRoomSettings.HasCeiling);
+            var inside = new BoxModelSideMaterials(null, LiveBuilderRoomSettings.FloorMaterial, LiveBuilderRoomSettings.CeilingMaterial,
                 LiveBuilderRoomSettings.WallMaterial);
-
-            if (!rectangle.IsInsideModel)
-            {
-                var shell = BoxModelShapeCollector.RoomShellOf(min, size, LiveBuilderRoomSettings.WallThickness, LiveBuilderRoomSettings.SlabThickness,
-                    LiveBuilderRoomSettings.HasFloor, LiveBuilderRoomSettings.HasCeiling);
-                boxes.Add(new BoxModelSolverBox(shell, BoxModelPartMode.Add, null, default));
-            }
-
-            boxes.Add(new BoxModelSolverBox(MillimeterBox.FromMeters(min, size), BoxModelPartMode.Cut, null, materials));
-            return boxes;
+            return BoxModelRoomShell.PreviewBoxesOf(RoomMin(), RoomSize(), LiveBuilderRoomSettings.WallThickness, LiveBuilderRoomSettings.SlabThickness, sides, inside);
         }
 
         // Угол комнаты изнутри: стены внутрь или по центру — отступ от нарисованного.
@@ -175,23 +169,28 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Комната в здании ─────────────────────────────────────────────
 
-        // Одна замкнутая перегородка-комната по углам прямоугольника: стороны вдоль стен здания не строятся, но остаются в контуре.
+        // Сторона на стене здания — комната до неё; свободная — отступ стен по настройке «Линия по стенам», как у прямоугольника в пустоте.
         private void CommitInBuilding(LiveBuilderBuildingContext context)
         {
-            GetRoomOutline(context, out var corners, out _);
-            var buildingTransform = context.Building.transform;
-            var room = BoxModelFactory.CreatePartition(context, buildingTransform.TransformPoint(corners[0]), "Room");
-            room.SkipsSidesAlongBuildingWalls = true;
+            GetRoomOutline(context, out var corners, out var isSideFree);
+            var inset = LiveBuilderRoomWalls.InsetOf(LiveBuilderRoomSettings.WallSide, PartitionThickness);
+            var min = corners[0];
+            var max = corners[2];
 
-            var spline = room.GetComponent<SplineContainer>().Spline;
+            // Стороны по кругу: −Z, +X, +Z, −X.
+            min.z += isSideFree[0] ? inset : 0f;
+            max.x -= isSideFree[1] ? inset : 0f;
+            max.z -= isSideFree[2] ? inset : 0f;
+            min.x += isSideFree[3] ? inset : 0f;
 
-            foreach (var corner in corners)
-                spline.Add(new BezierKnot(room.transform.InverseTransformPoint(buildingTransform.TransformPoint(corner))), TangentMode.Linear);
+            var planSize = new Vector2(Mathf.Max(MinRoomWidth, max.x - min.x), Mathf.Max(MinRoomWidth, max.z - min.z));
+            var room = BoxModelFactory.CreateRoomInBuilding(context, min, planSize);
 
-            spline.Closed = true;
-            room.Alignment = LiveBuilderRoomWalls.AlignmentFor(spline, LiveBuilderRoomSettings.WallSide);
-            SplineWallRebuilder.Rebuild(room);
+            if (room == null)
+                return;
+
             Selection.activeGameObject = room.gameObject;
+            BoxModelRebuilder.Rebuild(room.GetComponentInParent<BoxModel>(), LiveBuilderBuildQuality.Draft);
         }
 
         // Углы прямоугольника по кругу, в осях здания, и какие стороны свободны — не лежат на стенах здания.
@@ -208,9 +207,29 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // ── Отчёт для панели ─────────────────────────────────────────────
+
+        // Нарисованные стороны и высота комнаты для секции Drawing (<see cref="LiveBuilderDrawingReport"/>); жест в один шаг. Не рисуешь — null.
+        public LiveBuilderDrawingReport Report()
+        {
+            if (!rectangle.IsActive)
+                return null;
+
+            var drawn = rectangle.Max - rectangle.Min;
+            var isTyped = rectangle.AreSidesTyped;
+
+            return new LiveBuilderDrawingReport("Room", 1, 1, "Rectangle")
+                .WithSize("Width", drawn.x, isTyped)
+                .WithSize("Length", drawn.z, isTyped)
+                .WithSize("Height", LiveBuilderRoomSettings.ClearHeight)
+                .WithTyped(rectangle.TypedText)
+                .WithKeys(null, rectangle.TypedText.Length > 0 ? "clear typing" : "drop the room");
+        }
+
+
         // ── Рамка ────────────────────────────────────────────────────────
 
-        // Прямоугольник на полу и размеры комнаты; в здании — будущие перегородки сплошной линией, стороны вдоль его стен — пунктиром.
+        // Прямоугольник на полу и размеры комнаты; в здании — будущие стены сплошной линией, стороны на его стенах — пунктиром.
         public void DrawPreview()
         {
             if (!rectangle.IsActive)
@@ -218,7 +237,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (rectangle.BuildingContext != null)
             {
-                DrawPartitionsPreview(rectangle.BuildingContext);
+                DrawBuildingRoomPreview(rectangle.BuildingContext);
                 return;
             }
 
@@ -229,12 +248,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var max = min + size;
                 Handles.color = BoxModelPartHandles.CutColor;
                 Handles.DrawWireCube(min + size / 2f, size);
-                LiveBuilderSceneText.DrawLabel(max, "комната " + LiveBuilderSceneText.FormatMeters(size.x) + " × " + LiveBuilderSceneText.FormatMeters(size.z) +
-                                                    " м, высота " + LiveBuilderSceneText.FormatMeters(size.y) + " м");
+                LiveBuilderSceneText.DrawLabel(max, "room " + LiveBuilderSceneText.FormatMeters(size.x) + " × " + LiveBuilderSceneText.FormatMeters(size.z) +
+                                                    " m, height " + LiveBuilderSceneText.FormatMeters(size.y) + " m");
             }
         }
 
-        private void DrawPartitionsPreview(LiveBuilderBuildingContext context)
+        private void DrawBuildingRoomPreview(LiveBuilderBuildingContext context)
         {
             if (!rectangle.HasArea)
                 return;
@@ -269,7 +288,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 var size = rectangle.Max - rectangle.Min;
                 LiveBuilderSceneText.DrawLabel(corners[2] + height, LiveBuilderSceneText.FormatMeters(size.x) + " × " + LiveBuilderSceneText.FormatMeters(size.z) +
-                                                                    " м, перегородок: " + wallCount + (context.CopyCount > 1 ? ", × " + context.CopyCount + " этажа" : ""));
+                                                                    " m, walls: " + wallCount + (context.CopyCount > 1 ? ", × " + context.CopyCount + " storeys" : ""));
             }
         }
     }

@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Проём своего размера в инструменте «Проём»: протянул прямоугольник по любой поверхности, хоть по косой стене, — встаёт вырез (<see cref="GeometryCutter"/>)
+    /// Проём своего размера в инструменте «Cut»: протянул прямоугольник по любой поверхности, хоть по косой стене, — встаёт вырез (<see cref="GeometryCutter"/>)
     /// по её нормали. Насквозь — на толщину стены с запасом, ниша — на свою глубину. Форма — прямоугольник, арка или круг из настроек.
     /// Вырез ложится в стену, здание или объект из коробок, которые режет: едет вместе с ними; в стене по линии и здании — ещё и за их точками.
     /// </summary>
@@ -22,7 +22,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public bool IsActive => rectangle.IsActive;
 
-        public string Hint => "Тяни — размер проёма. Отпусти — готово. Esc — отмена";
+        public string Hint => "Drag — opening size, release — done " + LiveBuilderHintKeys.Esc + " cancel";
 
 
         // ── Жест ─────────────────────────────────────────────────────────
@@ -55,6 +55,19 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Размер проёма для секции Drawing (<see cref="LiveBuilderDrawingReport"/>): жест в один шаг, готово — отпустить. Не рисуешь — null.
+        public LiveBuilderDrawingReport Report()
+        {
+            if (!rectangle.IsActive)
+                return null;
+
+            return new LiveBuilderDrawingReport("Opening", 1, 1, "Rectangle")
+                .WithSize("Width", rectangle.Size.x)
+                .WithSize("Height", rectangle.Size.y)
+                .WithKeys(null, "drop the opening");
+        }
+
+
         // ── Вырез ────────────────────────────────────────────────────────
 
         // Опора — низ посередине: насквозь — в середине толщины, ниша — на поверхности (половина выреза снаружи ничего не режет).
@@ -83,10 +96,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var owner = cutter.transform.parent;
             cutter.FollowsWallLine = LiveBuilderPathOwners.IsPathOwner(owner) && Mathf.Abs(surfaceNormal.y) < WallNormalMaxVertical;
 
-            var building = LiveBuilderPathOwners.LinkedBuildingOf(owner);
+            var building = LiveBuilderPathOwners.StoreysBuildingOf(owner);
 
             if (building != null)
-                SplineBuildingLinkSync.Attach(cutter.gameObject, building, LiveBuilderBuildingContext.IsOnAllStoreys);
+                SplineBuildingInteriorPlacement.PutCutterOnStorey(cutter, building, LiveBuilderBuildingContext.IsOnAllStoreys);
         }
 
 
@@ -127,8 +140,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 points[index] = rectangle.PointAt(bottomCenter + outline[index % outline.Count]);
 
             Handles.DrawAAPolyLine(3f, points);
-            LiveBuilderSceneText.DrawLabel(rectangle.PointAt(min + size), LiveBuilderSceneText.FormatMeters(size.x) + " × " + LiveBuilderSceneText.FormatMeters(size.y) + " м · " +
-                                                                          (LiveBuilderCutterSettings.IsThrough ? "насквозь" : "ниша " + LiveBuilderSceneText.FormatMeters(LiveBuilderCutterSettings.NicheDepth) + " м"));
+            LiveBuilderSceneText.DrawLabel(rectangle.PointAt(min + size), LiveBuilderSceneText.FormatMeters(size.x) + " × " + LiveBuilderSceneText.FormatMeters(size.y) + " m · " +
+                                                                          (LiveBuilderCutterSettings.IsThrough ? "through" : "niche " + LiveBuilderSceneText.FormatMeters(LiveBuilderCutterSettings.NicheDepth) + " m"));
         }
 
         // Контур будущего выреза той формы, что выбрана, — тем же кодом, что у самого выреза.

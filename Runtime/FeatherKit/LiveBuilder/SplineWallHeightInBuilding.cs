@@ -8,8 +8,8 @@ namespace FeatherKit.LiveBuilder
     /// </summary>
     public enum SplineWallHeightInBuilding
     {
-        [InspectorName("До потолка этажа")] ToCeiling,
-        [InspectorName("Весь этаж, сквозь перекрытие")] FullStorey,
-        [InspectorName("Своя высота")] Custom
+        [InspectorName("To Storey Ceiling")] ToCeiling,
+        [InspectorName("Full Storey, Through Slab")] FullStorey,
+        [InspectorName("Custom Height")] Custom
     }
 }

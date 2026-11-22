@@ -3,31 +3,13 @@ using UnityEngine;
 
 namespace FeatherKit.EditorTools.LiveBuilder
 {
-    /// <summary>Настройки инструмента «Комната»: форма, куда встают стены, толщина стен и перекрытий, есть ли пол и потолок, материалы пола, стен и потолка.</summary>
+    /// <summary>Настройки режима Room «Коробки»: куда встают стены, толщина стен и перекрытий, есть ли пол и потолок, материалы пола, стен и потолка.</summary>
     public static class LiveBuilderRoomSettings
     {
         // Заводские значения, пока человек их не поменял: с ними сверяется «Ещё» окна — изменено ли.
         public const float FactoryWallThickness = 0.3f;
         public const float FactorySlabThickness = 0.2f;
 
-
-        // Сменилась форма — начатое рисование отменяется, как при смене инструмента.
-        public static event System.Action ShapeChanged;
-
-
-        public static LiveBuilderRoomShape Shape
-        {
-            get => LiveBuilderPreferences.GetEnum("Room.Shape", LiveBuilderRoomShape.Rectangle);
-            set
-            {
-                if (Shape == value)
-                    return;
-
-                LiveBuilderPreferences.SetInt("Room.Shape", (int)value);
-                ShapeChanged?.Invoke();
-                SceneView.RepaintAll();
-            }
-        }
 
         // Куда встают стены от нарисованного. Прямоугольнику в доме из коробок всё равно: он вырезается, своих стен у него нет.
         public static LiveBuilderRoomWallSide WallSide

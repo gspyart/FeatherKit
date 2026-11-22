@@ -7,23 +7,14 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Пересобирает меш объектов из коробок, когда изменились коробки: правка, перенос, порядок в списке, повторы, лестницы, Ctrl+Z.
-    /// Когда проверять — решает общая очередь <see cref="LiveBuilderRebuildQueue"/>.
-    /// Сравнивает «подпись» коробок расчёта (<see cref="BoxModelSignature"/>) с той, по которой собран меш, и число вершин меша — лишних пересборок нет,
-    /// а отставший от сцены файл меша догоняется при открытии сцены. Хранит наружные поверхности и коробки расчёта для выбора кликом.
-    /// Фаска рёбер (<see cref="BoxModelBevel"/>) — часть сборки: после поверхностей, до вырезов.
-    /// Общий меш копий и префабов не перезаписывает — экземпляры префабов разбирает <see cref="BoxModelPrefabInstances"/>.
-    /// Объект без единой коробки (пустая группа, <see cref="LiveBuilderGroups"/>) — без меша и без файла.
+    /// Пересобирает меш объектов из коробок, когда изменились коробки; когда проверять — решает очередь <see cref="LiveBuilderRebuildQueue"/>.
+    /// - сверяет подпись коробок (<see cref="BoxModelSignature"/>) и вершины меша: лишних пересборок нет, отставший от сцены файл меша догоняется
+    /// - чистовая сборка — с фаской рёбер (<see cref="BoxModelBevel"/>) и коллайдером, черновик — без них (<see cref="LiveBuilderBuildQuality"/>)
+    /// - общий меш копий и префабов не перезаписывает (<see cref="BoxModelPrefabInstances"/>); поверхности и коробки расчёта — в <see cref="BoxModelBuildResults"/>
+    /// - объект без единой коробки (пустая группа, <see cref="LiveBuilderGroups"/>) — без меша и без файла
     /// </summary>
     public static class BoxModelRebuilder
     {
-        private static readonly Dictionary<EntityId, BoxModelBuildResult> BuildResultsByModel = new();
-
-        // При каком номере правки посчитан результат объекта. Пока номер тот же — сцена не менялась, считать заново незачем:
-        // результат спрашивают на каждую отрисовку, наведение мыши и каждую стену объекта.
-        private static readonly Dictionary<EntityId, int> BuildVersionsByModel = new();
-        private static int sceneVersion;
-
         // Меши, чьи вершины уже сверены с коробками: номер меша → подпись, число вершин и габарит на момент сверки.
         private static readonly Dictionary<EntityId, string> VerifiedMeshes = new();
 
@@ -34,7 +25,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Номер правки сцены: поменялся — всё, что посчитано по сцене, устарело (например, что под мышью — <see cref="BoxModelPicker"/>).
-        public static int SceneVersion => sceneVersion;
+        public static int SceneVersion => BoxModelBuildResults.SceneVersion;
 
 
         // ── Пересборка ───────────────────────────────────────────────────
@@ -44,7 +35,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Ошибка в одном объекте не останавливает остальные.
         public static void RebuildChangedModels()
         {
-            foreach (var model in FindModels())
+            RebuildChangedModels(LiveBuilderRebuildScope.WholeScene, LiveBuilderBuildQuality.Final);
+        }
+
+
+        public static void RebuildChangedModels(LiveBuilderRebuildScope scope, LiveBuilderBuildQuality quality)
+        {
+            foreach (var model in scope.Find<BoxModel>())
             {
                 try
                 {
@@ -52,9 +49,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
                         continue;
 
                     BoxModelPieceTidying.Tidy(model);
+                    bool isUpToDate;
 
-                    if (!IsMeshUpToDate(model, model.GetComponent<MeshFilter>().sharedMesh))
-                        Rebuild(model);
+                    using (LiveBuilderRebuildProfiler.Measure(LiveBuilderRebuildStage.SignatureCheck))
+                        isUpToDate = IsMeshUpToDate(model, model.GetComponent<MeshFilter>().sharedMesh, quality);
+
+                    if (!isUpToDate)
+                        Build(model, quality);
                 }
                 catch (System.Exception exception)
                 {
@@ -63,26 +64,22 @@ namespace FeatherKit.EditorTools.LiveBuilder
             }
         }
 
-        // Меш собран по этим коробкам. Одной подписи мало: файл меша может отстать от сцены (не сохранился, откатили в git) —
-        // подпись совпадает, а меш пустой или старый. Поэтому сверяем ещё и сами вершины.
-        // Сверка вершин — один раз на меш и подпись: дальше хватает числа вершин и габарита, иначе каждая правка в сцене перебирала бы все меши.
-        // Прорезанный вырезами или со срезанными рёбрами меш с коробками по вершинам уже не сверить — хватает подписи и непустого меша.
-        // Пустой — тоже готовый, если его собрали в эту сессию: объект целиком в вырезе.
-        // Пустая группа — без коробок совсем — готова, когда меша нет вовсе: файла ей не заводим.
-        private static bool IsMeshUpToDate(BoxModel model, Mesh mesh)
+        // Файл меша мог отстать от сцены при той же подписи — сверяем и вершины, раз на меш и подпись. Прорезанный или срезанный фаской меш
+        // по вершинам не сверить — хватает подписи и непустого меша; пустой законен, если собран в эту сессию (объект целиком в вырезе).
+        private static bool IsMeshUpToDate(BoxModel model, Mesh mesh, LiveBuilderBuildQuality quality)
         {
-            var result = GetBuildResult(model);
+            var result = BoxModelBuildResults.Of(model);
 
-            if (result.Boxes.Count == 0)
+            if (HasNothingToBuild(result))
                 return mesh == null;
 
             var cutters = GeometryCutterLookup.CuttersFor(model, UncutWorldBoundsOf(model));
-            var signature = result.Signature + GeometryCutterLookup.KeyOf(model, cutters);
+            var signature = result.Signature + WorldKeyOf(model, result, quality) + GeometryCutterLookup.KeyOf(model, cutters);
 
-            if (model.BuiltSignature != signature || mesh == null)
+            if (!LiveBuilderDraftBuilds.IsBuilt(model, model.BuiltSignature, signature, quality) || mesh == null)
                 return false;
 
-            if (cutters.Count > 0 || IsCutAfterSurfaces(model, result))
+            if (model.BuiltSignature != signature || cutters.Count > 0 || IsCutAfterSurfaces(model, result))
                 return mesh.vertexCount > 0 || UncutBoundsByModel.ContainsKey(model.GetEntityId());
 
             var verifiedKey = result.Signature + "|" + mesh.vertexCount + "|" + mesh.bounds;
@@ -95,6 +92,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             VerifiedMeshes[mesh.GetEntityId()] = verifiedKey;
             return true;
+        }
+
+        // Мировой ключ текстуры (<see cref="LiveBuilderTextureSignature"/>): черновик берёт тот, по которому собран, — перенос в жесте не пересобирает.
+        private static string WorldKeyOf(BoxModel model, BoxModelBuildResult result, LiveBuilderBuildQuality quality)
+        {
+            return LiveBuilderTextureSignature.WorldKeyFor(quality, model.BuiltSignature, () => BoxModelSignature.WorldKeyOf(model, result.Boxes));
         }
 
         // Габарит до вырезов; не помнится (скрипты перезагрузились) — габарит готового меша.
@@ -117,14 +120,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var source = PrefabUtility.GetCorrespondingObjectFromSource(instance);
             var sourceMesh = source != null ? source.GetComponent<MeshFilter>().sharedMesh : null;
-            var result = GetBuildResult(instance);
+            var result = BoxModelBuildResults.Of(instance);
 
             // Пустая группа в префабе — меша нет и у него.
-            if (result.Boxes.Count == 0)
+            if (HasNothingToBuild(result))
                 return source != null && sourceMesh == null;
 
             // Подпись префаба — без части вырезов: свои вырезы префаба режут его меш, а экземпляр их не считает.
-            return source != null && GeometryCutterLookup.WithoutCutterKey(source.BuiltSignature) == result.Signature && sourceMesh != null
+            return source != null && GeometryCutterLookup.WithoutCutterKey(source.BuiltSignature) == result.Signature + BoxModelSignature.WorldKeyOf(instance, result.Boxes)
+                   && sourceMesh != null
                    && (IsCutAfterSurfaces(instance, result) ? sourceMesh.vertexCount > 0 : BoxModelMeshBuilder.IsBuiltFrom(sourceMesh, result.Surfaces));
         }
 
@@ -139,27 +143,59 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public static void Rebuild(BoxModel model)
         {
-            // Зовут и сразу после правки, до того как о ней узнала очередь, — считаем заново.
-            BuildVersionsByModel.Remove(model.GetEntityId());
-            var result = GetBuildResult(model);
+            Rebuild(model, LiveBuilderBuildQuality.Final);
+        }
 
-            if (result.Boxes.Count == 0)
+
+        // Черновик — без фаски и коллайдера, подпись в сцене не пишется: её запишет чистовая сборка (<see cref="LiveBuilderDraftBuilds"/>).
+        // Зовут и сразу после правки, до того как о ней узнала очередь, — коробки собираются заново.
+        public static void Rebuild(BoxModel model, LiveBuilderBuildQuality quality)
+        {
+            BoxModelBuildResults.Forget(model);
+            Build(model, quality);
+        }
+
+        // Коробки объекта уже собраны после правки — проход очереди только что сверил по ним подпись.
+        private static void Build(BoxModel model, LiveBuilderBuildQuality quality)
+        {
+            LiveBuilderRebuildProfiler.CountRebuiltConstruction();
+            var result = BoxModelBuildResults.Of(model);
+
+            if (HasNothingToBuild(result))
             {
+                LiveBuilderDraftBuilds.Forget(model);
                 ClearEmptyGroup(model, result.Signature);
                 return;
             }
 
+            var isFinal = quality == LiveBuilderBuildQuality.Final;
             var written = LiveBuilderMeshWriter.Write(model, null, mesh =>
             {
-                var materials = FillWithBevel(mesh, model, result);
+                var materials = FillWithBevel(mesh, model, result, isFinal);
                 UncutBoundsByModel[model.GetEntityId()] = mesh.bounds;
                 return materials;
-            });
-            var signature = result.Signature + GeometryCutterLookup.KeyOf(model, written.Cutters);
+            }, null, quality, result.Signature);
+            var signature = result.Signature + WorldKeyOf(model, result, quality) + GeometryCutterLookup.KeyOf(model, written.Cutters);
+
+            if (isFinal)
+                FinishBuild(model, result, written, signature);
+            else
+                LiveBuilderDraftBuilds.Remember(model, signature);
+
+            // Вырезы объекта режут его стены и здания — им тоже пора свериться.
+            LiveBuilderRebuildQueue.RequestCheck(model.gameObject);
+        }
+
+        // Чистовая сборка: коллайдер и подпись в сцене.
+        private static void FinishBuild(BoxModel model, BoxModelBuildResult result, LiveBuilderMeshWriteResult written, string signature)
+        {
             var isSceneChanged = written.IsNewMesh || model.BuiltSignature != signature;
 
-            LiveBuilderMeshWriter.UpdateCollider(model, model.HasCollider, model.HasCollider ? ColliderMeshOf(written.Mesh, result.Ramps) : null);
+            using (LiveBuilderRebuildProfiler.Measure(LiveBuilderRebuildStage.Collider))
+                LiveBuilderMeshWriter.UpdateCollider(model, model.HasCollider, model.HasCollider ? ColliderMeshOf(written.Mesh, result.Ramps) : null);
+
             model.BuiltSignature = signature;
+            LiveBuilderDraftBuilds.Forget(model);
 
             // Меш только догнал сцену — сцена та же, звёздочку «не сохранено» не ставим.
             if (isSceneChanged)
@@ -167,9 +203,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 EditorUtility.SetDirty(model);
                 LiveBuilderSyncEdits.RecordPrefabInstance(model);
             }
-
-            // Вырезы объекта режут его стены и здания — им тоже пора свериться.
-            LiveBuilderRebuildQueue.RequestCheck();
         }
 
         // Объект без единой коробки — группа, в которой пока только другие объекты: файла меша нет, меша и коллайдера тоже.
@@ -197,12 +230,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Меш из наружных поверхностей, рёбра срезаны фаской, если она задана, потом — скосы рёбер коробок. Вырезы режут потом — уже готовое.
-        private static Material[] FillWithBevel(Mesh mesh, BoxModel model, BoxModelBuildResult result)
+        // Меш из наружных поверхностей, рёбра срезаны фаской, если она задана и сборка чистовая, потом — скосы рёбер коробок:
+        // без них черновик пандуса пропал бы. Вырезы режут потом — уже готовое.
+        private static Material[] FillWithBevel(Mesh mesh, BoxModel model, BoxModelBuildResult result, bool hasBevel)
         {
-            var materials = BoxModelMeshBuilder.Fill(mesh, result.Surfaces, result.Boxes, model.DefaultMaterial);
-            BoxModelBevel.Apply(mesh, result.Surfaces, model.BevelSize, model.BevelSegments);
-            BoxModelChamferCutter.Apply(mesh, result.Boxes);
+            Material[] materials;
+
+            using (LiveBuilderRebuildProfiler.Measure(LiveBuilderRebuildStage.MeshFill))
+                materials = BoxModelMeshBuilder.Fill(mesh, result.Surfaces, result.Boxes, model.DefaultMaterial,
+                    LiveBuilderTextureSpace.Of(model.transform, model.TextureAlignment));
+
+            var unwrapper = LiveBuilderFaceUnwrapper.ForModel(model, materials);
+
+            if (hasBevel)
+                using (LiveBuilderRebuildProfiler.Measure(LiveBuilderRebuildStage.Bevel))
+                    BoxModelBevel.Apply(mesh, result.Surfaces, model.BevelSize, model.BevelSegments, unwrapper);
+
+            using (LiveBuilderRebuildProfiler.Measure(LiveBuilderRebuildStage.Chamfer))
+                BoxModelChamferCutter.Apply(mesh, result.Boxes, unwrapper);
+
             return materials;
         }
 
@@ -227,54 +273,50 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Наружные поверхности объекта в его осях, миллиметры; посчитаны заново, если коробки поменялись.
         public static IReadOnlyList<BoxModelSurface> GetSurfaces(BoxModel model)
         {
-            return GetBuildResult(model).Surfaces;
+            return BoxModelBuildResults.Of(model).Surfaces;
         }
 
 
         // Коробки расчёта по порядку — номер поверхности (SourcePart) указывает сюда.
         public static IReadOnlyList<BoxModelSolverBox> GetSolverBoxes(BoxModel model)
         {
-            return GetBuildResult(model).Boxes;
+            return BoxModelBuildResults.Of(model).Boxes;
         }
 
 
         // Габарит наружных поверхностей объекта в его осях — отсев по лучу до перебора поверхностей.
         public static Bounds GetSurfaceBounds(BoxModel model)
         {
-            return GetBuildResult(model).SurfaceBounds;
+            return BoxModelBuildResults.Of(model).SurfaceBounds;
         }
 
 
         // Сцена поменялась — все результаты пересчитать при следующем вопросе. Зовёт очередь пересборки на любую правку.
-        // Решатель при этом заново считает только объект с новой подписью коробок; остальные лишь собирают список коробок и сверяют подпись.
         public static void ForgetCachedResults()
         {
-            sceneVersion++;
+            BoxModelBuildResults.ForgetAll();
         }
 
 
-        // Всё, что считается из коробок объекта. С прошлой правки сцены — из памяти; та же подпись — те же поверхности,
-        // но коробки — новые: их хозяева могли смениться (удалил коробку и нарисовал такую же), а по хозяину выделяют кликом.
-        private static BoxModelBuildResult GetBuildResult(BoxModel model)
+        // Только объекты в области: черновой проход очереди после сверок, которые правят числа без событий редактора.
+        public static void ForgetCachedResults(LiveBuilderRebuildScope scope)
         {
-            var modelId = model.GetEntityId();
-            var hasCached = BuildResultsByModel.TryGetValue(modelId, out var cached);
+            if (scope.IsWholeScene)
+            {
+                ForgetCachedResults();
+                return;
+            }
 
-            if (hasCached && BuildVersionsByModel.TryGetValue(modelId, out var version) && version == sceneVersion)
-                return cached;
+            foreach (var model in scope.Find<BoxModel>())
+                BoxModelBuildResults.Forget(model);
+        }
 
-            var ramps = new List<BoxModelRampShape>();
-            var boxes = BoxModelShapeCollector.Collect(model, ramps);
-            var signature = BoxModelSignature.Of(model, boxes, ramps);
 
-            var surfaces = hasCached && cached.Signature == signature
-                ? cached.Surfaces
-                : BoxModelSurfaceFinder.FindOuterSurfaces(BoxModelSolver.Solve(boxes.ConvertAll(box => box.Shape)));
-
-            var result = new BoxModelBuildResult(signature, boxes, ramps, surfaces);
-            BuildResultsByModel[modelId] = result;
-            BuildVersionsByModel[modelId] = sceneVersion;
-            return result;
+        // Объект или меш удалён, сцена закрыта — их сверки и габариты больше не нужны.
+        public static void ForgetDestroyed()
+        {
+            LiveBuilderDestroyedObjects.RemoveFrom(VerifiedMeshes);
+            LiveBuilderDestroyedObjects.RemoveFrom(UncutBoundsByModel);
         }
 
 
@@ -295,8 +337,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
             boxes.AddRange(extraBoxes);
 
             var defaultMaterial = model != null ? model.DefaultMaterial : BoxModelFactory.LoadDefaultMaterial();
-            var surfaces = BoxModelSurfaceFinder.FindOuterSurfaces(BoxModelSolver.Solve(boxes.ConvertAll(box => box.Shape)));
-            return BoxModelMeshBuilder.Fill(mesh, surfaces, boxes, defaultMaterial);
+            var surfaces = model != null
+                ? BoxModelBuildResults.SurfacesWithoutStoring(model, boxes)
+                : BoxModelSurfaceFinder.FindOuterSurfaces(BoxModelSolver.Solve(boxes.ConvertAll(box => box.Shape)));
+            var textureSpace = model != null ? LiveBuilderTextureSpace.Of(model.transform, model.TextureAlignment) : default;
+            return BoxModelMeshBuilder.Fill(mesh, surfaces, boxes, defaultMaterial, textureSpace);
         }
 
 
@@ -315,73 +360,18 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Ни одной коробки или одни вырез-коробки (группа с проёмом): меша нет, как у пустой группы.
+        private static bool HasNothingToBuild(BoxModelBuildResult result)
+        {
+            return result.Boxes.TrueForAll(box => box.Owner is GeometryCutter);
+        }
+
+
         // Меш срезан после поверхностей — фаской или скосами рёбер: по вершинам его с коробками уже не сверить.
         private static bool IsCutAfterSurfaces(BoxModel model, BoxModelBuildResult result)
         {
             return BoxModelBevel.HasBevel(model) || result.Boxes.Exists(box => box.Chamfers.Count > 0);
         }
 
-
-        private static BoxModel[] FindModels()
-        {
-            return StageUtility.GetCurrentStageHandle().FindComponentsOfType<BoxModel>();
-        }
-    }
-
-
-    /// <summary>Что посчитано из коробок объекта: подпись, коробки расчёта, скаты лестниц и наружные поверхности.</summary>
-    public sealed class BoxModelBuildResult
-    {
-        public BoxModelBuildResult(string signature, List<BoxModelSolverBox> boxes, List<BoxModelRampShape> ramps, List<BoxModelSurface> surfaces)
-        {
-            Signature = signature;
-            Boxes = boxes;
-            Ramps = ramps;
-            Surfaces = surfaces;
-            SurfaceBounds = BoundsOf(surfaces);
-        }
-
-
-        public string Signature { get; }
-        public List<BoxModelSolverBox> Boxes { get; }
-        public List<BoxModelRampShape> Ramps { get; }
-        public List<BoxModelSurface> Surfaces { get; }
-
-        // Габарит всех наружных поверхностей в осях объекта, м: луч мимо него — ни одной поверхности не задевает.
-        public Bounds SurfaceBounds { get; }
-
-
-        private static Bounds BoundsOf(List<BoxModelSurface> surfaces)
-        {
-            var bounds = new Bounds();
-            var hasBounds = false;
-
-            foreach (var surface in surfaces)
-            {
-                var axis = BoxFaces.Axis(surface.Face);
-                var axisU = BoxFaces.SurfaceAxisU(surface.Face);
-                var axisV = BoxFaces.SurfaceAxisV(surface.Face);
-                var min = Vector3.zero;
-                var max = Vector3.zero;
-                min[axis] = max[axis] = MillimeterBox.ToMeters(surface.Plane);
-                min[axisU] = MillimeterBox.ToMeters(surface.Area.xMin);
-                max[axisU] = MillimeterBox.ToMeters(surface.Area.xMax);
-                min[axisV] = MillimeterBox.ToMeters(surface.Area.yMin);
-                max[axisV] = MillimeterBox.ToMeters(surface.Area.yMax);
-
-                if (!hasBounds)
-                {
-                    bounds.SetMinMax(min, max);
-                    hasBounds = true;
-                }
-                else
-                {
-                    bounds.Encapsulate(min);
-                    bounds.Encapsulate(max);
-                }
-            }
-
-            return bounds;
-        }
     }
 }

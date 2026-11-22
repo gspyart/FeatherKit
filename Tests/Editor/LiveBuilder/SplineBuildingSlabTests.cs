@@ -47,7 +47,7 @@ namespace FeatherKit.Tests.LiveBuilder
             BoxModelRebuilder.Rebuild(model);
             SplineBuildingRebuilder.Rebuild(building);
 
-            var slab = SplineBuildingParts.Find(building, SplineBuildingPartKind.Floor, 1);
+            var slab = SplineBuildingParts.Find(building, SplineBuildingPartKind.Slab, 1);
             var edgeArea = 0f;
 
             foreach (var (center, area) in VerticalTrianglesOf(slab))

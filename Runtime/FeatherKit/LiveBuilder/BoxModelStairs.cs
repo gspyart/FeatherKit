@@ -13,19 +13,19 @@ namespace FeatherKit.LiveBuilder
     }
 
 
-    /// <summary>Как выглядит лестница сбоку: сплошной ступенчатый объём до пола или отдельные плиты ступеней.</summary>
+    /// <summary>Как выглядит лестница сбоку: открытый марш из плит ступеней, под которым пусто, или сплошной ступенчатый объём до пола.</summary>
     public enum BoxModelStairsStyle
     {
-        [InspectorName("Ступени")] SeparateSteps,
-        [InspectorName("Сплошная")] Solid
+        [InspectorName("Open")] Open,
+        [InspectorName("Solid")] Solid
     }
 
 
     /// <summary>Сколько маршей: один прямой или два туда-обратно с площадкой посередине высоты (лестничная клетка).</summary>
     public enum BoxModelStairsShape
     {
-        [InspectorName("Прямая")] Straight,
-        [InspectorName("С площадкой")] Switchback
+        [InspectorName("Straight")] Straight,
+        [InspectorName("Switchback")] Switchback
     }
 
 
@@ -33,13 +33,13 @@ namespace FeatherKit.LiveBuilder
     /// Лестница в объекте из коробок: ступени — коробки объекта, поэтому режутся и повторяются как остальные.
     /// Форма — один прямой марш или два марша туда-обратно с площадкой на середине высоты: вся лестничная клетка одной вещью,
     /// поменял высоту — марши и площадка пересчитались.
-    /// Вид — сплошной объём до пола или отдельные плиты ступеней, под которыми пусто.
+    /// Вид — открытый марш (плиты ступеней, под ними пусто: улица, подвал) или сплошной объём до пола.
     /// Число ступеней — от высоты: подъём ступени подгоняется, чтобы верх лестницы пришёлся ровно на высоту.
     /// Ходят по невидимому скату через носики ступеней — он только в коллайдере. Может пробить перекрытие над собой.
     /// Опора — угол с наименьшими координатами, как у коробки. В игру не попадает — остаётся собранный меш.
     /// </summary>
     [FDescription("Лестница: ступени — коробки объекта, ходят по невидимому скату через носики. Число ступеней — от высоты. " +
-                  "Форма — прямой марш или два марша с площадкой. Вид — отдельные плиты ступеней или сплошной объём до пола. Опора — угол с наименьшими координатами.")]
+                  "Форма — прямой марш или два марша с площадкой. Вид — открытый (плиты ступеней, под ними пусто) или сплошной объём до пола. Опора — угол с наименьшими координатами.")]
     [AddComponentMenu("FeatherKit/Live Builder/Box Model Stairs")]
     [DisallowMultipleComponent]
     public class BoxModelStairs : MonoBehaviour
@@ -50,7 +50,7 @@ namespace FeatherKit.LiveBuilder
         // Мельче ступень не бывает, м.
         public const float MinStepDepth = 0.1f;
 
-        [Header("Форма")]
+        [Header("Shape")]
         [Tooltip("Куда лестница идёт вверх, по осям объекта. У лестницы с площадкой — куда идёт первый марш.")]
         [SerializeField] private BoxModelStairsDirection direction = BoxModelStairsDirection.PositiveZ;
 
@@ -76,15 +76,15 @@ namespace FeatherKit.LiveBuilder
         [Tooltip("Первый марш — с другой стороны клетки. Выключено — у меньших координат поперёк подъёма.")]
         [SerializeField] private bool isFirstFlightOnOtherSide;
 
-        [Tooltip("Ступени — каждая ступень отдельной плитой, под лестницей пусто. Сплошная — ступенчатый объём от пола.")]
-        [SerializeField] private BoxModelStairsStyle style = BoxModelStairsStyle.SeparateSteps;
+        [Tooltip("Open — каждая ступень отдельной плитой, под лестницей пусто: улица, подвал. Solid — ступенчатый объём от пола.")]
+        [SerializeField] private BoxModelStairsStyle style = BoxModelStairsStyle.Open;
 
-        [Tooltip("Толщина плиты ступени, м — только для вида «Ступени». Равна подъёму (0,2) — ступени сходятся углами; меньше — висят отдельно.")]
+        [Tooltip("Толщина плиты ступени, м — только у вида Open. Равна подъёму (0,2) — ступени сходятся углами; меньше — висят отдельно.")]
         [Min(0.02f)]
         [SerializeField] private float stepThickness = 0.2f;
 
         [Space]
-        [Header("Ступени")]
+        [Header("Steps")]
         [Tooltip("Желаемый подъём одной ступени, м. Точный подгоняется, чтобы ступени ровно легли в высоту. По метрикам — 0,2.")]
         [Min(0.05f)]
         [SerializeField] private float stepHeight = 0.2f;
@@ -94,12 +94,15 @@ namespace FeatherKit.LiveBuilder
         [SerializeField] private float stepDepth = 0.3f;
 
         [Space]
-        [Header("Вокруг")]
+        [Header("Around")]
         [Tooltip("Проём в перекрытии над маршем, чтобы не биться головой: режет над лестницей от 2,1 м над её полом до её верха. Стены по бокам не режет.")]
         [SerializeField] private bool cutsAbove = true;
 
         [Tooltip("Материал ступеней. Пусто — материал объекта.")]
         [SerializeField] private Material material;
+
+        [Tooltip("Сдвиг, масштаб и поворот текстуры на ступенях. Всё по умолчанию — как есть.")]
+        [SerializeField] private LiveBuilderTextureFit textureFit = new();
 
 
         public BoxModelStairsDirection Direction
@@ -174,6 +177,12 @@ namespace FeatherKit.LiveBuilder
         {
             get => material;
             set => material = value;
+        }
+
+        public LiveBuilderTextureFit TextureFit
+        {
+            get => textureFit ??= new LiveBuilderTextureFit();
+            set => textureFit = value ?? new LiveBuilderTextureFit();
         }
 
         // Ступеней столько, чтобы подъём был ближе всего к желаемому. У лестницы с площадкой — в обоих маршах вместе, не меньше двух.

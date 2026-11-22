@@ -22,8 +22,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public bool IsActive => start != null;
 
         public string Hint => start == null || end != null
-            ? "Клик — откуда прыжок"
-            : "Клик — куда прыжок. Esc — убрать";
+            ? "Click — where the jump starts"
+            : "Click — where the jump lands " + LiveBuilderHintKeys.Esc + " clear";
 
 
         // ── Мышь ─────────────────────────────────────────────────────────
@@ -54,6 +54,23 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             start = null;
             end = null;
+        }
+
+
+        // Расстояние, по горизонтали и по высоте для секции Drawing (<see cref="LiveBuilderDrawingReport"/>). Не меряешь — null.
+        public LiveBuilderDrawingReport Report()
+        {
+            if (start is not { } from)
+                return null;
+
+            var report = new LiveBuilderDrawingReport("Ruler", end != null ? 2 : 1, 2, end != null ? "Measured" : "To");
+
+            if ((end ?? hovered) is { } to)
+                report.WithSize("Distance", Vector3.Distance(from, to))
+                    .WithSize("Horizontal", new Vector2(to.x - from.x, to.z - from.z).magnitude)
+                    .WithSize("Height", to.y - from.y);
+
+            return report.WithKeys(null, "clear");
         }
 
 
@@ -120,8 +137,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Handles.DrawLine(a, b, 3f);
             Handles.DrawWireDisc(b, Vector3.up, HandleUtility.GetHandleSize(b) * 0.06f);
 
-            var text = "по горизонтали " + LiveBuilderSceneText.FormatMeters(horizontal) + " м, по высоте " + (rise < 0f ? "−" : "+") +
-                       LiveBuilderSceneText.FormatMeters(rise) + " м" + (verdictText.Length > 0 ? " — " + verdictText : "");
+            var text = "across " + LiveBuilderSceneText.FormatMeters(horizontal) + " m, up " + (rise < 0f ? "−" : "+") +
+                       LiveBuilderSceneText.FormatMeters(rise) + " m" + (verdictText.Length > 0 ? " — " + verdictText : "");
             LiveBuilderSceneText.DrawLabel((a + b) / 2f, text);
         }
     }

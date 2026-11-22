@@ -6,7 +6,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Ручки того, что выделено, в инструменте «Live Builder» (<see cref="LiveBuilderSceneTool"/>): каркасы коробок у объектов в выделении — всегда,
-    /// а ручки — только у того, что правит выбранный инструмент (<see cref="LiveBuilderTool.CanEdit(UnityEngine.GameObject)"/>): у коробок, комнат, лестниц (<see cref="BoxModelPartHandles"/>),
+    /// а ручки — только у того, что правит выбранный инструмент (<see cref="LiveBuilderTool.CanEdit(UnityEngine.GameObject)"/>): у коробок, вырез-коробок, комнат, лестниц (<see cref="BoxModelPartHandles"/>),
+    /// колонн (<see cref="LiveBuilderColumnHandles"/>),
     /// скосы рёбер коробок (<see cref="BoxModelChamferHandles"/>),
     /// вырезов (<see cref="GeometryCutterHandles"/>), стрелки переноса и копии (<see cref="LiveBuilderMoveHandle"/>),
     /// в режиме «Грани» — стрелки выделенных граней, ручка повтора у группы повтора.
@@ -34,7 +35,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return;
 
             foreach (var selected in Selection.gameObjects)
-                if (selected.TryGetComponent<GeometryCutter>(out var cutter) && tool.CanEdit(cutter))
+                if (selected.TryGetComponent<GeometryCutter>(out var cutter) && tool.CanEdit(cutter) && !HasBoxHandles(cutter))
                     GeometryCutterHandles.Draw(cutter);
 
             if (BoxModelSelectionModeSetting.IsSelectingFaces && tool.CanEditFaces)
@@ -53,11 +54,19 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderRepeatHandle.DrawForSelection();
         }
 
-        // Ручки на гранях у выделенных коробок, комнат и лестниц — если их правит инструмент.
+        // Ручки на гранях у выделенных коробок, комнат, лестниц и колонн — если их правит инструмент.
         private static void DrawBoxHandles(LiveBuilderTool tool)
         {
             foreach (var selected in Selection.gameObjects)
             {
+                if (selected.TryGetComponent<LiveBuilderColumn>(out var column))
+                {
+                    if (tool.CanEdit(selected))
+                        LiveBuilderColumnHandles.Draw(column);
+
+                    continue;
+                }
+
                 var model = selected.GetComponentInParent<BoxModel>();
 
                 if (model == null || !tool.CanEdit(selected))
@@ -72,7 +81,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     BoxModelPartHandles.DrawHandles(model, room);
                 else if (selected.TryGetComponent<BoxModelStairs>(out var stairs))
                     BoxModelPartHandles.DrawHandles(model, stairs);
+                else if (selected.TryGetComponent<GeometryCutter>(out var cutter) && HasBoxHandles(cutter))
+                    BoxModelPartHandles.DrawHandles(GeometryCutterSolverBoxes.CollectingModelOf(cutter), cutter);
             }
+        }
+
+        private static bool HasBoxHandles(GeometryCutter cutter)
+        {
+            return BoxModelPartHandles.HasBoxHandles(GeometryCutterSolverBoxes.CollectingModelOf(cutter), cutter);
         }
     }
 }

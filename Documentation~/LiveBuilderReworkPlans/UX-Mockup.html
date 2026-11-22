@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Builder Panel Mockup</title>
+<style>
+:root{
+  --page:#1d1d1d; --frame:#262626; --frame-b:#151515;
+  --win:#383838; --win-dark:#323232; --head:#3e3e3e; --line:#232323; --line-soft:#2d2d2d;
+  --field:#2a2a2a; --field-b:#1f1f1f; --btn:#585858; --btn-b:#303030; --btn-on:#46607c; --btn-on-b:#3a79bb;
+  --text:#c8c8c8; --text-hi:#e6e6e6; --dim:#8d8d8d; --chip:rgba(0,0,0,.22);
+  --tool:#3b75c7; --sel:#cc852b; --lvl:#7566c2; --add:#5cc0ff; --cut:#e0504a; --warn:#e0b440; --ok:#79c07a;
+  --note:#f2c94c;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--page);color:#d6d6d6;font:13px/1.45 Inter,"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,sans-serif;padding:24px 16px 60px}
+h1{font-size:22px;margin:0 0 4px;color:#f0f0f0}
+h2{font-size:16px;margin:36px 0 10px;color:#f0f0f0;border-bottom:1px solid #333;padding-bottom:6px}
+p.lead{max-width:980px;color:#b8b8b8;margin:6px 0}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 0 6px;font-size:12px;color:#bbb}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:14px;border-radius:3px;display:inline-block}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,600px),1fr));gap:22px;align-items:start}
+.frame{background:var(--frame);border:1px solid var(--frame-b);border-radius:8px;overflow:hidden}
+.frame>h3{margin:0;padding:9px 14px;font-size:14px;background:#2e2e2e;border-bottom:1px solid var(--frame-b);color:#f0f0f0}
+.frame>h3 small{color:#9a9a9a;font-weight:400;margin-left:8px}
+.notes{margin:0;padding:10px 14px 14px 34px;font-size:12.5px;color:#c6c6c6}
+.notes li{margin:3px 0}
+.notes li::marker{color:var(--note);font-weight:700}
+code{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:#e8d9a8}
+
+/* ── Scene view ─────────────────────────── */
+.scene{position:relative;min-height:330px;padding:12px 36px 46px 12px;display:flex;gap:10px;justify-content:flex-end;align-items:flex-start;
+  background:linear-gradient(#6b6f75 0,#55585c 45%,#3f4144 46%,#36383a 100%);overflow:hidden}
+.scene::before{content:"";position:absolute;inset:46% 0 0 0;background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);background-size:28px 28px;pointer-events:none}
+.scene>svg.draw{position:absolute;left:10px;top:20px;pointer-events:none}
+.hint{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);background:rgba(20,20,20,.78);color:#eee;font-size:12px;border-radius:4px;padding:3px 10px;white-space:nowrap;display:flex;gap:8px;align-items:center;max-width:94%;overflow:hidden}
+.hint.wide{left:10px;right:10px;transform:none;justify-content:center}
+.hint .status{margin-left:auto;padding-left:14px;color:#aab;border-left:1px solid #555}
+kbd{display:inline-block;font:11px Inter,"Segoe UI",sans-serif;background:#4a4a4a;border:1px solid #2a2a2a;border-bottom-width:2px;border-radius:3px;padding:0 5px;color:#f2f2f2;line-height:15px}
+.keys{position:absolute;left:10px;bottom:38px;background:rgba(25,25,25,.78);color:#eee;font-size:11px;padding:5px 8px;border-radius:3px;max-width:250px}
+.keys b{display:block;font-size:11px;color:#fff;margin-bottom:2px}
+
+/* ── Overlay panel ──────────────────────── */
+.ov{position:relative;width:300px;background:var(--win);border:1px solid var(--line);border-radius:4px;box-shadow:0 3px 10px rgba(0,0,0,.45);font-size:12px;color:var(--text);flex:none;z-index:1}
+.ov.narrow{width:220px}
+.ov-title{height:20px;display:flex;align-items:center;gap:6px;padding:0 6px;font-weight:600;font-size:11px;color:#bdbdbd;border-bottom:1px solid var(--line)}
+.ov-title .sp{flex:1}
+.ov-title .ib{width:20px;height:16px;display:grid;place-items:center;border-radius:3px;color:#cfcfcf}
+.ov-title .ib.on{background:#3f6f45;color:#dff5df}
+.row{position:relative;display:flex;align-items:center;gap:4px;min-height:22px;padding:2px 6px}
+.tools{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;padding:5px 6px 4px}
+.narrow .tools{grid-template-columns:repeat(4,1fr)}
+.tb{position:relative;height:26px;background:#474747;border:1px solid var(--btn-b);border-radius:3px;display:grid;place-items:center;color:#dcdcdc}
+.tb.on{background:var(--btn-on);border-color:var(--btn-on-b);color:#fff}
+.tb i{position:absolute;right:2px;bottom:0;font-style:normal;font-size:8.5px;color:#9c9c9c;line-height:10px}
+.tb.on i{color:#d6e4f5}
+.opts{border-left:2px solid var(--tool);background:rgba(59,117,199,.06);margin:0 0 2px;padding:3px 0}
+.opts.dim{opacity:.5}
+.name{font-weight:600;color:var(--text-hi);min-width:58px}
+.seg{display:inline-flex;border:1px solid var(--btn-b);border-radius:3px;overflow:hidden;height:18px}
+.seg b{font-weight:400;display:grid;place-items:center;min-width:22px;padding:0 5px;background:#515151;color:#dedede;border-right:1px solid var(--btn-b);font-size:11px;gap:3px;grid-auto-flow:column}
+.seg b:last-child{border-right:0}
+.seg b.on{background:var(--btn-on);color:#fff}
+.btn{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 7px;background:var(--btn);border:1px solid var(--btn-b);border-radius:3px;color:#eaeaea;font-size:11.5px;white-space:nowrap}
+.btn.on{background:var(--btn-on);border-color:var(--btn-on-b)}
+.btn.ghost{background:transparent;border-color:#4a4a4a;color:#bdbdbd}
+.btn.dis{opacity:.45}
+.btn.dot::after{content:"";width:5px;height:5px;border-radius:50%;background:var(--note);margin-left:2px}
+.chip{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;background:var(--chip);border-radius:3px;color:#a9a9a9;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip.link{color:#9cc0ef;cursor:pointer}
+.chip.sel{background:rgba(204,133,43,.18);color:#f0c58a;border:1px solid rgba(204,133,43,.45)}
+.into{font-size:11px;color:#9a9a9a}
+.into b{color:#b7cbe6;font-weight:500}
+.stage-tag{font-size:9.5px;color:#a998e8;border:1px solid #5b4f93;border-radius:2px;padding:0 3px;margin-left:4px;white-space:nowrap}
+
+.card{border-top:2px solid var(--sel);background:rgba(204,133,43,.035)}
+.card.draw{border-top-color:var(--tool);background:rgba(59,117,199,.05)}
+.ch{position:relative;display:flex;align-items:center;gap:6px;padding:4px 6px 0;min-height:22px}
+.ch .t{font-weight:600;color:var(--text-hi)}
+.ch .nm{color:#d9d9d9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ch .dims{margin-left:auto;color:#a9a9a9;white-space:nowrap}
+.path{padding:0 6px 3px 28px;font-size:11px;color:#8f8f8f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.path a{color:#9cc0ef;text-decoration:none}
+.warnbar{position:relative;margin:2px 6px 4px;padding:3px 6px;border-radius:3px;background:rgba(224,180,64,.13);border:1px solid rgba(224,180,64,.4);color:#ecd697;font-size:11.5px;display:flex;gap:6px;align-items:flex-start}
+.sec{border-top:1px solid var(--line-soft)}
+.sh{position:relative;display:flex;align-items:center;gap:5px;height:20px;padding:0 6px;font-weight:600;font-size:11.5px;color:#cfcfcf;background:rgba(255,255,255,.025)}
+.sh .tri{width:8px;color:#a7a7a7;font-size:9px}
+.sh .sum{font-weight:400;color:#8f8f8f;margin-left:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sh .addline{margin-left:auto}
+.sb{padding:2px 0 4px}
+.f{position:relative;display:grid;grid-template-columns:104px 1fr;align-items:center;min-height:20px;padding:1px 6px 1px 18px;gap:4px}
+.narrow .f{grid-template-columns:78px 1fr}
+.compact .f{grid-template-columns:52px 1fr}
+.f>label{color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.f>.c{display:flex;gap:4px;align-items:center;min-width:0;flex-wrap:wrap}
+.in{height:18px;background:var(--field);border:1px solid var(--field-b);border-radius:3px;color:#d8d8d8;padding:0 4px;display:flex;align-items:center;min-width:34px;flex:1;font-size:12px;white-space:nowrap;overflow:hidden}
+.in.s{flex:0 0 44px}
+.in.mixed{color:#9a9a9a;justify-content:center}
+.in.typed{border-color:var(--btn-on-b);color:#fff}
+.in.cursor::after{content:"";width:1px;height:12px;background:#fff;margin-left:1px;animation:bl 1s steps(1) infinite}
+@keyframes bl{50%{opacity:0}}
+.ax{color:#9a9a9a;font-size:11px;margin-right:-2px}
+.v3{display:flex;gap:4px;flex:1;min-width:0}
+.v3>span{display:flex;align-items:center;gap:3px;flex:1;min-width:0}
+.narrow .v3{flex-direction:column;align-items:stretch;gap:2px}
+.dd::after{content:"▾";margin-left:auto;padding-left:4px;color:#aaa;font-size:10px}
+.obj{gap:4px}
+.obj .sq{width:12px;height:12px;border-radius:2px;flex:none}
+.obj::after{content:"⊙";margin-left:auto;color:#aaa;font-size:11px}
+.cb{width:14px;height:14px;background:var(--field);border:1px solid var(--field-b);border-radius:3px;display:grid;place-items:center;font-size:10px;color:#fff;flex:none}
+.cb.on{background:var(--btn-on);border-color:var(--btn-on-b)}
+.cbl{display:inline-flex;align-items:center;gap:4px;margin-right:6px}
+.note-line{padding:1px 6px 2px 18px;font-size:11px;color:#8f8f8f}
+.bar{display:flex;align-items:center;gap:4px;height:24px;padding:0 6px;border-top:1px solid var(--line);background:var(--win-dark);border-radius:0 0 4px 4px;white-space:nowrap}
+.bar .gap{width:1px;height:14px;background:#4a4a4a;margin:0 2px}
+.mini{height:18px;min-width:18px;padding:0 4px;display:inline-grid;place-items:center;background:#4d4d4d;border:1px solid var(--btn-b);border-radius:3px;color:#ddd;font-size:11px}
+.mini.on{background:var(--btn-on);border-color:var(--btn-on-b);color:#fff}
+.n{position:absolute;right:-30px;top:50%;transform:translateY(-50%);width:18px;height:18px;border-radius:50%;background:var(--note);color:#1b1b1b;font:700 11px/18px Inter,sans-serif;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.5)}
+.n.l{right:auto;left:-26px}
+.ico{width:16px;height:16px;flex:none}
+.ico.s{width:14px;height:14px}
+.add{color:var(--add)} .cutc{color:var(--cut)}
+.sel-c{color:var(--sel)}
+
+/* toolbars */
+.vtb{position:absolute;left:8px;top:40px;background:var(--win);border:1px solid var(--line);border-radius:4px;padding:3px;display:flex;flex-direction:column;gap:2px;box-shadow:0 3px 10px rgba(0,0,0,.45);z-index:1}
+.vtb .tb{width:28px}
+.vtb .stor{display:flex;flex-direction:column;align-items:center;font-size:11px;color:#ddd;gap:1px;padding-top:3px;border-top:1px solid #2b2b2b;margin-top:2px}
+.htb{position:absolute;left:0;right:0;top:0;height:30px;background:#2f2f2f;border-bottom:1px solid #1d1d1d;display:flex;align-items:center;gap:3px;padding:0 6px;z-index:2}
+.htb .tb{width:28px;height:22px}
+.collapsed{position:absolute;right:8px;top:40px;display:flex;align-items:center;gap:2px;background:var(--win);border:1px solid var(--line);border-radius:4px;padding:3px 5px;color:#ddd;box-shadow:0 3px 10px rgba(0,0,0,.45);z-index:1}
+.popup{position:absolute;right:8px;top:72px;z-index:3}
+
+/* window */
+.win{width:100%;max-width:420px;background:var(--win);border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;margin:14px auto}
+.wtab{display:flex;align-items:center;gap:6px;height:22px;padding:0 8px;background:#2b2b2b;border-bottom:2px solid var(--lvl);font-weight:600;color:#ddd;border-radius:4px 4px 0 0}
+.win .sh{background:rgba(117,102,194,.08)}
+.tbl{display:grid;grid-template-columns:1fr 60px 1fr 18px;gap:3px 4px;padding:2px 6px 4px 18px;align-items:center}
+.tbl .h{color:#8f8f8f;font-size:11px}
+.res{display:flex;align-items:center;gap:6px;padding:2px 6px 2px 18px;font-size:11.5px}
+.res span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.res span.btn{flex:none}
+
+.both{display:flex;gap:40px;flex-wrap:wrap;justify-content:flex-end;align-items:flex-start}
+.subcap{font-size:11px;color:#ddd;background:rgba(0,0,0,.45);padding:1px 6px;border-radius:3px;margin-bottom:4px;display:inline-block}
+.tablecap{max-width:980px}
+table.spec{border-collapse:collapse;font-size:12.5px;margin:6px 0 0;max-width:980px;width:100%}
+table.spec td,table.spec th{border:1px solid #3a3a3a;padding:5px 8px;text-align:left;vertical-align:top}
+table.spec th{background:#2c2c2c;color:#eee}
+@media (max-width:560px){
+  .scene{padding:10px 32px 46px 10px;justify-content:center}
+  .ov{width:100%;max-width:300px}
+  .scene>svg.draw{opacity:.35}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<defs>
+<symbol id="i-select" viewBox="0 0 16 16"><path d="M4 2v11l3-3 2.3 4.3 1.6-.8L8.6 9.3H12Z" fill="currentColor"/></symbol>
+<symbol id="i-box" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M8 1.8 14 4.8v6.6L8 14.3 2 11.4V4.8Z"/><path d="M2 4.8 8 7.8l6-3M8 7.8v6.5"/></g></symbol>
+<symbol id="i-cut" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2.5" width="12" height="11" rx="1" stroke-dasharray="2.2 1.6"/><rect x="5" y="5.5" width="6" height="5" fill="currentColor" fill-opacity=".35"/></g></symbol>
+<symbol id="i-wall" viewBox="0 0 16 16"><path d="M1.5 10.5 8 4h6.5v2.2H8.9l-5.8 5.8Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+<symbol id="i-building" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M3 14.5V3h10v11.5M1.5 14.5h13"/><path d="M5.5 5.5h1.5M9 5.5h1.5M5.5 8.5h1.5M9 8.5h1.5M7 14.5v-3h2v3"/></g></symbol>
+<symbol id="i-stairs" viewBox="0 0 16 16"><path d="M1.5 14h4v-3.5h3.5V7h3.5V3.5h2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+<symbol id="i-module" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3"><rect x="3" y="2" width="10" height="12" rx=".5"/><path d="M8 2v12M3 7.5h10"/></g></symbol>
+<symbol id="i-ruler" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="m2 11 9-9 3 3-9 9Z"/><path d="m5 8 1.4 1.4M7 6l1.4 1.4M9 4l1.4 1.4"/></g></symbol>
+<symbol id="i-room" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="12" height="10"/><rect x="4.2" y="5.2" width="7.6" height="5.6" stroke-dasharray="1.5 1.2"/></g></symbol>
+<symbol id="i-ramp" viewBox="0 0 16 16"><path d="M2 13h12V5Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+<symbol id="i-column" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3"><ellipse cx="8" cy="3.5" rx="4" ry="1.6"/><path d="M4 3.5v9M12 3.5v9"/><path d="M4 12.5a4 1.6 0 0 0 8 0"/></g></symbol>
+<symbol id="i-rect" viewBox="0 0 16 16"><rect x="4" y="2.5" width="8" height="11" fill="none" stroke="currentColor" stroke-width="1.3"/></symbol>
+<symbol id="i-arch" viewBox="0 0 16 16"><path d="M4 14V7a4 4 0 0 1 8 0v7Z" fill="none" stroke="currentColor" stroke-width="1.3"/></symbol>
+<symbol id="i-circle" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.3"/></symbol>
+<symbol id="i-objects" viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/></symbol>
+<symbol id="i-faces" viewBox="0 0 16 16"><g stroke="currentColor" stroke-width="1.3"><rect x="3" y="3" width="10" height="10" rx="1" fill="none"/><rect x="3" y="3" width="10" height="4" fill="currentColor" fill-opacity=".5"/></g></symbol>
+<symbol id="i-storey" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2.5" y="2" width="11" height="3.4"/><rect x="2.5" y="6.3" width="11" height="3.4" fill="currentColor" fill-opacity=".45"/><rect x="2.5" y="10.6" width="11" height="3.4"/></g></symbol>
+<symbol id="i-grid" viewBox="0 0 16 16"><path d="M2 5.5h12M2 10.5h12M5.5 2v12M10.5 2v12" stroke="currentColor" stroke-width="1.2"/><rect x="2" y="2" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.2"/></symbol>
+<symbol id="i-snap" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 14V3h11"/><circle cx="3" cy="3" r="2.3"/></g></symbol>
+<symbol id="i-vall" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3 14V4l5-2 5 2v10Z"/></g></symbol>
+<symbol id="i-vrooms" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3 14V8h10v6Z"/><path d="M3 8 4.5 6M13 8l-1.5-2" stroke-dasharray="1.3 1.3"/></g></symbol>
+<symbol id="i-vwalls" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3 14v-3h10v3Z"/><path d="M6 11v3M10 11v3"/></g></symbol>
+<symbol id="i-wire" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="1.6 1.2"><path d="M8 1.8 14 4.8v6.6L8 14.3 2 11.4V4.8Z"/></g></symbol>
+<symbol id="i-gear" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2.3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></g></symbol>
+<symbol id="i-power" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2v6"/><path d="M4.6 4.4a5 5 0 1 0 6.8 0"/></g></symbol>
+<symbol id="i-array" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.2"><rect x="1.5" y="5.5" width="3.5" height="5"/><rect x="6.2" y="5.5" width="3.5" height="5"/><rect x="11" y="5.5" width="3.5" height="5"/></g></symbol>
+<symbol id="i-up" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M8 13V3M4.5 6.5 8 3l3.5 3.5"/><path d="M3 14h10"/></g></symbol>
+<symbol id="i-chamfer" viewBox="0 0 16 16"><path d="M2.5 13.5V6.5l4-4h7v11Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+<symbol id="i-mat" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="6" cy="6" r="1.6" fill="currentColor" fill-opacity=".6"/></symbol>
+<symbol id="i-move" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M8 1.5v13M1.5 8h13M6 3.5 8 1.5l2 2M6 12.5l2 2 2-2M3.5 6 1.5 8l2 2M12.5 6l2 2-2 2"/></g></symbol>
+<symbol id="i-new" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2" width="12" height="12" rx="1.5" stroke-dasharray="2 1.5"/><path d="M8 5v6M5 8h6"/></g></symbol>
+<symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 1.8 15 14H1Z" fill="currentColor"/><path d="M8 6v4M8 11.6v.6" stroke="#2a2a2a" stroke-width="1.5"/></symbol>
+<symbol id="i-into" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2 5h7v8"/><path d="m6 10 3 3 3-3"/></g></symbol>
+<symbol id="i-swap" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2 5.5h11l-2.5-2.5M14 10.5H3l2.5 2.5"/></g></symbol>
+<symbol id="i-link" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M6.5 9.5 9.5 6.5"/><path d="M7 4.5 8.5 3a2.5 2.5 0 0 1 3.5 3.5L10.5 8M9 11.5 7.5 13A2.5 2.5 0 0 1 4 9.5L5.5 8"/></g></symbol>
+<symbol id="i-dots" viewBox="0 0 16 16"><g fill="currentColor"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></g></symbol>
+<symbol id="i-lock" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3"><rect x="3.5" y="7" width="9" height="7" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></g></symbol>
+<symbol id="i-mouse" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3"><rect x="4" y="1.5" width="8" height="13" rx="4"/><path d="M8 1.5v5"/></g></symbol>
+</defs>
+</svg>
+
+<h1>Live Builder — макет панели в окне сцены и окна уровня</h1>
+<p class="lead">Макет к этапу 3 (ТЗ <code>LiveBuilderRework.md</code>, план <code>Stage3and5and6.md</code>, понятия — <code>Stage2and4.md</code>). Разбор, отзыв на план и список правок — <code>UX-Review.md</code> рядом.
+Подписи в интерфейсе — английские, пояснения на странице и всплывающие подсказки в Unity — русские. Размеры как в редакторе Unity: шрифт 12 px, строка поля 18–20 px, панель 300 px.
+Жёлтые кружки — номера пояснений под каждым состоянием.</p>
+<div class="legend">
+  <span><i class="sw" style="background:var(--tool)"></i>синий — про инструмент и новое</span>
+  <span><i class="sw" style="background:var(--sel)"></i>оранжевый — про выделенное</span>
+  <span><i class="sw" style="background:var(--lvl)"></i>фиолетовый — уровень (окно)</span>
+  <span><i class="sw" style="background:var(--add)"></i>голубой — добавляет</span>
+  <span><i class="sw" style="background:var(--cut)"></i>красный — вырезает</span>
+  <span><i class="sw" style="background:var(--btn-on)"></i>нажато / выбрано (как в Unity)</span>
+  <span><span class="stage-tag">stage 5</span> — появится на этом этапе, место держим</span>
+</div>
+
+<h2>Устройство панели</h2>
+<table class="spec">
+<tr><th>Сверху вниз</th><th>Что в ней</th><th>Когда меняется</th></tr>
+<tr><td>Заголовок</td><td>Название, кнопка вкл/выкл (B), ⚙ — окно уровня. Заголовок рисует сам Unity, наши — две кнопки справа</td><td>никогда</td></tr>
+<tr><td>Ряд инструментов</td><td>8 значков: Select, Box, Cut, Wall, Building, Stairs, Module, Ruler. Клавиша в углу — из Shortcut Manager. Подсказка: имя, клавиша, что делает (по-русски)</td><td>никогда</td></tr>
+<tr><td>Строка инструмента <span class="sel-c" style="color:var(--tool)">(синяя полоса)</span></td><td>Режимы значками · 1–3 частые настройки нового · <b>Into</b> — куда встанет · ⋯ — редкое во всплывающем окошке (точка на ⋯ — внутри что-то не по умолчанию)</td><td>со сменой инструмента</td></tr>
+<tr><td>Карточка <span class="sel-c">(оранжевая полоса)</span></td><td>Заголовок: значок вида, имя, размер. Путь — клик выделяет родителя. Предупреждения — сразу под ним. Секции всегда в одном порядке: <b>Construction → Cut → Material → Chamfer → Array → Move</b>. Пустая секция — одна строка-кнопка</td><td>с выделением; пока рисуешь — секция Drawing</td></tr>
+<tr><td>Нижняя строка</td><td>Storey ◀ N ▶ и пол этажа · Grid ▾ · Snap · View All / Rooms / Walls · Wireframes</td><td>никогда</td></tr>
+</table>
+
+<h2>Состояния</h2>
+<div class="grid">
+
+<!-- ═════════ A. Nothing selected ═════════ -->
+<section class="frame">
+<h3>A. Ничего не выделено <small>инструмент Select</small></h3>
+<div class="scene">
+  <svg class="draw" width="260" height="250" viewBox="0 0 260 250"><g fill="none" stroke="#2a2c2e" stroke-width="1.2"><path d="M30 200 L30 70 L150 40 L230 70 L230 200 Z" fill="#7c7f84"/><path d="M150 40 L150 170 M30 200 L150 170 L230 200" stroke="#5a5c60"/></g></svg>
+  <div class="ov">
+    <div class="ov-title">Live Builder<span class="sp"></span><span class="ib on" title="Выключить (B)"><svg class="ico s"><use href="#i-power"/></svg></span><span class="ib" title="Окно уровня"><svg class="ico s"><use href="#i-gear"/></svg></span></div>
+    <div class="tools" style="position:relative">
+      <span class="tb on"><svg class="ico"><use href="#i-select"/></svg><i>1</i></span><span class="tb"><svg class="ico"><use href="#i-box"/></svg><i>2</i></span><span class="tb"><svg class="ico"><use href="#i-cut"/></svg><i>3</i></span><span class="tb"><svg class="ico"><use href="#i-wall"/></svg><i>4</i></span><span class="tb"><svg class="ico"><use href="#i-building"/></svg><i>5</i></span><span class="tb"><svg class="ico"><use href="#i-stairs"/></svg><i>6</i></span><span class="tb"><svg class="ico"><use href="#i-module"/></svg><i>7</i></span><span class="tb"><svg class="ico"><use href="#i-ruler"/></svg><i>8</i></span>
+      <span class="n">1</span>
+    </div>
+    <div class="opts">
+      <div class="row"><span class="name">Select</span><span class="seg"><b class="on" title="Объекты целиком"><svg class="ico s"><use href="#i-objects"/></svg>Objects</b><b title="Куски граней"><svg class="ico s"><use href="#i-faces"/></svg>Faces</b></span><span class="n">2</span></div>
+    </div>
+    <div class="card" style="border-top-color:#5a5a5a;background:none">
+      <div class="row" style="color:var(--dim);padding:6px 8px">Nothing selected — click a build in the Scene view or the Hierarchy.<span class="n">3</span></div>
+    </div>
+    <div class="bar" style="position:relative">
+      <svg class="ico s"><use href="#i-storey"/></svg><span class="mini">◀</span><span class="in s" style="flex:0 0 26px;justify-content:center">2</span><span class="mini">▶</span><span class="chip">+3.0 m</span>
+      <span class="gap"></span><span class="btn" style="padding:0 4px"><svg class="ico s"><use href="#i-grid"/></svg>0.5<span style="font-size:9px">▾</span></span><span class="mini on" title="Прилипание к точкам (S)"><svg class="ico s"><use href="#i-snap"/></svg></span>
+      <span class="gap"></span><span class="seg"><b class="on"><svg class="ico s"><use href="#i-vall"/></svg></b><b><svg class="ico s"><use href="#i-vrooms"/></svg></b><b><svg class="ico s"><use href="#i-vwalls"/></svg></b></span><span class="mini"><svg class="ico s"><use href="#i-wire"/></svg></span>
+      <span class="n">4</span>
+    </div>
+  </div>
+  <div class="hint">Click — select anything <kbd>Shift</kbd> add <kbd>click again</kbd> deeper</div>
+</div>
+<ol class="notes">
+  <li>Ряд инструментов — один ряд значков 26 px, клавиша в углу берётся из Shortcut Manager: переназначил в Edit → Shortcuts — поменялась и здесь.</li>
+  <li>Строка инструмента — режимы значками со словами; клавиша «1» ещё раз — следующий режим, Shift+1 — предыдущий.</li>
+  <li>Пустая карточка — одна бледная строка. Никаких пустых секций и длинных пояснений «?»: они ушли во всплывающие подсказки и LiveBuilder.md.</li>
+  <li>Нижняя строка — всегда одна и та же: этаж ◀ 2 ▶ с полом этажа (бледная плашка — посчитанное, не поле), сетка, привязка, вид, каркасы. Слова — во всплывающих подсказках.</li>
+</ol>
+</section>
+
+<!-- ═════════ B. Box selected ═════════ -->
+<section class="frame">
+<h3>B. Выделена коробка <small>инструмент Box, режим Solid</small></h3>
+<div class="scene">
+  <svg class="draw" width="270" height="270" viewBox="0 0 270 270"><g stroke-linejoin="round"><path d="M40 190 L120 220 L220 180 L220 110 L140 80 L40 120 Z" fill="#8a8d92" stroke="#2a2c2e"/><path d="M40 120 L120 150 L220 110 M120 150 L120 220" fill="none" stroke="#2a2c2e"/><path d="M40 120 L120 150 L220 110 L140 80 Z" fill="none" stroke="#cc852b" stroke-width="2"/><path d="M40 120 L40 190 L120 220 L220 180 L220 110" fill="none" stroke="#cc852b" stroke-width="2"/><rect x="125" y="108" width="9" height="9" fill="#5cc0ff"/><rect x="76" y="160" width="9" height="9" fill="#5cc0ff"/><rect x="166" y="160" width="9" height="9" fill="#5cc0ff"/></g><text x="70" y="240" fill="#fff" font-size="11">4 m</text><text x="178" y="215" fill="#fff" font-size="11">3 m</text></svg>
+  <div class="ov">
+    <div class="ov-title">Live Builder<span class="sp"></span><span class="ib on"><svg class="ico s"><use href="#i-power"/></svg></span><span class="ib"><svg class="ico s"><use href="#i-gear"/></svg></span></div>
+    <div class="tools"><span class="tb"><svg class="ico"><use href="#i-select"/></svg><i>1</i></span><span class="tb on"><svg class="ico"><use href="#i-box"/></svg><i>2</i></span><span class="tb"><svg class="ico"><use href="#i-cut"/></svg><i>3</i></span><span class="tb"><svg class="ico"><use href="#i-wall"/></svg><i>4</i></span><span class="tb"><svg class="ico"><use href="#i-building"/></svg><i>5</i></span><span class="tb"><svg class="ico"><use href="#i-stairs"/></svg><i>6</i></span><span class="tb"><svg class="ico"><use href="#i-module"/></svg><i>7</i></span><span class="tb"><svg class="ico"><use href="#i-ruler"/></svg><i>8</i></span></div>
+    <div class="opts">
+      <div class="row"><span class="name">Box</span><span class="seg"><b class="on" title="Сплошная коробка"><svg class="ico s"><use href="#i-box"/></svg>Solid</b><b title="Комната: пустота и оболочка"><svg class="ico s"><use href="#i-room"/></svg>Room</b><b title="Пандус (этап 6)"><svg class="ico s"><use href="#i-ramp"/></svg></b><b title="Колонна (этап 6)"><svg class="ico s"><use href="#i-column"/></svg></b></span><span class="n">1</span></div>
+      <div class="row"><span class="seg" title="Наружу добавляет, внутрь вырезает"><b class="on">Auto</b><b class="add">Add</b><b class="cutc">Cut</b></span><span class="btn ghost" title="Следующая коробка — отдельный объект"><svg class="ico s"><use href="#i-new"/></svg>New</span><span class="btn ghost" title="Повтор вверх до верха здания"><svg class="ico s"><use href="#i-up"/></svg>To top</span><span class="btn ghost" style="padding:0 3px" title="Редкое: угол, материалы нового"><svg class="ico s"><use href="#i-dots"/></svg></span><span class="n">2</span></div>
+      <div class="row into"><svg class="ico s"><use href="#i-into"/></svg>Into: <b>Section A › Storey 2</b><span class="n">3</span></div>
+    </div>
+    <div class="card">
+      <div class="ch"><svg class="ico add"><use href="#i-box"/></svg><span class="t">Box</span><span class="nm">Add Box</span><span class="dims">4 × 3 × 2.5 m</span></div>
+      <div style="position:relative"><div class="path"><a href="#">Section A</a> › <a href="#">Storey 2</a> › Add Box</div><span class="n">4</span></div>
+      <div class="sec"><div class="sh"><span class="tri">▾</span>Construction</div>
+        <div class="sb">
+          <div class="f"><label>Size</label><div class="c"><div class="v3"><span><b class="ax">X</b><span class="in">4</span></span><span><b class="ax">Y</b><span class="in">3</span></span><span><b class="ax">Z</b><span class="in">2.5</span></span></div></div><span class="n">5</span></div>
+          <div class="f"><label></label><div class="c"><span class="btn" title="Превратить в вырез той же формы"><svg class="ico s cutc"><use href="#i-swap"/></svg>Make Cut</span><span class="chip" title="Угол коробки в осях объекта — под ⋯">corner in ⋯</span></div></div>
+        </div></div>
+      <div class="sec"><div class="sh"><span class="tri">▾</span>Material</div>
+        <div class="sb">
+          <div class="f"><label>Side</label><div class="c"><span class="in dd">All</span></div></div>
+          <div class="f"><label>Material</label><div class="c"><span class="in obj"><i class="sq" style="background:#9b8b78"></i>Concrete Wall</span></div></div>
+          <div class="f" style="opacity:.5"><label>Offset / Scale</label><div class="c"><span class="in s">0</span><span class="in s">1</span><span class="stage-tag">stage 5</span></div></div>
+        </div></div>
+      <div class="sec"><div class="sh"><span class="tri">▸</span>Chamfer<span class="sum">none</span><span class="addline btn ghost">+ Add</span></div></div>
+      <div class="sec"><div class="sh"><span class="tri">▸</span>Array<span class="sum">none</span><span class="addline btn ghost">+ Add</span><span class="n">6</span></div></div>
+      <div class="sec"><div class="sh"><span class="tri">▸</span>Move &amp; Copies<span class="sum">exact offset, ×N copies</span></div></div>
+    </div>
+    <div class="bar"><svg class="ico s"><use href="#i-storey"/></svg><span class="mini">◀</span><span class="in s" style="flex:0 0 26px;justify-content:center">2</span><span class="mini">▶</span><span class="chip">+3.0 m</span><span class="gap"></span><span class="btn" style="padding:0 4px"><svg class="ico s"><use href="#i-grid"/></svg>0.5<span style="font-size:9px">▾</span></span><span class="mini on"><svg class="ico s"><use href="#i-snap"/></svg></span><span class="gap"></span><span class="seg"><b class="on"><svg class="ico s"><use href="#i-vall"/></svg></b><b><svg class="ico s"><use href="#i-vrooms"/></svg></b><b><svg class="ico s"><use href="#i-vwalls"/></svg></b></span><span class="mini"><svg class="ico s"><use href="#i-wire"/></svg></span></div>
+  </div>
+  <div class="keys"><b>Box — keys</b>square on a face — size · <kbd>Alt</kbd> both · <kbd>Alt</kbd><kbd>Shift</kbd> all<br><kbd>Ctrl</kbd> + drag square — extrude a new box<br><kbd>Shift</kbd> + move handles — copy</div>
+  <div class="hint">Drag a face square — resize <kbd>Ctrl</kbd> extrude <kbd>Esc</kbd> deselect</div>
+</div>
+<ol class="notes">
+  <li>Режимы «Коробки»: Solid / Room подписаны, Ramp и Column (этап 6) — только значки, они реже. «2» — следующий режим, <b>Shift+2 — предыдущий</b>: Room → Solid одним нажатием.</li>
+  <li>Частое про новое: Auto/Add/Cut (push/pull), New — отдельный объект, To top — повтор вверх до верха здания (это <code>LiveBuilderArray</code> по Y). Те же слова и значок — в секции Array выделенного. ⋯ — угол, материалы нового.</li>
+  <li><b>Into</b> — куда встанет следующая коробка. После этапа 2 от этого зависит, что вырез режет, — видно до клика.</li>
+  <li>Путь выделенного: клик по «Storey 2» выделит этаж, по «Section A» — объект. Заменяет поиск в иерархии.</li>
+  <li>Construction всегда первой: главные числа — сразу под заголовком. У коробки нет «Mode Add/Cut»: по плану 2/4 вырез — всегда вырез, переход — кнопкой Make Cut.</li>
+  <li>Пустые Chamfer и Array — одна строка с «+ Add», без пустого блока. Move &amp; Copies — последней и свёрнута. Шпаргалка слева внизу — только клавиши инструмента и выделенного, 3 строки.</li>
+</ol>
+</section>
+
+<!-- ═════════ C. Cut selected ═════════ -->
+<section class="frame">
+<h3>C. Выделен вырез <small>инструмент Cut, форма Rectangle</small></h3>
+<div class="scene">
+  <svg class="draw" width="260" height="280" viewBox="0 0 260 280"><path d="M20 60 L200 30 L200 250 L20 260 Z" fill="#878a8f" stroke="#2a2c2e"/><g fill="#3a3c3f"><rect x="40" y="90" width="26" height="26"/><rect x="85" y="84" width="26" height="26"/><rect x="130" y="78" width="26" height="26"/><rect x="40" y="150" width="26" height="26"/><rect x="85" y="144" width="26" height="26"/><rect x="130" y="138" width="26" height="26"/></g><rect x="85" y="144" width="26" height="26" fill="none" stroke="#cc852b" stroke-width="2"/><rect x="40" y="208" width="116" height="30" fill="none" stroke="#e0504a" stroke-dasharray="3 3" opacity=".5"/><text x="44" y="227" fill="#fbd" font-size="10">storey 1 skipped</text></svg>
+  <div class="ov">
+    <div class="ov-title">Live Builder<span class="sp"></span><span class="ib on"><svg class="ico s"><use href="#i-power"/></svg></span><span class="ib"><svg class="ico s"><use href="#i-gear"/></svg></span></div>
+    <div class="tools"><span class="tb"><svg class="ico"><use href="#i-select"/></svg><i>1</i></span><span class="tb"><svg class="ico"><use href="#i-box"/></svg><i>2</i></span><span class="tb on"><svg class="ico"><use href="#i-cut"/></svg><i>3</i></span><span class="tb"><svg class="ico"><use href="#i-wall"/></svg><i>4</i></span><span class="tb"><svg class="ico"><use href="#i-building"/></svg><i>5</i></span><span class="tb"><svg class="ico"><use href="#i-stairs"/></svg><i>6</i></span><span class="tb"><svg class="ico"><use href="#i-module"/></svg><i>7</i></span><span class="tb"><svg class="ico"><use href="#i-ruler"/></svg><i>8</i></span></div>
+    <div class="opts">
+      <div class="row"><span class="name">Cut</span><span class="seg"><b class="on"><svg class="ico s"><use href="#i-rect"/></svg></b><b><svg class="ico s"><use href="#i-arch"/></svg></b><b><svg class="ico s"><use href="#i-circle"/></svg></b></span><span class="in dd" style="flex:1" title="Размер для клика по стене">Window 1.5 × 1.5</span><span class="n">1</span></div>
+      <div class="row"><span class="btn on"><svg class="ico s"><use href="#i-up"/></svg>To top</span><span class="btn ghost dot" style="padding:0 4px" title="Внутри не по умолчанию: ниша 0,2 м"><svg class="ico s"><use href="#i-dots"/></svg></span><span class="into" style="margin-left:4px"><svg class="ico s" style="vertical-align:-3px"><use href="#i-into"/></svg> Into: <b>Building › Storey 2</b></span><span class="n">2</span></div>
+    </div>
+    <div class="card">
+      <div class="ch"><svg class="ico cutc"><use href="#i-cut"/></svg><span class="t">Cut</span><span class="nm">Window South</span><span class="dims">1.5 × 1.5 m</span></div>
+      <div class="path"><a href="#">Section A</a> › <a href="#">Building</a> › <a href="#">Storey 2</a> › Window South</div>
+      <div class="sec"><div class="sh"><span class="tri">▾</span>Construction</div><div class="sb">
+        <div class="f"><label>Shape</label><div class="c"><span class="seg"><b class="on"><svg class="ico s"><use href="#i-rect"/></svg>Rect</b><b><svg class="ico s"><use href="#i-arch"/></svg>Arch</b><b><svg class="ico s"><use href="#i-circle"/></svg>Circle</b></span></div></div>
+        <div class="f"><label>Width × Height</label><div class="c"><span class="in">1.5</span><span class="in">1.5</span></div></div>
+        <div class="f"><label>Sill above floor</label><div class="c"><span class="in">0.9</span></div></div>
+      </div></div>
+      <div class="sec"><div class="sh"><span class="tri">▾</span>Cut</div><div class="sb">
+        <div class="f"><label>Where it cuts</label><div class="c"><span class="seg"><b class="on">Own object</b><b>Everything</b></span></div><span class="n">3</span></div>
+        <div class="f"><label>Cuts</label><div class="c"><span class="seg"><b>All</b><b>Slabs</b><b class="on">Walls</b></span></div></div>
+        <div class="f"><label>Depth</label><div class="c"><span class="seg"><b class="on">Through</b><b>Niche</b></span></div></div>
+        <div class="note-line">Cuts now: «Building», «Partition 2»</div>
+      </div></div>
+      <div class="sec"><div class="sh"><span class="tri">▸</span>Material<span class="sum">hole sides: Plaster</span></div></div>
+      <div class="sec"><div class="sh"><span class="tri">▾</span>Array<span class="sum">8 × 8 copies</span><span class="n">4</span></div><div class="sb">
+        <div class="f"><label>Along</label><div class="c"><span class="seg"><b>Axes</b><b class="on">Wall</b></span><span class="seg"><b>Count</b><b class="on">Fill</b></span></div></div>
+        <div class="f"><label>X — length</label><div class="c"><span class="in">whole side</span><span class="ax">margin</span><span class="in s">0.6</span></div></div>
+        <div class="f"><label>Y — up</label><div class="c"><span class="btn on"><svg class="ico s"><use href="#i-up"/></svg>To top</span><span class="chip">9 · step = storey</span></div></div>
+        <div class="f"><label>Skip Y</label><div class="c"><span class="in">1</span></div></div>
+        <div class="note-line">X: 8 copies, step 2.9 m · Pattern — under ⋯</div>
+      </div></div>
+      <div class="sec"><div class="sh"><span class="tri">▸</span>Move &amp; Copies</div></div>
+    </div>
+    <div class="bar"><svg class="ico s"><use href="#i-storey"/></svg><span class="mini">◀</span><span class="in s" style="flex:0 0 26px;justify-content:center">2</span><span class="mini">▶</span><span class="chip">+3.0 m</span><span class="gap"></span><span class="btn" style="padding:0 4px"><svg class="ico s"><use href="#i-grid"/></svg>0.5<span style="font-size:9px">▾</span></span><span class="mini on"><svg class="ico s"><use href="#i-snap"/></svg></span><span class="gap"></span><span class="seg"><b class="on"><svg class="ico s"><use href="#i-vall"/></svg></b><b><svg class="ico s"><use href="#i-vrooms"/></svg></b><b><svg class="ico s"><use href="#i-vwalls"/></svg></b></span><span class="mini"><svg class="ico s"><use href="#i-wire"/></svg></span></div>
+  </div>
+  <div class="hint">Click a wall — window 1.5 × 1.5 <kbd>Shift</kbd>+click row along wall <kbd>drag</kbd> own size</div>
+</div>
+<ol class="notes">
+  <li>Форма — режимы значками (клавиша «3» ещё раз — следующая). Рядом — готовый размер для клика: самое частое, без ⋯.</li>
+  <li>To top нажата и помнится — следующий вырез сразу на всех этажах выше. Точка на ⋯ — внутри не по умолчанию (ниша), спрятанное не удивит.</li>
+  <li>Секция Cut — та же у выреза любой формы и у выреза-коробки: Where it cuts, Cuts, Depth, а ниже строкой — что режет сейчас.</li>
+  <li>Array раскрыта, потому что есть. «Y — up: To top» — те же слова и значок, что в строке инструмента. Предел 5000 копий — жёлтой строкой под заголовком карточки, а не внутри секции.</li>
+</ol>
+</section>
+
+<!-- ═════════ D. Building selected ═════════ -->
+<section class="frame">
+<h3>D. Выделено здание <small>инструмент Building, только что нарисовано</small></h3>
+<div class="scene">
+  <svg class="draw" width="250" height="290" viewBox="0 0 250 290"><path d="M20 270 L20 40 L150 20 L230 45 L230 260 L150 280 Z" fill="#8a8d92" stroke="#cc852b" stroke-width="2"/><path d="M150 20 L150 280" stroke="#2a2c2e"/><g stroke="#4f5256" fill="none">
+  <path d="M20 65 L150 48 L230 70"/><path d="M20 90 L150 76 L230 95"/><path d="M20 115 L150 104 L230 120"/><path d="M20 140 L150 132 L230 145"/><path d="M20 165 L150 160 L230 170"/><path d="M20 190 L150 188 L230 195"/><path d="M20 215 L150 216 L230 220"/><path d="M20 240 L150 244 L230 240"/></g><g fill="#5cc0ff"><circle cx="20" cy="270" r="4"/><circle cx="150" cy="280" r="4"/><circle cx="230" cy="260" r="4"/></g></svg>
+  <div class="ov">
+    <div class="ov-title">Live Builder<span class="sp"></span><span class="ib on"><svg class="ico s"><use href="#i-power"/></svg></span><span class="ib"><svg class="ico s"><use href="#i-gear"/></svg></span></div>
+    <div class="tools"><span class="tb"><svg class="ico"><use href="#i-select"/></svg><i>1</i></span><span class="tb"><svg class="ico"><use href="#i-box"/></svg><i>2</i></span><span class="tb"><svg class="ico"><use href="#i-cut"/></svg><i>3</i></span><span class="tb"><svg class="ico"><use href="#i-wall"/></svg><i>4</i></span><span class="tb on"><svg class="ico"><use href="#i-building"/></svg><i>5</i></span><span class="tb"><svg class="ico"><use href="#i-stairs"/></svg><i>6</i></span><span class="tb"><svg class="ico"><use href="#i-module"/></svg><i>7</i></span><span class="tb"><svg class="ico"><use href="#i-ruler"/></svg><i>8</i></span></div>
+    <div class="opts">
+      <div class="row"><span class="name">Building</span><span class="ax">Storeys</span><span class="in s">9</span><span class="in dd" style="flex:1">Exterior 0.3</span><span class="btn ghost" style="padding:0 3px"><svg class="ico s"><use href="#i-dots"/></svg></span><span class="n">1</span></div>
+    </div>
+    <div class="card">
+      <div class="ch"><svg class="ico"><use href="#i-building"/></svg><span class="t">Building</span><span class="nm">Section A</span><span class="dims">24 × 12 m · 9 st.</span></div>
+      <div class="path"><a href="#">Section A</a> › Building<span class="chip" style="margin-left:6px">height 27.6 · clear 2.8 m</span></div>
+      <div class="warnbar"><svg class="ico s" style="color:var(--warn)"><use href="#i-warn"/></svg><span>Rotated inside its object — interior will drift. Rotate the object instead.</span><span class="n" style="right:-36px">2</span></div>
+      <div class="sec"><div class="sh"><span class="tri">▾</span>Construction</div><div class="sb">
+        <div class="f"><label>Storeys</label><div class="c"><span class="in typed">9</span></div><span class="n">3</span></div>
+        <div class="f"><label>Storey height</label><div class="c"><span class="in" style="color:#9a9a9a">3.0</span><span class="btn on" title="Высота этажа — из уровня"><svg class="ico s"><use href="#i-link"/></svg>Level</span></div></div>
+        <div class="f"><label>Stands on storey</label><div class="c"><span class="in s">1</span><span class="chip">floor 0.0 m</span></div></div>
+        <div class="f"><label>Wall type</label><div class="c"><span class="in dd">Exterior Wall 0.3</span></div></div>
+        <div class="f"><label>Line</label><div class="c"><span class="seg"><b class="on">Outside</b><b>Inside</b><b>Axis</b></span></div></div>
+        <div class="f"><label>Slab</label><div class="c"><span class="in s">0.2</span><span class="cbl"><span class="cb on">✓</span>Floor</span><span class="cbl"><span class="cb on">✓</span>Roof</span></div></div>
+        <div class="f"><label>Parapet</label><div class="c"><span class="cb on">✓</span><span class="in s">1.0</span><span class="btn dis">Gable Roof</span><span class="stage-tag">stage 6</span></div></div>
+      </div></div>
+      <div class="sec"><div class="sh"><span class="tri">▸</span>Points<span class="sum">4 corners · none selected</span></div></div>
+      <div class="sec"><div class="sh"><span class="tri">▾</span>Inside<span class="n">4</span></div><div class="sb"><div class="f" style="grid-template-columns:1fr"><div class="c"><span class="chip link">Storey 1 · 6</span><span class="chip link">Storey 2 · 3</span><span class="chip link">Storey 3–9 · 0</span><span class="chip link">Roof · 1</span></div></div></div></div>
+      <div class="sec"><div class="sh"><span class="tri">▸</span>Material<span class="sum">outer, inner, floor, ceiling, roof</span></div></div>
+      <div class="sec"><div class="sh"><span class="tri">▸</span>Array<span class="sum">none</span><span class="addline btn ghost">+ Add</span></div></div>
+      <div class="sec"><div class="sh"><span class="tri">▸</span>Move &amp; Copies</div></div>
+    </div>
+    <div class="bar"><svg class="ico s"><use href="#i-storey"/></svg><span class="mini">◀</span><span class="in s" style="flex:0 0 26px;justify-content:center">1</span><span class="mini">▶</span><span class="chip">+0.0 m</span><span class="gap"></span><span class="btn" style="padding:0 4px"><svg class="ico s"><use href="#i-grid"/></svg>1<span style="font-size:9px">▾</span></span><span class="mini on"><svg class="ico s"><use href="#i-snap"/></svg></span><span class="gap"></span><span class="seg"><b class="on"><svg class="ico s"><use href="#i-vall"/></svg></b><b><svg class="ico s"><use href="#i-vrooms"/></svg></b><b><svg class="ico s"><use href="#i-vwalls"/></svg></b></span><span class="mini"><svg class="ico s"><use href="#i-wire"/></svg></span></div>
+  </div>
+  <div class="hint">Click an empty spot — new outline <kbd>click a point</kbd> select <kbd>←↑→↓</kbd> nudge</div>
+</div>
+<ol class="notes">
+  <li>Строка «Здания» — число этажей и тип стен для следующего; редкое (толщины, пол, крыша, материалы) — под ⋯.</li>
+  <li>Предупреждение — сразу под заголовком, жёлтым, одной строкой: что не так и что сделать. Не прячется в секции.</li>
+  <li>Первое поле карточки — «Storeys»: нарисовал контур, отпустил — число этажей прямо под рукой, окно не нужно (Blender: «поправить последнее»). Высота этажа бледная со значком связи — берётся из уровня; отжал «Level» — своя.</li>
+  <li>Inside — этажи здания плашками с числом вещей внутри; клик — выделить этаж. Это иерархия <code>Storey N</code> из плана 2/4, видимая без окна Hierarchy. Слово — Storey, не Floor: «Floor» здесь уже значит «пол».</li>
+</ol>
+</section>
+
+<!-- ═════════ E. Several selected ═════════ -->
+<section class="frame">
+<h3>E. Выделено несколько <small>разных видов и одного вида</small></h3>
+<div class="scene">
+  <div class="both">
+    <div>
+      <span class="subcap">разные: 2 Box · 1 Cut · 1 Building</span>
+      <div class="ov compact" style="width:280px">
+        <div class="ov-title">Live Builder<span class="sp"></span><span class="ib on"><svg class="ico s"><use href="#i-power"/></svg></span><span class="ib"><svg class="ico s"><use href="#i-gear"/></svg></span></div>
+        <div class="tools"><span class="tb on"><svg class="ico"><use href="#i-select"/></svg><i>1</i></span><span class="tb"><svg class="ico"><use href="#i-box"/></svg><i>2</i></span><span class="tb"><svg class="ico"><use href="#i-cut"/></svg><i>3</i></span><span class="tb"><svg class="ico"><use href="#i-wall"/></svg><i>4</i></span><span class="tb"><svg class="ico"><use href="#i-building"/></svg><i>5</i></span><span class="tb"><svg class="ico"><use href="#i-stairs"/></svg><i>6</i></span><span class="tb"><svg class="ico"><use href="#i-module"/></svg><i>7</i></span><span class="tb"><svg class="ico"><use href="#i-ruler"/></svg><i>8</i></span></div>
+        <div class="opts"><div class="row"><span class="name">Select</span><span class="seg"><b class="on"><svg class="ico s"><use href="#i-objects"/></svg>Objects</b><b><svg class="ico s"><use href="#i-faces"/></svg>Faces</b></span></div></div>
+        <div class="card">
+          <div class="ch"><span class="t">4 selected</span><span class="dims">box 26 × 14 × 28 m</span></div>
+          <div class="row" style="flex-wrap:wrap;padding-bottom:4px"><span class="chip sel" title="Выделить только коробки"><svg class="ico s add"><use href="#i-box"/></svg>2 Box</span><span class="chip sel"><svg class="ico s cutc"><use href="#i-cut"/></svg>1 Cut</span><span class="chip sel"><svg class="ico s"><use href="#i-building"/></svg>1 Building</span><span class="n">1</span></div>
+          <div class="note-line" style="padding-left:8px">Only what all of them have. Click a kind to edit it.</div>
+          <div class="sec"><div class="sh"><span class="tri">▸</span>Array<span class="sum">1 of 4 has one</span><span class="addline btn ghost">+ Add to each</span><span class="n">2</span></div></div>
+          <div class="sec"><div class="sh"><span class="tri">▾</span>Move &amp; Copies</div><div class="sb">
+            <div class="f"><label>Offset</label><div class="c"><div class="v3"><span><b class="ax">X</b><span class="in">0</span></span><span><b class="ax">Y</b><span class="in">3</span></span><span><b class="ax">Z</b><span class="in">0</span></span></div></div></div>
+            <div class="f"><label></label><div class="c"><span class="btn">Move</span><span class="btn">Copies ×</span><span class="in s">2</span></div></div>
+          </div></div>
+        </div>
+        <div class="bar"><svg class="ico s"><use href="#i-storey"/></svg><span class="mini">◀</span><span class="in s" style="flex:0 0 26px;justify-content:center">2</span><span class="mini">▶</span><span class="gap"></span><span class="btn" style="padding:0 4px"><svg class="ico s"><use href="#i-grid"/></svg>0.5</span><span class="mini on"><svg class="ico s"><use href="#i-snap"/></svg></span><span class="gap"></span><span class="mini"><svg class="ico s"><use href="#i-wire"/></svg></span></div>
+      </div>
+    </div>
+    <div>
+      <span class="subcap">одного вида: 3 Box</span>
+      <div class="ov" style="width:250px">
+        <div class="card" style="border-radius:4px 4px 0 0">
+          <div class="ch"><svg class="ico add"><use href="#i-box"/></svg><span class="t">3 Boxes</span><span class="dims">mixed size</span></div>
+          <div class="path"><a href="#">Section A</a> › <a href="#">Storey 2</a></div>
+          <div class="sec"><div class="sh"><span class="tri">▾</span>Construction</div><div class="sb">
+            <div class="f" style="grid-template-columns:56px 1fr"><label>Size</label><div class="c"><div class="v3"><span><b class="ax">X</b><span class="in mixed">—</span></span><span><b class="ax">Y</b><span class="in">3</span></span><span><b class="ax">Z</b><span class="in mixed">—</span></span></div></div><span class="n">3</span></div>
+          </div></div>
+          <div class="sec"><div class="sh"><span class="tri">▾</span>Material</div><div class="sb">
+            <div class="f" style="grid-template-columns:56px 1fr"><label>All</label><div class="c"><span class="in obj mixed" style="justify-content:flex-start">— mixed</span></div></div>
+          </div></div>
+          <div class="sec"><div class="sh"><span class="tri">▸</span>Chamfer<span class="sum">2 of 3</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="hint">4 selected <kbd>Shift</kbd>+click add / remove <kbd>Esc</kbd> deselect</div>
+</div>
+<ol class="notes">
+  <li>Разные виды — плашки «2 Box · 1 Cut · 1 Building»; клик по плашке оставляет выделенными только их (как в Figma). Нет «+ N more» с полями одного активного: человек не правит одно, думая, что правит все.</li>
+  <li>Показываются только общие секции — Array и Move &amp; Copies; «+ Add to each» ставит повтор каждому.</li>
+  <li>Один вид — те же поля, правка ставит всем; разные значения — «—» (<code>EditorGUI.showMixedValue</code>, даром через <code>SerializedObject</code> с несколькими целями).</li>
+</ol>
+</section>
+
+<!-- ═════════ F. Drawing ═════════ -->
+<section class="frame">
+<h3>F. Идёт рисование <small>Box, шаг 2 из 2 — высота, набрано «4 X 3 X 1,5»</small></h3>
+<div class="scene">
+  <svg class="draw" width="270" height="270" viewBox="0 0 270 270"><path d="M30 190 L120 222 L230 180 L140 150 Z" fill="rgba(92,192,255,.18)" stroke="#5cc0ff" stroke-width="1.5" stroke-dasharray="5 3"/><path d="M30 190 L30 130 L120 162 L230 120 L230 180 M120 162 L120 222 M30 130 L140 90 L230 120" fill="none" stroke="#5cc0ff" stroke-width="1.5"/><text x="56" y="225" fill="#fff" font-size="11">4 m</text><text x="182" y="216" fill="#fff" font-size="11">3 m</text><text x="236" y="152" fill="#fff" font-size="11">1.37</text><g transform="translate(150 60)"><rect x="0" y="0" width="92" height="20" rx="3" fill="rgba(20,20,20,.85)" stroke="#3a79bb"/><text x="8" y="14" fill="#fff" font-size="12">4 × 3 × 1,5▌</text></g><path d="M196 82 L196 100" stroke="#3a79bb"/><circle cx="196" cy="104" r="4" fill="none" stroke="#fff"/></svg>
+  <div class="ov">
+    <div class="ov-title">Live Builder<span class="sp"></span><span class="ib on"><svg class="ico s"><use href="#i-power"/></svg></span><span class="ib"><svg class="ico s"><use href="#i-gear"/></svg></span></div>
+    <div class="tools"><span class="tb"><svg class="ico"><use href="#i-select"/></svg><i>1</i></span><span class="tb on"><svg class="ico"><use href="#i-box"/></svg><i>2</i></span><span class="tb"><svg class="ico"><use href="#i-cut"/></svg><i>3</i></span><span class="tb"><svg class="ico"><use href="#i-wall"/></svg><i>4</i></span><span class="tb"><svg class="ico"><use href="#i-building"/></svg><i>5</i></span><span class="tb"><svg class="ico"><use href="#i-stairs"/></svg><i>6</i></span><span class="tb"><svg class="ico"><use href="#i-module"/></svg><i>7</i></span><span class="tb"><svg class="ico"><use href="#i-ruler"/></svg><i>8</i></span></div>
+    <div class="opts dim">
+      <div class="row"><span class="name">Box</span><span class="seg"><b class="on"><svg class="ico s"><use href="#i-box"/></svg>Solid</b><b><svg class="ico s"><use href="#i-room"/></svg>Room</b><b><svg class="ico s"><use href="#i-ramp"/></svg></b><b><svg class="ico s"><use href="#i-column"/></svg></b></span><span class="n">1</span></div>
+    </div>
+    <div class="card draw">
+      <div class="ch"><svg class="ico" style="color:#9cc0ef"><use href="#i-box"/></svg><span class="t">Drawing</span><span class="nm">new Box</span><span class="dims">step 2 / 2 · Height</span><span class="n">2</span></div>
+      <div class="sb" style="padding-top:4px">
+        <div class="f"><label>Width</label><div class="c"><span class="in typed">4</span><svg class="ico s" style="color:#9cc0ef" title="набрано"><use href="#i-lock"/></svg></div></div>
+        <div class="f"><label>Length</label><div class="c"><span class="in typed">3</span><svg class="ico s" style="color:#9cc0ef"><use href="#i-lock"/></svg></div></div>
+        <div class="f"><label>Height</label><div class="c"><span class="in" style="color:#aaa">1.37</span><svg class="ico s" style="color:#aaa"><use href="#i-mouse"/></svg></div></div>
+        <div class="f"><label>Typed</label><div class="c"><span class="in typed cursor">4 × 3 × 1,5</span></div><span class="n">3</span></div>
+        <div class="note-line"><kbd>Enter</kbd> box 4 × 3 × 1.5 · <kbd>⌫</kbd> erase · <kbd>Esc</kbd> clear typing, again — drop box</div>
+        <div class="note-line" style="color:#9cb4d4"><svg class="ico s" style="vertical-align:-3px"><use href="#i-into"/></svg> Into: Section A › Storey 2 · Auto → adds (outward)</div>
+      </div>
+    </div>
+    <div class="bar"><svg class="ico s"><use href="#i-storey"/></svg><span class="mini">◀</span><span class="in s" style="flex:0 0 26px;justify-content:center">2</span><span class="mini">▶</span><span class="chip">+3.0 m</span><span class="gap"></span><span class="btn" style="padding:0 4px"><svg class="ico s"><use href="#i-grid"/></svg>0.5<span style="font-size:9px">▾</span></span><span class="mini on"><svg class="ico s"><use href="#i-snap"/></svg></span><span class="gap"></span><span class="seg"><b class="on"><svg class="ico s"><use href="#i-vall"/></svg></b><b><svg class="ico s"><use href="#i-vrooms"/></svg></b><b><svg class="ico s"><use href="#i-vwalls"/></svg></b></span><span class="mini"><svg class="ico s"><use href="#i-wire"/></svg></span></div>
+  </div>
+  <div class="hint">Move the mouse — height, click — done <kbd>Enter</kbd> typed <kbd>Esc</kbd> cancel</div>
+</div>
+<ol class="notes">
+  <li>Строка инструмента притушена, но работает: режим во время жеста не меняется (клавиши цифр сейчас — набор числа, контекст «рисую»).</li>
+  <li>Карточка выделенного уступает место секции <b>Drawing</b> с синей полосой: это про новое, а не про выделенное. Шаг жеста — в заголовке.</li>
+  <li>Набранное видно в двух местах: у прицела (главное, глаз там) и в панели вместе с тем, что сделают Enter и Esc. Замок — число набрано и мышь его не меняет; значок мыши — число ещё от мыши. Как Measurements box в SketchUp.</li>
+</ol>
+</section>
+
+<!-- ═════════ G. Narrow ═════════ -->
+<section class="frame">
+<h3>G. Узкая панель <small>220 px, выделена коробка</small></h3>
+<div class="scene">
+  <div class="ov narrow">
+    <div class="ov-title">Live Builder<span class="sp"></span><span class="ib on"><svg class="ico s"><use href="#i-power"/></svg></span><span class="ib"><svg class="ico s"><use href="#i-gear"/></svg></span></div>
+    <div class="tools" style="position:relative"><span class="tb"><svg class="ico"><use href="#i-select"/></svg><i>1</i></span><span class="tb on"><svg class="ico"><use href="#i-box"/></svg><i>2</i></span><span class="tb"><svg class="ico"><use href="#i-cut"/></svg><i>3</i></span><span class="tb"><svg class="ico"><use href="#i-wall"/></svg><i>4</i></span><span class="tb"><svg class="ico"><use href="#i-building"/></svg><i>5</i></span><span class="tb"><svg class="ico"><use href="#i-stairs"/></svg><i>6</i></span><span class="tb"><svg class="ico"><use href="#i-module"/></svg><i>7</i></span><span class="tb"><svg class="ico"><use href="#i-ruler"/></svg><i>8</i></span><span class="n">1</span></div>
+    <div class="opts"><div class="row"><span class="seg"><b class="on"><svg class="ico s"><use href="#i-box"/></svg></b><b><svg class="ico s"><use href="#i-room"/></svg></b><b><svg class="ico s"><use href="#i-ramp"/></svg></b><b><svg class="ico s"><use href="#i-column"/></svg></b></span><span class="seg"><b class="on">A</b><b class="add">+</b><b class="cutc">−</b></span><span class="btn ghost" style="padding:0 3px"><svg class="ico s"><use href="#i-dots"/></svg></span><span class="n">2</span></div>
+      <div class="row into"><svg class="ico s"><use href="#i-into"/></svg><b style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">…› Storey 2</b></div></div>
+    <div class="card">
+      <div class="ch"><svg class="ico add"><use href="#i-box"/></svg><span class="nm">Add Box</span><span class="dims">4×3×2.5</span></div>
+      <div class="path"><a href="#">…</a> › <a href="#">Storey 2</a> › Add Box</div>
+      <div class="sec"><div class="sh"><span class="tri">▾</span>Construction</div><div class="sb">
+        <div class="f"><label>Size</label><div class="c"><div class="v3"><span><b class="ax">X</b><span class="in">4</span></span><span><b class="ax">Y</b><span class="in">3</span></span><span><b class="ax">Z</b><span class="in">2.5</span></span></div></div><span class="n">3</span></div>
+      </div></div>
+      <div class="sec"><div class="sh"><span class="tri">▸</span>Material<span class="sum">Concrete</span></div></div>
+      <div class="sec"><div class="sh"><span class="tri">▸</span>Chamfer<span class="addline btn ghost" style="padding:0 4px">+</span></div></div>
+      <div class="sec"><div class="sh"><span class="tri">▸</span>Array<span class="addline btn ghost" style="padding:0 4px">+</span></div></div>
+      <div class="sec"><div class="sh"><span class="tri">▸</span>Move</div></div>
+    </div>
+    <div class="bar" style="position:relative"><span class="mini">◀</span><span class="in s" style="flex:0 0 22px;justify-content:center">2</span><span class="mini">▶</span><span class="gap"></span><span class="btn" style="padding:0 3px"><svg class="ico s"><use href="#i-grid"/></svg>0.5</span><span class="mini on"><svg class="ico s"><use href="#i-snap"/></svg></span><span class="btn" style="padding:0 3px"><svg class="ico s"><use href="#i-vall"/></svg><span style="font-size:9px">▾</span></span><span class="n">4</span></div>
+  </div>
+  <div class="hint">Drag a face square — resize</div>
+</div>
+<ol class="notes">
+  <li>Уже 260 px — инструменты в два ряда по четыре; значки и клавиши те же, место значка не меняется.</li>
+  <li>Переключатели теряют слова, остаются значки, слово — во всплывающей подсказке (это уже умеет <code>LiveBuilderWindowControls.Switch</code>). Auto/Add/Cut — «A + −» тем же цветом.</li>
+  <li>Подписи полей сужаются до 78 px, X/Y/Z — в столбик (как <code>Vector3Field</code> без <code>wideMode</code>). Путь сокращается с начала: «… › Storey 2».</li>
+  <li>Нижняя строка: пол этажа и каркасы прячутся, три вида — одной кнопкой со списком. Минимум ширины панели — 220 px.</li>
+</ol>
+</section>
+
+<!-- ═════════ H. Docked ═════════ -->
+<section class="frame">
+<h3>H. Панель пристыкована <small>к краю — колонкой, к полосе сверху — рядом</small></h3>
+<div class="scene" style="min-height:360px">
+  <div class="htb"><span style="font-size:11px;color:#aaa;margin-right:4px">Live Builder</span><span class="tb"><svg class="ico"><use href="#i-select"/></svg><i>1</i></span><span class="tb on"><svg class="ico"><use href="#i-box"/></svg><i>2</i></span><span class="tb"><svg class="ico"><use href="#i-cut"/></svg><i>3</i></span><span class="tb"><svg class="ico"><use href="#i-wall"/></svg><i>4</i></span><span class="tb"><svg class="ico"><use href="#i-building"/></svg><i>5</i></span><span class="tb"><svg class="ico"><use href="#i-stairs"/></svg><i>6</i></span><span class="tb"><svg class="ico"><use href="#i-module"/></svg><i>7</i></span><span class="tb"><svg class="ico"><use href="#i-ruler"/></svg><i>8</i></span><span class="gap" style="width:1px;height:16px;background:#555;margin:0 4px"></span><span class="mini">◀</span><span style="font-size:11px">2</span><span class="mini">▶</span><span class="btn" style="padding:0 3px;margin-left:4px"><svg class="ico s"><use href="#i-grid"/></svg>0.5</span><span class="n" style="right:6px">1</span></div>
+  <div class="vtb"><span class="tb"><svg class="ico"><use href="#i-select"/></svg><i>1</i></span><span class="tb on"><svg class="ico"><use href="#i-box"/></svg><i>2</i></span><span class="tb"><svg class="ico"><use href="#i-cut"/></svg><i>3</i></span><span class="tb"><svg class="ico"><use href="#i-wall"/></svg><i>4</i></span><span class="tb"><svg class="ico"><use href="#i-building"/></svg><i>5</i></span><span class="tb"><svg class="ico"><use href="#i-stairs"/></svg><i>6</i></span><span class="tb"><svg class="ico"><use href="#i-module"/></svg><i>7</i></span><span class="tb"><svg class="ico"><use href="#i-ruler"/></svg><i>8</i></span><div class="stor"><span>▲</span><b>2</b><span>▼</span></div><span class="n" style="right:-26px;top:20px">2</span></div>
+  <div class="collapsed"><svg class="ico"><use href="#i-box"/></svg><span style="font-size:10px">▾</span><span class="n l" style="left:-26px">3</span></div>
+  <div class="popup">
+    <div class="ov" style="width:260px">
+      <div class="card" style="border-radius:4px 4px 0 0">
+        <div class="ch"><svg class="ico add"><use href="#i-box"/></svg><span class="t">Box</span><span class="nm">Add Box</span><span class="dims">4 × 3 × 2.5</span></div>
+        <div class="path"><a href="#">Section A</a> › <a href="#">Storey 2</a> › Add Box</div>
+        <div class="sec"><div class="sh"><span class="tri">▾</span>Construction</div><div class="sb"><div class="f" style="grid-template-columns:50px 1fr"><label>Size</label><div class="c"><div class="v3"><span><b class="ax">X</b><span class="in">4</span></span><span><b class="ax">Y</b><span class="in">3</span></span><span><b class="ax">Z</b><span class="in">2.5</span></span></div></div></div></div></div>
+        <div class="sec"><div class="sh"><span class="tri">▸</span>Material · Chamfer · Array · Move</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="hint wide" style="padding-right:30px">Drag on a surface — rectangle <kbd>4 X 3</kbd> exact <span class="status">Storey 2 · Grid 0.5 m · Snap on</span><span class="n" style="right:4px">4</span></div>
+</div>
+<ol class="notes">
+  <li><b>Horizontal toolbar</b> (полоса сверху или снизу окна сцены): 8 инструментов, этаж ◀ 2 ▶, сетка. Карточки нет — ей нужна высота.</li>
+  <li><b>Vertical toolbar</b> (у левого или правого края): колонка из 8 инструментов и этаж ▲ 2 ▼ — как штатный оверлей Tools.</li>
+  <li><b>Свёрнутая панель</b> — значок текущего инструмента со стрелкой; клик — карточка всплывает (так Unity сам сворачивает оверлеи в полосах).</li>
+  <li>Пока полная панель не видна, справа в подсказке — этаж, сетка и привязка, только для чтения. Менять — клавишами <kbd>PgUp</kbd> <kbd>[</kbd> <kbd>]</kbd> <kbd>S</kbd> или в панели.</li>
+</ol>
+<p class="notes" style="padding-top:0;margin-top:-6px;color:#a9a9a9">Цена: полосы требуют <code>Overlay</code> с <code>ICreateHorizontalToolbar</code> / <code>ICreateVerticalToolbar</code> на UI Toolkit (ряд из <code>EditorToolbarToggle</code>); карточка внутри панели — тот же IMGUI через <code>IMGUIContainer</code>. Если дорого — сначала только Panel: в полосе Unity свернёт её до значка (п. 3), но инструмент в один клик уже не выбрать.</p>
+</section>
+
+<!-- ═════════ I. Off ═════════ -->
+<section class="frame">
+<h3>I. Live Builder выключен</h3>
+<div class="scene" style="min-height:200px">
+  <div class="vtb" style="top:12px"><span class="tb on" title="Unity: Move"><svg class="ico"><use href="#i-move"/></svg></span><span class="tb"><svg class="ico"><use href="#i-box"/></svg><i>B</i></span><span class="n" style="right:-26px;top:44px">2</span></div>
+  <div class="ov">
+    <div class="ov-title">Live Builder<span class="sp"></span><span class="ib" title="Включить (B)"><svg class="ico s"><use href="#i-power"/></svg></span><span class="ib"><svg class="ico s"><use href="#i-gear"/></svg></span></div>
+    <div class="row" style="padding:8px 6px"><span class="btn" style="flex:1;justify-content:center;height:22px"><svg class="ico s"><use href="#i-power"/></svg>Turn on Live Builder <kbd>B</kbd></span><span class="n">1</span></div>
+  </div>
+  <div class="hint">Live Builder is off — <kbd>B</kbd> in the Scene view</div>
+</div>
+<ol class="notes">
+  <li>Выключен — в панели одна кнопка; клавиши 1–8, S, «2» отданы Unity (контексты ярлыков сняты).</li>
+  <li>Live Builder — <code>EditorTool</code>, значит его значок стоит и в штатном оверлее Tools; там же клавиша B. Проверить в редакторе, что виден.</li>
+</ol>
+</section>
+
+<!-- ═════════ J. Level window ═════════ -->
+<section class="frame">
+<h3>J. Окно Live Builder — настройки уровня <small>кнопка ⚙ в панели</small></h3>
+<div style="padding:4px 14px">
+  <div class="win">
+    <div class="wtab"><svg class="ico s" style="color:#b7a8ff"><use href="#i-storey"/></svg>Live Builder — Level</div>
+    <div class="sec" style="border-top:0"><div class="sh"><span class="tri">▾</span>Level Check<span class="addline btn">Check Level</span></div><div class="sb">
+      <div class="res"><svg class="ico s" style="color:var(--warn)"><use href="#i-warn"/></svg><span>«Section B» misses storey 2 by 12 cm</span><span class="btn ghost">Select</span></div>
+      <div class="res"><svg class="ico s" style="color:var(--warn)"><use href="#i-warn"/></svg><span>«Garage Row» — 5 400 copies, over 5 000</span><span class="btn ghost">Select</span></div>
+      <div class="note-line">Scene edited after the check — check again.</div>
+    </div></div>
+    <div class="sec"><div class="sh"><span class="tri">▾</span>Storeys<span class="sum">stored in the scene</span></div><div class="sb">
+      <div class="f"><label>Storey height</label><div class="c"><span class="in">3.0</span></div></div>
+      <div class="f"><label>Storey 1 floor</label><div class="c"><span class="in">0.0</span></div></div>
+      <div class="f"><label>Lowest storey</label><div class="c"><span class="in s">-1</span><span class="chip">basement −3.0 m</span></div></div>
+    </div></div>
+    <div class="sec"><div class="sh"><span class="tri">▾</span>Wall Types<span class="addline btn ghost">+ New Type</span></div>
+      <div class="tbl"><span class="h">Name</span><span class="h">Thickness</span><span class="h">Material</span><span></span>
+        <span class="in">Exterior Wall</span><span class="in">0.3</span><span class="in obj"><i class="sq" style="background:#9b8b78"></i>Panel</span><span><svg class="ico s"><use href="#i-dots"/></svg></span>
+        <span class="in">Partition</span><span class="in">0.15</span><span class="in obj"><i class="sq" style="background:#c9c2b3"></i>Plaster</span><span><svg class="ico s"><use href="#i-dots"/></svg></span>
+        <span class="in">Thin Partition</span><span class="in">0.1</span><span class="in obj"><i class="sq" style="background:#c9c2b3"></i>Plaster</span><span><svg class="ico s"><use href="#i-dots"/></svg></span>
+      </div></div>
+    <div class="sec"><div class="sh"><span class="tri">▾</span>Materials</div><div class="sb">
+      <div class="f"><label>Level palette</label><div class="c"><span class="in obj">Comedown Palette</span></div></div>
+      <div class="f" style="opacity:.55"><label>Tile size</label><div class="c"><span class="in">Panel</span><span class="in s">3 × 3</span><span class="stage-tag">stage 5</span></div></div>
+    </div></div>
+    <div class="sec"><div class="sh"><span class="tri">▸</span>Mesh Files<span class="sum">folder, clean unused</span></div></div>
+  </div>
+</div>
+<ol class="notes">
+  <li>Одна страница без вкладок, разделы-свёртки; что раскрыто — помнится. Фиолетовая полоса — цвет «уровня», как у нынешней вкладки.</li>
+  <li>Level Check — первым: окно чаще открывают ради проверки. У каждой строки — Select.</li>
+  <li>Нет палитры инструментов, подсказки, выделенного — всё это в панели сцены. Окно можно закрыть и строить дальше.</li>
+</ol>
+</section>
+
+</div>
+
+<h2>Подсказка внизу окна сцены и шпаргалка</h2>
+<table class="spec">
+<tr><th>Что</th><th>Как</th><th>Почему</th></tr>
+<tr><td>Подсказка</td><td>Одна строка по центру внизу: «что сделать дальше» + 2–4 клавиши плашками <kbd>Enter</kbd> <kbd>Esc</kbd>. Длинное — не сюда, а во всплывающую подсказку инструмента</td><td>Как строка состояния Blender: клавиши активного инструмента всегда перед глазами</td></tr>
+<tr><td>Справа в подсказке</td><td>«Storey 2 · Grid 0.5 m · Snap on» — только когда панель свёрнута, в полосе или спрятана (состояние H)</td><td>Этаж и сетку надо видеть всегда, менять — в одном месте</td></tr>
+<tr><td>Шпаргалка (левый нижний угол)</td><td>Только клавиши инструмента и выделенного, 3–5 строк, ширина 250 px. Общие клавиши (1–8, <kbd>[</kbd> <kbd>]</kbd>, <kbd>PgUp</kbd>, <kbd>S</kbd>) — на значках и в подсказках панели. <kbd>/</kbd> — спрятать</td><td>Общие не меняются и выучиваются за день; половина нынешней шпаргалки — они</td></tr>
+<tr><td>Набор чисел</td><td>У прицела — плашка «4 × 3 × 1,5▌» синим контуром; в панели — секция Drawing (состояние F)</td><td>Глаз у прицела; панель — для «что сделает Enter»</td></tr>
+</table>
+
+</body>
+</html>

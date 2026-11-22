@@ -41,9 +41,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             return mode switch
             {
-                BoxModelDrawMode.Add => "Добавить",
-                BoxModelDrawMode.Cut => "Вырезать",
-                _ => "Авто"
+                BoxModelDrawMode.Add => "Add",
+                BoxModelDrawMode.Cut => "Cut",
+                _ => "Auto"
             };
         }
     }

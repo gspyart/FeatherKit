@@ -51,7 +51,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// Дыру рисует меш самой стены или здания, а клик сквозь дыру улетает дальше. Здесь — по коробке, в которую вписан резчик:
     /// клик выделяет его, если перед ним ничего нет и клик — по дыре или её откосу, а не по пустой части коробки мимо дыры (<see cref="GeometryCutterRayHit"/>).
     /// Работает и в Live Builder, и в обычном выборе Unity (Move, Rotate), даже без значков (Gizmos).
-    /// Вырезающие коробки обычного объекта из коробок сюда не входят: их и так выделяет клик по стенке дыры.
+    /// Вырезающие коробки и вырез-коробки обычного объекта из коробок сюда не входят: их и так выделяет клик по стенке дыры.
     /// </summary>
     [InitializeOnLoad]
     public static class GeometryCutterPicker
@@ -79,13 +79,19 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return hit.Cutter != null;
         }
 
-        // Вырез со всеми копиями вверх — по коробке, в которую вписана его форма; дыра — середина коробки по глубине (Z выреза).
+        // Вырез со всеми копиями — по коробке, в которую вписана его форма; дыра — середина коробки по глубине (Z выреза).
+        // Вырез-коробку своего объекта выбирают как вырезающую коробку: в здании дыра — вся коробка, в объекте — клик по стенке дыры.
         private static void ConsiderCutter(Ray ray, GeometryCutter cutter, ref GeometryCutterRayHit hit)
         {
+            var isSolverPiece = GeometryCutterSolverBoxes.IsSolverPiece(cutter);
+
+            if (isSolverPiece && cutter.GetComponentInParent<SplineBuilding>() == null)
+                return;
+
             var box = new Bounds(new Vector3(0f, cutter.Height / 2f, 0f), new Vector3(cutter.Width, cutter.Height, cutter.Depth));
 
-            for (var copy = 0; copy < cutter.CopiesUp; copy++)
-                Consider(ray, cutter, GeometryCutterOutline.CopyToWorld(cutter, copy), box, true, ref hit);
+            foreach (var copy in GeometryCutterCopy.AllOf(cutter))
+                Consider(ray, cutter, copy.ToWorld, box, !isSolverPiece, ref hit);
         }
 
         // Вырезающие коробки в зданиях этого объекта — со всеми копиями по этажам. Дыра у них — вся коробка: луч в ней — уже в дыре.

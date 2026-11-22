@@ -70,26 +70,26 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (drop >= Settings.DeadlyFall)
             {
-                text = "падение с " + Format(drop) + " м — смерть";
+                text = "fall of " + Format(drop) + " m — deadly";
                 return LiveBuilderJumpVerdict.Impossible;
             }
 
             GetGapLimits(drop, out var easy, out var limit);
-            var fallNote = drop > Settings.SafeFall ? ", жёсткое приземление" : "";
+            var fallNote = drop > Settings.SafeFall ? ", hard landing" : "";
 
             if (horizontal <= easy)
             {
-                text = "легко (до " + Format(easy) + " м)" + fallNote;
+                text = "easy (up to " + Format(easy) + " m)" + fallNote;
                 return LiveBuilderJumpVerdict.Easy;
             }
 
             if (horizontal <= limit)
             {
-                text = "на пределе (предел " + Format(limit) + " м)" + fallNote;
+                text = "at the limit (limit " + Format(limit) + " m)" + fallNote;
                 return LiveBuilderJumpVerdict.Hard;
             }
 
-            text = "не допрыгнуть (предел " + Format(limit) + " м)";
+            text = "too far (limit " + Format(limit) + " m)";
             return LiveBuilderJumpVerdict.Impossible;
         }
 
@@ -100,11 +100,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (rise > Settings.MaxHangReach || horizontal > limit)
             {
-                text = "не достать — выше " + Format(Settings.MaxHangReach) + " м или дальше " + Format(limit) + " м; нужен уступ или бег по стене";
+                text = "out of reach — higher than " + Format(Settings.MaxHangReach) + " m or farther than " + Format(limit) + " m; needs a ledge or a wall run";
                 return LiveBuilderJumpVerdict.Impossible;
             }
 
-            text = "только в вис на край";
+            text = "only as a hang on the edge";
             return LiveBuilderJumpVerdict.Hard;
         }
 

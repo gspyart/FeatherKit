@@ -175,7 +175,7 @@ namespace FeatherKit.Tests.LiveBuilder
             var building = testScene.CreateBuilding(model, 2, Vector3.zero, new Vector3(8f, 0f, 0f), new Vector3(8f, 0f, 8f), new Vector3(0f, 0f, 8f));
             var floor = building.FirstFloorWorldHeight - Origin.y;
             var hole = BoxModelFactory.CreatePart(model, new Vector3(2f, floor + 2f, 2f), new Vector3(4f, floor + 5f, 4f), BoxModelPartMode.Cut);
-            hole.transform.SetParent(BoxModelFactory.InteriorOf(building), true);
+            hole.transform.SetParent(SplineBuildingStoreys.ContainerOf(building, 0).transform, true);
 
             BoxModelRebuilder.Rebuild(model);
             SplineBuildingRebuilder.Rebuild(building);

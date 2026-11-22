@@ -7,8 +7,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Объекты частей здания по контуру (<see cref="SplineBuildingPart"/>) в иерархии: найти, создать, убрать лишние, все ли на месте.
-    /// Стены и пол этажа лежат в группе «Storey N», крыша — прямо в здании. Имена частей и групп — тоже здесь.
-    /// Геометрию частей не строит — это <see cref="SplineBuildingRebuilder"/>.
+    /// Стены и перекрытие этажа — в его этаже (<see cref="SplineBuildingStoreys"/>), крыша — в «Roof»; у старого здания — в группе «Storey N»
+    /// в нуле здания, крыша — прямо в нём. Имена частей и групп — тоже здесь. Геометрию частей не строит — это <see cref="SplineBuildingRebuilder"/>.
     /// </summary>
     public static class SplineBuildingParts
     {
@@ -54,12 +54,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Создание ─────────────────────────────────────────────────────
 
-        // Новая часть: стены и пол этажа — в группе «Storey N», крыша — прямо в здании. Статика и слой — как у здания.
+        // Новая часть в своём этаже, в осях здания; у старого здания — в группе «Storey N», крыша — прямо в нём. Статика и слой — как у здания.
         public static SplineBuildingPart Create(SplineBuilding building, SplineBuildingPartKind kind, int storey)
         {
-            var parent = kind == SplineBuildingPartKind.Roof ? building.transform : StoreyGroupOf(building, storey);
-            var partObject = new GameObject(NameOf(kind, storey).Replace(StoreyGroupName(storey) + " ", ""));
-            partObject.transform.SetParent(parent, false);
+            var partObject = new GameObject(PartNameOf(building, kind));
+            partObject.transform.SetParent(ParentFor(building, kind, storey), false);
+            SplineBuildingStoreys.KeepInBuildingAxes(partObject.transform);
             partObject.layer = building.gameObject.layer;
             GameObjectUtility.SetStaticEditorFlags(partObject, GameObjectUtility.GetStaticEditorFlags(building.gameObject));
 
@@ -67,6 +67,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
             part.Kind = kind;
             part.Storey = storey;
             return part;
+        }
+
+        private static Transform ParentFor(SplineBuilding building, SplineBuildingPartKind kind, int storey)
+        {
+            if (SplineBuildingStoreys.HasStoreyContainers(building))
+                return (kind == SplineBuildingPartKind.Roof ? SplineBuildingStoreys.RoofOf(building) : SplineBuildingStoreys.ContainerOf(building, storey)).transform;
+
+            return kind == SplineBuildingPartKind.Roof ? building.transform : StoreyGroupOf(building, storey);
         }
 
         private static Transform StoreyGroupOf(SplineBuilding building, int storey)
@@ -148,10 +156,17 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Имена ────────────────────────────────────────────────────────
 
-        // «Storey 2 Walls», «Storey 1 Floor», «Roof» — и имя части (без этажа), и имя файла меша.
-        public static string NameOf(SplineBuildingPartKind kind, int storey)
+        // «Storey 2 Walls», «Storey 1 Slab», «Roof» — имя файла меша; этаж — номер в здании с единицы.
+        public static string NameOf(SplineBuilding building, SplineBuildingPartKind kind, int storey)
         {
-            return kind == SplineBuildingPartKind.Roof ? "Roof" : StoreyGroupName(storey) + " " + kind;
+            return kind == SplineBuildingPartKind.Roof ? "Roof" : StoreyGroupName(storey) + " " + PartNameOf(building, kind);
+        }
+
+
+        // Имя объекта части: «Walls», «Slab», «Roof». У старого здания перекрытие — «Floor»: так оно названо в его файлах и мешах.
+        public static string PartNameOf(SplineBuilding building, SplineBuildingPartKind kind)
+        {
+            return kind == SplineBuildingPartKind.Slab && !SplineBuildingStoreys.HasStoreyContainers(building) ? "Floor" : kind.ToString();
         }
 
 

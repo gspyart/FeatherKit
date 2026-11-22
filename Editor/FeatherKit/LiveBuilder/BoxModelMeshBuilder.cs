@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using FeatherKit.LiveBuilder;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -6,7 +7,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Строит меш объекта из коробок по его наружным поверхностям: по четырёхугольнику на прямоугольник, своя часть меша на каждый материал.
-    /// Развёртка — по метрам от опоры объекта: объект стоит на сетке — клетки текстуры совпадают с клетками мира.
+    /// Развёртка — по метрам от опоры объекта, через формулу <see cref="LiveBuilderTextureMapping"/>: плитка материала, подгонка стороны,
+    /// у World — сдвиг до мира (<see cref="LiveBuilderTextureSpace"/>).
     /// Ещё собирает меш для столкновений: видимый меш плюс невидимые скаты лестниц.
     /// </summary>
     public static class BoxModelMeshBuilder
@@ -19,8 +21,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Заполняет готовый меш заново — тот же объект и тот же файл, окно сцены сразу видит изменение. Возвращает материалы по частям меша.
-        // Материал прямоугольника — от стороны коробки, которая его создала; нет у неё своего — материал объекта.
-        public static Material[] Fill(Mesh mesh, IReadOnlyList<BoxModelSurface> surfaces, IReadOnlyList<BoxModelSolverBox> boxes, Material defaultMaterial)
+        // Материал и подгонка прямоугольника — от стороны коробки, которая его создала; нет у неё своего материала — материал объекта.
+        public static Material[] Fill(Mesh mesh, IReadOnlyList<BoxModelSurface> surfaces, IReadOnlyList<BoxModelSolverBox> boxes, Material defaultMaterial,
+            LiveBuilderTextureSpace textureSpace = default)
         {
             var usedMaterials = new List<Material>();
             var trianglesByMaterial = new List<List<int>>();
@@ -40,7 +43,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     trianglesByMaterial.Add(new List<int>());
                 }
 
-                AddQuad(surface, vertices, normals, textureCoordinates, trianglesByMaterial[materialIndex]);
+                var texture = new BoxModelSurfaceTexture(FitOf(surface, boxes), LiveBuilderMaterialTiling.SizeOf(material), textureSpace);
+                AddQuad(surface, texture, vertices, normals, textureCoordinates, trianglesByMaterial[materialIndex]);
             }
 
             mesh.Clear();
@@ -65,20 +69,26 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return own != null ? own : defaultMaterial;
         }
 
+        private static LiveBuilderTextureFit FitOf(BoxModelSurface surface, IReadOnlyList<BoxModelSolverBox> boxes)
+        {
+            return surface.SourcePart >= 0 && surface.SourcePart < boxes.Count ? boxes[surface.SourcePart].FitForSurface(surface.Face) : null;
+        }
+
         // Четыре угла прямоугольника; порядок обхода — чтобы лицевая сторона смотрела наружу.
-        private static void AddQuad(BoxModelSurface surface, List<Vector3> vertices, List<Vector3> normals,
+        private static void AddQuad(BoxModelSurface surface, BoxModelSurfaceTexture texture, List<Vector3> vertices, List<Vector3> normals,
             List<Vector2> textureCoordinates, List<int> triangles)
         {
             var axisU = BoxFaces.SurfaceAxisU(surface.Face);
             var axisV = BoxFaces.SurfaceAxisV(surface.Face);
             var normal = BoxFaces.Normal(surface.Face);
             var firstVertex = vertices.Count;
+            var worldShift = new Vector2(texture.Space.ShiftAlongAxis(axisU), texture.Space.ShiftAlongAxis(axisV));
 
             foreach (var corner in CornersOf(surface))
             {
                 vertices.Add(corner);
                 normals.Add(normal);
-                textureCoordinates.Add(new Vector2(corner[axisU], corner[axisV]));
+                textureCoordinates.Add(LiveBuilderTextureMapping.Map(new Vector2(corner[axisU], corner[axisV]), worldShift, texture.Fit, texture.MetersPerTile));
             }
 
             var facesOutward = Vector3.Dot(Vector3.Cross(vertices[firstVertex + 1] - vertices[firstVertex], vertices[firstVertex + 2] - vertices[firstVertex]), normal) > 0f;
@@ -184,5 +194,22 @@ namespace FeatherKit.EditorTools.LiveBuilder
             else
                 triangles.AddRange(new[] { first, first + 2, first + 1, first, first + 3, first + 2 });
         }
+    }
+
+
+    /// <summary>Чем развернуть один прямоугольник объекта из коробок: подгонка его стороны, плитка его материала и сдвиг до мира.</summary>
+    public readonly struct BoxModelSurfaceTexture
+    {
+        public BoxModelSurfaceTexture(LiveBuilderTextureFit fit, Vector2 metersPerTile, LiveBuilderTextureSpace space)
+        {
+            Fit = fit;
+            MetersPerTile = metersPerTile;
+            Space = space;
+        }
+
+
+        public LiveBuilderTextureFit Fit { get; }
+        public Vector2 MetersPerTile { get; }
+        public LiveBuilderTextureSpace Space { get; }
     }
 }

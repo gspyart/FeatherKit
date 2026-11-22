@@ -185,7 +185,7 @@ namespace FeatherKit.Tests.LiveBuilder
             return model;
         }
 
-        // Вырез-дверь 1 × 2 м отдельным объектом, низ посередине — в точке от Origin.
+        // Вырез-дверь 1 × 2 м отдельным объектом, низ посередине — в точке от Origin. Над ним постройки нет — режет всё, чего касается.
         private static void CreateCutterAt(Vector3 bottom, float depth)
         {
             var cutterObject = new GameObject("Door Cutter");
@@ -194,6 +194,7 @@ namespace FeatherKit.Tests.LiveBuilder
             cutter.Width = 1f;
             cutter.Height = 2f;
             cutter.Depth = depth;
+            cutter.Scope = GeometryCutterScope.EverythingItTouches;
         }
 
 

@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Порядок в кусках объекта из коробок — коробках, комнатах, лестницах, группах повтора. Наводится перед каждой сверкой меша:
+    /// Порядок в кусках объекта из коробок — коробках, комнатах, лестницах. Наводится перед каждой сверкой меша:
     /// куски не поворачиваются и не масштабируются, все, кроме групп, помечены EditorOnly и в сборку не попадают,
     /// имя коробки по умолчанию следует за её режимом. Здесь же имена и метка, с которыми куски создаются.
     /// </summary>
@@ -37,9 +37,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 TidyTransform(room.transform);
                 MarkEditorOnly(room.gameObject);
             }
-
-            foreach (var repeat in model.GetComponentsInChildren<BoxModelRepeat>(false))
-                TidyTransform(repeat.transform);
         }
 
         private static void TidyTransform(Transform pieceTransform)

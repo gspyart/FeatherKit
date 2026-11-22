@@ -4,71 +4,82 @@ using UnityEditor;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Инспектор стены по линии: размер → этажи → пол и потолок (у замкнутой) → вид → тонко. Стена в здании — копии от здания, высота — до потолка, на весь этаж или своя
-    /// («Height In Building»); поля от здания только показаны, а этажи меняются в привязке («Spline Building Storey Link» ниже);
-    /// у неё же — «не строить стороны вдоль стен здания».
+    /// Инспектор стены по линии: размер → пол и потолок (у замкнутой) → вид → тонко; главное — и секция Construction панели.
+    /// Стена в этаже здания — высота до потолка, на весь этаж или своя («Height In Building») и «не строить стороны вдоль стен здания»; поля от здания только показаны.
     /// </summary>
     [CustomEditor(typeof(SplineWall))]
     [CanEditMultipleObjects]
-    public class SplineWallEditor : Editor
+    public class SplineWallEditor : Editor, ILiveBuilderCompactInspector
     {
+        // Полный инспектор: главное → вид → тонко.
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
             var wall = (SplineWall)target;
-            var isLinked = wall.TryGetComponent<SplineBuildingStoreyLink>(out var link) && link.IsValid;
+            DrawConstruction(wall);
+            LiveBuilderInspectorLayout.Section("Look");
 
-            LiveBuilderInspectorLayout.Section("Размер");
+            if (wall.WallType == null)
+                LiveBuilderInspectorLayout.Properties(serializedObject, "material");
+            else
+                LiveBuilderInspectorLayout.DrivenValue("Material", wall.Material != null ? wall.Material.name : "kit gray", "Материал — из типа стены", "from type");
+
+            if (LiveBuilderInspectorLayout.Foldout("SplineWall.Fine", "Fine Tuning"))
+                LiveBuilderInspectorLayout.Properties(serializedObject, "curveStep", "cornerSegments", "hasCollider");
+
+            serializedObject.ApplyModifiedProperties();
+        }
+
+
+        // ILiveBuilderCompactInspector: секция Construction панели.
+        public void DrawMainFields()
+        {
+            serializedObject.Update();
+            DrawConstruction((SplineWall)target);
+            serializedObject.ApplyModifiedProperties();
+        }
+
+
+        // Тип, толщина, линия, высота → пол и потолок у замкнутой.
+        private void DrawConstruction(SplineWall wall)
+        {
+            var isInBuilding = SplineBuildingStoreys.BuildingOfStoreyContent(wall.transform) != null;
+
+            LiveBuilderInspectorLayout.Section("Size");
             LiveBuilderInspectorLayout.Properties(serializedObject, "wallType");
 
             if (wall.WallType != null)
-                LiveBuilderInspectorLayout.DrivenValue("Thickness", LiveBuilderSceneText.FormatMeters(wall.Thickness) + " м", "Толщина — из типа стены", "от типа");
+                LiveBuilderInspectorLayout.DrivenValue("Thickness", LiveBuilderSceneText.FormatMeters(wall.Thickness) + " m", "Толщина — из типа стены", "from type");
             else
                 LiveBuilderInspectorLayout.Properties(serializedObject, "thickness");
 
             LiveBuilderInspectorLayout.Properties(serializedObject, "alignment");
 
             // Комнате в здании — какие стороны строить; без здания нечему лежать вдоль.
-            if (isLinked)
+            if (isInBuilding)
             {
                 LiveBuilderInspectorLayout.Properties(serializedObject, "skipsSidesAlongBuildingWalls", "heightInBuilding");
 
                 if (wall.HeightInBuilding == SplineWallHeightInBuilding.Custom)
                     LiveBuilderInspectorLayout.Properties(serializedObject, "height");
                 else
-                    LiveBuilderInspectorLayout.DrivenValue("Height", LiveBuilderSceneText.FormatMeters(wall.Height) + " м",
-                        wall.HeightInBuilding == SplineWallHeightInBuilding.FullStorey ? "Весь этаж здания, сквозь перекрытие" : "До потолка этажа здания");
+                    LiveBuilderInspectorLayout.DrivenValue("Height", LiveBuilderSceneText.FormatMeters(wall.Height) + " m",
+                        wall.HeightInBuilding == SplineWallHeightInBuilding.FullStorey ? "Весь этаж здания, сквозь перекрытие" : "До потолка этажа здания", "from building");
             }
             else
             {
                 LiveBuilderInspectorLayout.Properties(serializedObject, "height");
             }
 
-            // Копии вверх — дело здания. У стены без здания поле видно, только если копии уже есть: чтобы их можно было убрать.
-            if (isLinked || wall.CopiesUp > 1)
-                LiveBuilderInspectorLayout.StoreyCopies(serializedObject, wall, isLinked);
-
             // Пол и потолок — у замкнутой стены: у открытой линии нечего закрывать.
             if (IsClosed(wall))
             {
-                LiveBuilderInspectorLayout.Section("Пол и потолок");
+                LiveBuilderInspectorLayout.Section("Floor And Ceiling");
                 LiveBuilderInspectorLayout.Properties(serializedObject, "hasFloor", "hasCeiling");
 
                 if (wall.HasSlabs)
                     LiveBuilderInspectorLayout.Properties(serializedObject, "slabThickness", "floorMaterial", "ceilingMaterial");
             }
-
-            LiveBuilderInspectorLayout.Section("Вид");
-
-            if (wall.WallType == null)
-                LiveBuilderInspectorLayout.Properties(serializedObject, "material");
-            else
-                LiveBuilderInspectorLayout.DrivenValue("Material", wall.Material != null ? wall.Material.name : "серый набора", "Материал — из типа стены", "от типа");
-
-            if (LiveBuilderInspectorLayout.Foldout("SplineWall.Fine", "Тонко"))
-                LiveBuilderInspectorLayout.Properties(serializedObject, "curveStep", "cornerSegments", "hasCollider");
-
-            serializedObject.ApplyModifiedProperties();
         }
 
         // Хоть одна линия стены замкнута.

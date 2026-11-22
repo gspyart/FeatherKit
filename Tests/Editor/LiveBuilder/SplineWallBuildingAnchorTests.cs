@@ -84,25 +84,25 @@ namespace FeatherKit.Tests.LiveBuilder
             Assert.AreEqual(building.ClearHeight, partition.Height, 0.001f, "по умолчанию — до потолка");
 
             partition.HeightInBuilding = SplineWallHeightInBuilding.FullStorey;
-            SplineBuildingLinkSync.Sync(partition.GetComponent<SplineBuildingStoreyLink>());
+            SplineBuildingStoreySync.Sync(building);
             Assert.AreEqual(building.StoreyHeight, partition.Height, 0.001f, "весь этаж — сквозь перекрытие");
 
             partition.HeightInBuilding = SplineWallHeightInBuilding.Custom;
             partition.Height = 2.5f;
-            SplineBuildingLinkSync.Sync(partition.GetComponent<SplineBuildingStoreyLink>());
+            SplineBuildingStoreySync.Sync(building);
             Assert.AreEqual(2.5f, partition.Height, 0.001f, "своя высота остаётся");
         }
 
 
         // ── Помощники ────────────────────────────────────────────────────
 
-        // Перегородка в здании, привязанная к его этажам, — как ставит «Стена» в здании.
+        // Перегородка в первом этаже здания — как ставит «Стена» в здании; высоту берёт от этажа сверка этажей.
         private SplineWall CreatePartition(bool isClosed, params Vector3[] points)
         {
             var wall = testScene.CreateWall(points);
             wall.GetComponent<SplineContainer>().Spline.Closed = isClosed;
-            wall.transform.SetParent(BoxModelFactory.InteriorOf(building), true);
-            SplineBuildingLinkSync.Attach(wall.gameObject, building, false);
+            wall.transform.SetParent(SplineBuildingStoreys.ContainerOf(building, 0).transform, true);
+            SplineBuildingStoreySync.Sync(building);
             return wall;
         }
 

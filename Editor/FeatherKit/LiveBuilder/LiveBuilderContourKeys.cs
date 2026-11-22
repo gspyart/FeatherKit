@@ -6,10 +6,10 @@ using UnityEngine.Splines;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Клавиши правки контура (<see cref="LiveBuilderContourHandles"/>), пока выбраны точки: Delete — убрать выбранные
-    /// (у замкнутого контура остаётся хотя бы три, у линии — две; объект целиком тогда не удаляется), стрелки — сдвинуть на шаг сетки, Esc — снять выбор.
-    /// У стены по линии, пока видны её точки, C — замкнуть или разомкнуть, выбраны точки или нет. Здание всегда замкнуто.
-    /// Пока тянут точку или рамку, клавиши правки не работают: Delete только глушится, чтобы не удалить объект целиком.
+    /// Клавиши правки контура (<see cref="LiveBuilderContourHandles"/>): Delete — убрать выбранные точки (у замкнутого контура остаётся хотя бы три,
+    /// у линии — две; объект целиком тогда не удаляется), стрелки — выбранные на шаг сетки, C у стены по линии — замкнуть или разомкнуть.
+    /// Стрелки и C — ярлыки (<see cref="LiveBuilderContourShortcuts"/>), снять выбор — цепочка Esc (<see cref="LiveBuilderSceneKeyboard.Cancel"/>).
+    /// Пока тянут точку или рамку, Delete только глушится, чтобы не удалить объект целиком. Здание всегда замкнуто.
     /// </summary>
     public static class LiveBuilderContourKeys
     {
@@ -17,7 +17,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private const int MinOpenKnots = 2;
 
 
-        // Возвращает, забрал ли событие. isGestureActive — тянут точку или рамку.
+        // Delete у выбранных точек — команда Unity, не ярлык. Возвращает, забрал ли событие. isGestureActive — тянут точку или рамку.
         public static bool Handle(Component owner, SplineContainer container, bool isGestureActive)
         {
             var current = Event.current;
@@ -25,39 +25,12 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (isGestureActive)
                 return SwallowDelete(current);
 
-            if (current.type == EventType.KeyDown && current.keyCode == KeyCode.C && !current.control && !current.alt && CanToggleClosed(owner, container))
-            {
-                ToggleClosed(container);
-                current.Use();
-                return true;
-            }
-
-            if (LiveBuilderContourSelection.Knots.Count == 0)
+            if (LiveBuilderContourSelection.Knots.Count == 0 || !IsDelete(current))
                 return false;
 
-            if (IsDelete(current))
-            {
-                if (current.type != EventType.ValidateCommand)
-                    RemoveSelectedKnots(container);
+            if (current.type != EventType.ValidateCommand)
+                RemoveSelectedKnots(container);
 
-                current.Use();
-                return true;
-            }
-
-            if (current.type != EventType.KeyDown)
-                return false;
-
-            if (current.keyCode == KeyCode.Escape)
-            {
-                LiveBuilderContourSelection.Clear();
-                current.Use();
-                return true;
-            }
-
-            if (!TryGetArrowShift(owner, current.keyCode, out var localShift))
-                return false;
-
-            LiveBuilderContourDrag.ShiftSelected(container, localShift, "Nudge Contour Points");
             current.Use();
             return true;
         }
@@ -79,6 +52,21 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return isDeleteCommand || isDeleteKey;
         }
 
+
+        // ── Ярлыки ───────────────────────────────────────────────────────
+
+        // Стрелка — выбранные точки показанного контура на шаг сетки.
+        public static void NudgeSelectedPoints(KeyCode arrow)
+        {
+            var owner = LiveBuilderContourSelection.Owner;
+
+            if (owner == null || LiveBuilderContourSelection.Knots.Count == 0 || !owner.TryGetComponent<SplineContainer>(out var container)
+                || !TryGetArrowShift(owner, arrow, out var localShift))
+                return;
+
+            LiveBuilderContourDrag.ShiftSelected(container, localShift, "Nudge Contour Points");
+        }
+
         // Стрелки — на шаг сетки вдоль осей сетки: влево-вправо — X, вверх-вниз — Z.
         private static bool TryGetArrowShift(Component owner, KeyCode key, out Vector3 localShift)
         {
@@ -95,6 +83,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var worldShift = (frame != null ? frame.TransformDirection(direction) : direction) * LiveBuilderGrid.CurrentStep;
             localShift = owner.transform.InverseTransformDirection(worldShift);
             return direction != Vector3.zero;
+        }
+
+
+        // C — у стены по линии, пока видны её точки, выбраны они или нет.
+        public static void ToggleClosedOfShownContour()
+        {
+            var owner = LiveBuilderContourSelection.Owner;
+
+            if (owner != null && owner.TryGetComponent<SplineContainer>(out var container) && CanToggleClosed(owner, container))
+                ToggleClosed(container);
         }
 
 

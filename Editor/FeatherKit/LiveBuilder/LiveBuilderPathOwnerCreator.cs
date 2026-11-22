@@ -4,8 +4,8 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Создаёт объект, по точкам которого рисует линия (<see cref="LiveBuilderPathGesture"/>): стену, перегородку, здание или комнату —
-    /// по настройкам инструментов и тому, где первый клик: в здании, в доме из коробок, в выделенном объекте или в пустоте.
+    /// Создаёт объект, по точкам которого рисует линия (<see cref="LiveBuilderPathGesture"/>): стену, перегородку или здание —
+    /// по настройкам инструментов и тому, где первый клик: в здании, в выделенном объекте или в пустоте.
     /// Точек не ставит — объект создаётся пустым, с Undo (<see cref="BoxModelFactory"/>).
     /// </summary>
     public static class LiveBuilderPathOwnerCreator
@@ -41,38 +41,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // В здании — замкнутая перегородка-комната: стороны вдоль его стен не строятся. В доме из коробок (house) — стены перегородки до его потолка.
-        // В пустоте — комната со стенами, полом и потолком, как у здания: стоит низом на том, где кликнул; объект из коробок под неё — createdModel.
-        public static Component CreateRoom(Vector3 worldPoint, LiveBuilderBuildingContext context, BoxModel house, float houseCeiling, out BoxModel createdModel)
-        {
-            createdModel = null;
-
-            if (context != null)
-            {
-                var room = BoxModelFactory.CreatePartition(context, worldPoint, "Room");
-                room.SkipsSidesAlongBuildingWalls = true;
-                return room;
-            }
-
-            if (house != null)
-            {
-                var walls = BoxModelFactory.CreateWall(house, worldPoint, house.transform.rotation);
-                walls.name = "Room";
-                walls.Thickness = LiveBuilderWallSettings.PartitionThickness;
-                walls.Material = LiveBuilderWallSettings.Material;
-                walls.WallType = LiveBuilderWallSettings.PartitionWallType;
-                walls.Height = houseCeiling;
-                return walls;
-            }
-
-            var parentModel = SelectedOrNewModel(worldPoint, "Room", out createdModel);
-            return BoxModelFactory.CreateContourRoom(parentModel, worldPoint, parentModel.transform.rotation);
-        }
-
-
         // ── Помощники ────────────────────────────────────────────────────
 
-        // Выделенный объект из коробок, а без него — новый: так в здании или комнате сразу работают лестницы и вырезы.
+        // Выделенный объект из коробок, а без него — новый: так в здании сразу работают лестницы и вырезы.
         private static BoxModel SelectedOrNewModel(Vector3 worldPoint, string name, out BoxModel createdModel)
         {
             var selected = BoxModelActions.SelectedModel();

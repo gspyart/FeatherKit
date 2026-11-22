@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEngine;
@@ -5,29 +6,29 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Карточка «Этажи уровня» вкладки «Выделено»: здание не на этажах уровня (поставлено раньше или сдвинуто) — его этажи не совпадают с окном,
-    /// предупреждение и кнопка выровнять. Здание на этажах — карточки нет.
+    /// Секция Level Storeys у старого здания без этажей-контейнеров, которое не стоит на этажах уровня: кнопка выровнять.
+    /// Здание с этажами-контейнерами показывает этаж уровня в Construction (<see cref="SplineBuildingLevelFields"/>), там этой секции нет.
     /// </summary>
     public sealed class LiveBuilderLevelAlignmentCard : LiveBuilderSelectionCard
     {
-        public override int Order => 60;
+        public override int Order => LevelStoreysOrder;
+
+        public override string Title => "Level Storeys";
 
 
-        public override bool Draw(GameObject selected)
+        public override bool ShowsFor(IReadOnlyList<GameObject> selected)
         {
-            if (OwnComponentOf(selected) is not SplineBuilding building || SplineBuildingLevelAlignment.IsAlignedToLevel(building))
-                return false;
+            return selected.Count == 1 && selected[0].TryGetComponent<SplineBuilding>(out var building)
+                                       && !SplineBuildingStoreys.HasStoreyContainers(building) && !SplineBuildingLevelAlignment.IsAlignedToLevel(building);
+        }
 
-            using (LiveBuilderWindowControls.Card("Этажи уровня"))
-            {
-                EditorGUILayout.HelpBox("Этажи здания не совпадают с этажами уровня: низ здания не на полу этажа или высота этажа другая. " +
-                                        "Тогда «этаж» в окне и в здании — разные.", MessageType.Warning);
 
-                if (GUILayout.Button(new GUIContent("Поставить на этажи уровня", "Низ здания — на ближайший пол этажа уровня, высота этажа — как в окне. Интерьер переедет вместе")))
-                    SplineBuildingLevelAlignment.AlignToLevel(building);
-            }
+        public override void Draw(IReadOnlyList<GameObject> selected)
+        {
+            LiveBuilderWindowControls.Note("The building storeys do not match the level storeys: its bottom is off a level floor or its storey height differs.");
 
-            return true;
+            if (GUILayout.Button(new GUIContent("Put On Level Storeys", "Низ здания — на ближайший пол этажа уровня, высота этажа — как у уровня. Интерьер переедет вместе")))
+                SplineBuildingLevelAlignment.AlignToLevel(selected[0].GetComponent<SplineBuilding>());
         }
     }
 }

@@ -6,31 +6,19 @@ using UnityEngine.Splines;
 
 namespace FeatherKit.EditorTools.LiveBuilder
 {
-    /// <summary>Что встаёт по линии точек: стена, здание или комната по контуру.</summary>
+    /// <summary>Что встаёт по линии точек: стена или здание.</summary>
     public enum LiveBuilderPathKind
     {
         Wall,
-        Building,
-        Room
+        Building
     }
 
 
     /// <summary>
-    /// Рисование линии точками для инструментов «Стена», «Здание» и «Комната» по контуру: кликами точки по сетке — первая на верх того, что под мышью
-    /// (коробки, крыши, перекрытия), а под мышью пусто или стена сбоку — на пол текущего этажа; дальше линия идёт на высоте первой точки,
-    /// и по ним сразу встаёт стена (<see cref="SplineWall"/>), здание (<see cref="SplineBuilding"/>) или комната.
-    /// Точка — угол или плавный изгиб: по переключателю в окне, Shift на клике — наоборот.
-    /// Клик по первой точке — замкнуть; Enter — готово (здание и комната замыкаются сами), Esc — бросить начатую линию целиком; Ctrl+Z, пока рисуешь, — убрать последнюю точку.
-    /// Отрезок, с которым контур здания или комнаты перекрестит сам себя, — красный, с подписью.
-    /// Точная длина, как в SketchUp (<see cref="LiveBuilderTypedLength"/>): набрал цифры — Enter ставит следующую точку на этом расстоянии в сторону мыши.
-    /// У мыши подпись, к чему прилипло: «к стене» здания, «замкнуть» у первой точки.
-    /// Готовая линия — один шаг отмены: Ctrl+Z после неё убирает всю стену, здание или комнату, без пустых объектов.
-    /// Стена внутри здания (<see cref="LiveBuilderBuildingContext"/>) — перегородка: на полу его этажа, до потолка, толщиной перегородки,
-    /// точки прилипают к стенам здания, на этом этаже или на всех выше.
-    /// Комната: в здании — замкнутая перегородка, стороны вдоль его стен не строятся; в доме из коробок — стены до его потолка;
-    /// в пустоте — здание в один этаж. Куда встают её стены от линии — наружу, внутрь или по центру — по настройке «Линия по стенам» (<see cref="LiveBuilderRoomWalls"/>).
-    /// Выделен объект из коробок — линия встаёт в него и его вырезающие коробки режут и её. Здание и комната в пустоте — в новом объекте из коробок:
-    /// так в них сразу работают лестницы и вырезы (<see cref="LiveBuilderPathOwnerCreator"/>). Двигать точки потом — <see cref="LiveBuilderContourHandles"/>.
+    /// Рисование линии точками для «Стены» и «Здания»: точки по сетке — первая на верх того, что под мышью, иначе на пол этажа; по ним сразу встаёт стена или здание.
+    /// - точка — угол или плавно; клик по первой — замкнуть; Enter — готово, Esc — бросить целиком; набранные цифры — точная длина
+    /// - в здании — перегородка на его этаже; в выделенном объекте — в нём, а внутри пустоты или выреза — в «Kept From Cuts» (<see cref="LiveBuilderKeptFromCuts"/>)
+    /// - готовая линия — один шаг отмены; здание в пустоте — в новом объекте (<see cref="LiveBuilderPathOwnerCreator"/>), точки потом — <see cref="LiveBuilderContourHandles"/>
     /// </summary>
     public sealed class LiveBuilderPathGesture
     {
@@ -43,11 +31,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Ближе этого к последней точке — та же точка, м.
         private const float SameKnotDistance = 0.005f;
 
-        // Здание и комната — замкнутый контур хотя бы из трёх точек, стена — хотя бы из двух.
+        // Здание — замкнутый контур хотя бы из трёх точек, стена — хотя бы из двух.
         private const int MinClosedPoints = 3;
         private const int MinWallPoints = 2;
 
-        // Отрезок к мыши, с которым контур здания или комнаты перекрестит сам себя.
+        // Отрезок к мыши, с которым контур здания перекрестит сам себя.
         private static readonly Color CrossingColor = new(1f, 0.3f, 0.25f);
 
         private readonly LiveBuilderPathKind kind;
@@ -69,15 +57,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private LiveBuilderBuildingContext buildingContext;
         private LiveBuilderBuildingContext hoveredBuildingContext;
 
-        // Пол дома из коробок под мышью и высота до его потолка, м: комната по контуру встанет там стенами до потолка.
-        private BoxModel hoveredHouse;
-        private float hoveredHouseCeiling;
+        // Стена, начатая под мышью, встанет в «Kept From Cuts»: точка внутри пустоты или выреза объекта.
+        private bool isHoverInsideCut;
 
         // Шаг отмены, с которого началось рисование: готовая линия схлопывается в один шаг — один Ctrl+Z убирает её целиком.
         private int undoGroupAtBegin;
 
-        // Группа «Interior», которую создала эта перегородка: отменили её — пустая группа уходит вместе с ней.
-        private Transform interiorCreatedByGesture;
+        // Группа «Kept From Cuts», которую создала эта линия: отменили её — пустая группа уходит вместе с ней.
+        private Transform keptGroupCreatedByGesture;
 
 
         public LiveBuilderPathGesture(LiveBuilderPathKind kind)
@@ -89,31 +76,25 @@ namespace FeatherKit.EditorTools.LiveBuilder
         public bool IsActive => pathOwner != null;
 
         public string Hint => pathOwner == null
-            ? "Клик — первая точка " + ShapeName + " на полу этажа" + RoomPlaceHint + ". Shift — точка наоборот: " +
-              (LiveBuilderWallSettings.IsSmooth ? "углом" : "плавно")
+            ? "Click — the first point of " + ShapeName + KeptFromCutsHint + " " + LiveBuilderHintKeys.Shift + (LiveBuilderWallSettings.IsSmooth ? " corner" : " smooth")
             : typedLength.IsTyping
-                ? "Длина " + typedLength.Text + " м: Enter — точка на этом расстоянии в сторону мыши, Backspace — стереть цифру, Esc — отмена длины"
+                ? "Length " + typedLength.Text + " m " + LiveBuilderHintKeys.Enter + " point toward the mouse " + LiveBuilderHintKeys.Key("Backspace") + " erase " +
+                  LiveBuilderHintKeys.Esc + " cancel length"
                 : IsClosedShape
-                    ? "Клик — следующая точка контура, цифры + Enter — точная длина. По первой точке или Enter — замкнуть и готово. Esc — бросить контур, Ctrl+Z — убрать последнюю точку"
-                    : "Клик — следующая точка, цифры + Enter — точная длина, по первой — замкнуть. Enter — готово, Esc — бросить линию, Ctrl+Z — убрать последнюю точку";
+                    ? "Click — next point, the first one closes " + LiveBuilderHintKeys.Enter + " close and done " + LiveBuilderHintKeys.Esc + " drop " +
+                      LiveBuilderHintKeys.Undo + " undo point"
+                    : "Click — next point, the first one closes " + LiveBuilderHintKeys.Enter + " done " + LiveBuilderHintKeys.Esc + " drop " +
+                      LiveBuilderHintKeys.Undo + " undo point";
 
-        private string ShapeName => kind switch
-        {
-            LiveBuilderPathKind.Building => "контура здания",
-            LiveBuilderPathKind.Room => "контура комнаты",
-            _ => "стены"
-        };
+        private string ShapeName => kind == LiveBuilderPathKind.Building ? "the building outline" : "the wall";
 
-        // Что встанет по контуру комнаты там, где мышь.
-        private string RoomPlaceHint => kind != LiveBuilderPathKind.Room ? ""
-            : CurrentContext != null ? ": в здании — перегородки, вдоль его стен не строятся"
-            : hoveredHouse != null ? ": в доме — стены до его потолка"
-            : ": стены, пол и потолок вокруг";
+        // Стена внутри пустоты или выреза — говорим заранее, куда она встанет.
+        private string KeptFromCutsHint => isHoverInsideCut ? " — inside a cut: goes into '" + LiveBuilderKeptFromCuts.GroupName + "', stays uncut" : "";
 
-        // Здание и комната всегда замыкаются.
+        // Здание всегда замыкается.
         private bool IsClosedShape => kind != LiveBuilderPathKind.Wall;
 
-        // Здание, в котором рисуется (или будет рисоваться) стена или комната; у здания-инструмента — никогда. Здание удалили — уже не в нём.
+        // Здание, в котором рисуется (или будет рисоваться) стена; у здания-инструмента — никогда. Здание удалили — уже не в нём.
         private LiveBuilderBuildingContext CurrentContext
         {
             get
@@ -132,15 +113,22 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             var isStarting = pathOwner == null;
             hoveredBuildingContext = isStarting && kind != LiveBuilderPathKind.Building && LiveBuilderBuildingContext.TryFind(worldRay, out var context) ? context : null;
-            hoveredHouse = null;
+            hoveredWorldPoint = TryGetFloorPoint(worldRay, out var point) ? point : null;
+            isHoverInsideCut = isStarting && kind == LiveBuilderPathKind.Wall && hoveredWorldPoint is { } floorPoint
+                               && LiveBuilderKeptFromCuts.IsInsideCut(NewWallParent(CurrentContext), floorPoint);
+        }
 
-            if (isStarting && kind == LiveBuilderPathKind.Room && CurrentContext == null && LiveBuilderFloorRectangle.TryFindHouseFloor(worldRay, out var house, out _, out var ceiling))
+        // Куда встанет новая стена: в здании — в его выделенную группу или к нему (интерьер — его ребёнок), иначе — в выделенный объект из коробок.
+        private static Transform NewWallParent(LiveBuilderBuildingContext context)
+        {
+            if (context != null)
             {
-                hoveredHouse = house;
-                hoveredHouseCeiling = ceiling;
+                var group = BoxModelFactory.SelectedGroupIn(context.Building);
+                return group != null ? group.transform : context.Building.transform;
             }
 
-            hoveredWorldPoint = TryGetFloorPoint(worldRay, out var point) ? point : null;
+            var model = BoxModelActions.SelectedModel();
+            return model != null ? model.transform : null;
         }
 
 
@@ -227,13 +215,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Готово: мало точек — линии нет; иначе выделяется. Здание и комната замыкаются всегда.
+        // Готово: мало точек — линии нет; иначе выделяется. Здание замыкается всегда.
         public void Finish()
         {
             Finish(IsClosedShape);
         }
 
-        // Бросить начатую линию целиком: всё, что сделано с её начала (сама постройка, её точки, группа «Interior»), отменяется одним махом.
+        // Бросить начатую линию целиком: всё, что сделано с её начала (сама постройка, её точки, её группы), отменяется одним махом.
         public void Abandon()
         {
             if (pathOwner == null)
@@ -242,7 +230,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Undo.RevertAllDownToGroup(undoGroupAtBegin);
             pathOwner = null;
             createdModel = null;
-            interiorCreatedByGesture = null;
+            keptGroupCreatedByGesture = null;
             buildingContext = null;
             typedLength.Clear();
         }
@@ -258,9 +246,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (Container.Spline.Count < minPoints)
             {
                 Undo.DestroyObjectImmediate(createdModel != null ? createdModel.gameObject : pathOwner.gameObject);
-
-                if (interiorCreatedByGesture != null && interiorCreatedByGesture.childCount == 0)
-                    Undo.DestroyObjectImmediate(interiorCreatedByGesture.gameObject);
+                DestroyIfEmpty(keptGroupCreatedByGesture);
             }
             else
             {
@@ -276,21 +262,28 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Undo.CollapseUndoOperations(undoGroupAtBegin);
             pathOwner = null;
             createdModel = null;
-            interiorCreatedByGesture = null;
+            keptGroupCreatedByGesture = null;
             buildingContext = null;
             typedLength.Clear();
         }
 
 
+        // Группа, которую создала эта линия, без неё осталась пустой.
+        private static void DestroyIfEmpty(Transform createdGroup)
+        {
+            if (createdGroup != null && createdGroup.childCount == 0)
+                Undo.DestroyObjectImmediate(createdGroup.gameObject);
+        }
+
+
         // ── Линия и точки ────────────────────────────────────────────────
 
-        // Новое здание, стена или комната — пока без точек.
+        // Новое здание или стена — пока без точек.
         private void Begin(Vector3 worldPoint, LiveBuilderBuildingContext context)
         {
             Undo.IncrementCurrentGroup();
             undoGroupAtBegin = Undo.GetCurrentGroup();
             buildingContext = context;
-            var hadInterior = context != null && BoxModelFactory.HasInterior(context.Building);
 
             switch (kind)
             {
@@ -299,51 +292,27 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     pathOwner = LiveBuilderPathOwnerCreator.CreateBuilding(worldPoint, out createdModel);
                     break;
 
-                case LiveBuilderPathKind.Room:
-                    Undo.SetCurrentGroupName("Draw Room");
-                    pathOwner = LiveBuilderPathOwnerCreator.CreateRoom(worldPoint, context, hoveredHouse, hoveredHouseCeiling, out createdModel);
-                    break;
-
                 default:
                     Undo.SetCurrentGroupName("Draw Wall");
                     pathOwner = LiveBuilderPathOwnerCreator.CreateWall(worldPoint, context);
                     break;
             }
 
-            // Перегородка встаёт в группу «Interior» здания; не было её — создала эта перегородка.
-            var group = pathOwner.transform.parent;
-            interiorCreatedByGesture = context != null && !hadInterior && group != null && group.parent == context.Building.transform ? group : null;
+            if (kind == LiveBuilderPathKind.Wall && LiveBuilderKeptFromCuts.MoveIfInsideCut(pathOwner.transform, worldPoint))
+                keptGroupCreatedByGesture = pathOwner.transform.parent;
         }
-
 
         private void AddKnot(Vector3 worldPoint, bool isShiftHeld)
         {
             var isSmooth = LiveBuilderWallSettings.IsSmooth != isShiftHeld;
             var localPoint = pathOwner.transform.InverseTransformPoint(worldPoint);
 
-            // Контур здания и комнаты в пустоте — ровно на точке опоры, на высоте первой точки.
+            // Контур здания — ровно на точке опоры, на высоте первой точки.
             if (pathOwner is SplineBuilding)
                 localPoint.y = 0f;
 
             Undo.RecordObject(Container, "Add Path Point");
             Container.Spline.Add(new BezierKnot(localPoint), isSmooth ? TangentMode.AutoSmooth : TangentMode.Linear);
-            ApplyRoomWallSide();
-        }
-
-        // Комната из стены по линии — сторона стены от линии по настройке «Линия по стенам» и по тому, в какую сторону обходишь комнату. Пересчёт на каждой точке:
-        // пока рисуешь, видно, куда встанут стены.
-        private void ApplyRoomWallSide()
-        {
-            if (kind != LiveBuilderPathKind.Room || pathOwner is not SplineWall walls)
-                return;
-
-            var alignment = LiveBuilderRoomWalls.AlignmentFor(Container.Spline, LiveBuilderRoomSettings.WallSide);
-
-            if (walls.Alignment == alignment)
-                return;
-
-            Undo.RecordObject(walls, "Add Path Point");
-            walls.Alignment = alignment;
         }
 
         private bool IsNearFirstKnot(Vector3 worldPoint)
@@ -375,16 +344,13 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Точка на полу по сетке: в здании — на полу его этажа, в его осях, и прилипает к его стенам; первая точка комнаты в доме из коробок — на его полу;
+        // Точка на полу по сетке: в здании — на полу его этажа, в его осях, и прилипает к его стенам;
         // иначе — на полу текущего этажа, в осях объекта, в который встанет линия, а без него — мира.
         private bool TryGetFloorPoint(Ray worldRay, out Vector3 worldPoint)
         {
             var context = CurrentContext;
             snapLabel = null;
             activeGuide = null;
-
-            if (pathOwner == null && hoveredHouse != null && LiveBuilderFloorRectangle.TryFindHouseFloor(worldRay, out _, out worldPoint, out _))
-                return true;
 
             if (context != null)
             {
@@ -399,7 +365,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var gridPoint = floor.SnapOnPlane(floorPoint);
                 var wallPoint = context.SnapToWalls(gridPoint);
                 worldPoint = floor.FrameToWorld.MultiplyPoint3x4(wallPoint);
-                snapLabel = (wallPoint - gridPoint).sqrMagnitude > 0.000001f ? "к стене" : LiveBuilderPointSnap.LabelAt(worldPoint);
+                snapLabel = (wallPoint - gridPoint).sqrMagnitude > 0.000001f ? "to wall" : LiveBuilderPointSnap.LabelAt(worldPoint);
                 worldPoint = ApplyGuides(floor.FrameToWorld, floor.Axis, floor.FrameToWorld.MultiplyPoint3x4(floorPoint), worldPoint);
                 return true;
             }
@@ -458,9 +424,51 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // ── Отчёт для панели ─────────────────────────────────────────────
+
+        // Какая точка следующая, отрезок к мыши и вся длина для секции Drawing (<see cref="LiveBuilderDrawingReport"/>); точек сколько угодно. Не рисуешь — null.
+        public LiveBuilderDrawingReport Report()
+        {
+            if (pathOwner == null)
+                return null;
+
+            var spline = Container.Spline;
+            var typedValues = new List<float>();
+            var isLengthTyped = typedLength.TryPeekAll(typedValues);
+            var last = spline.Count > 0 ? pathOwner.transform.TransformPoint((Vector3)spline[spline.Count - 1].Position) : (Vector3?)null;
+            var segment = isLengthTyped ? typedValues[0] : last is { } lastPoint && hoveredWorldPoint is { } hovered ? Vector3.Distance(lastPoint, hovered) : 0f;
+            var total = 0f;
+
+            for (var index = 1; index < spline.Count; index++)
+                total += Vector3.Distance(pathOwner.transform.TransformPoint((Vector3)spline[index - 1].Position),
+                    pathOwner.transform.TransformPoint((Vector3)spline[index].Position));
+
+            var shapeName = kind == LiveBuilderPathKind.Building ? "outline" : "wall";
+            return new LiveBuilderDrawingReport(kind == LiveBuilderPathKind.Building ? "Building outline" : "Wall", spline.Count + 1, 0, "Point " + (spline.Count + 1))
+                .WithSize("Segment", segment, isLengthTyped)
+                .WithSize("Total", total)
+                .WithTyped(typedLength.Text)
+                .WithKeys(ReportEnterResult(spline.Count, isLengthTyped, segment, shapeName), typedLength.IsTyping ? "clear the length" : "drop the " + shapeName);
+        }
+
+        // Enter: набранная длина — точка на ней; иначе — готово, а точек мало — линии не будет.
+        private string ReportEnterResult(int pointCount, bool isLengthTyped, float segment, string shapeName)
+        {
+            if (typedLength.IsTyping)
+                return isLengthTyped ? "point at " + LiveBuilderSceneText.FormatMeters(segment) + " m" : "erase typing";
+
+            var minPoints = IsClosedShape ? MinClosedPoints : MinWallPoints;
+
+            if (pointCount < minPoints)
+                return "drop — needs " + minPoints + " points";
+
+            return IsClosedShape ? "close and finish" : "finish the " + shapeName;
+        }
+
+
         // ── Рамка ────────────────────────────────────────────────────────
 
-        // Точки, отрезок до мыши с длиной, у здания и комнаты — ещё и замыкающий отрезок к первой точке; прицел.
+        // Точки, отрезок до мыши с длиной, у здания — ещё и замыкающий отрезок к первой точке; прицел.
         public void DrawPreview()
         {
             if (hoveredWorldPoint is not { } hovered)
@@ -470,7 +478,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Handles.DrawWireDisc(hovered, Vector3.up, HandleUtility.GetHandleSize(hovered) * 0.08f);
 
             var isClosing = pathOwner != null && IsNearFirstKnot(hovered);
-            var cursorLabel = isClosing ? "замкнуть" : snapLabel;
+            var cursorLabel = isClosing ? "close" : snapLabel;
 
             if (cursorLabel != null)
                 LiveBuilderSceneText.DrawLabel(hovered + Vector3.up * HandleUtility.GetHandleSize(hovered) * 0.25f, cursorLabel);
@@ -499,10 +507,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderLineGuides.Draw(guide, hovered);
 
             var lengthLabel = isCrossing
-                ? "стороны перекрестятся — пол и крыша не построятся"
+                ? "sides will cross — floor and roof won't be built"
                 : typedLength.IsTyping
-                    ? typedLength.Text + " м ↵"
-                    : LiveBuilderSceneText.FormatMeters(Vector3.Distance(last, hovered)) + " м · цифры — точно";
+                    ? typedLength.Text + " m ↵"
+                    : LiveBuilderSceneText.FormatMeters(Vector3.Distance(last, hovered)) + " m · digits — exact";
             LiveBuilderSceneText.DrawLabel((last + hovered) / 2f, lengthLabel);
 
             if (IsClosedShape && spline.Count >= 2)

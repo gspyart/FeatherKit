@@ -7,7 +7,7 @@ using UnityEngine.Splines;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Держит точки перегородок (<see cref="SplineWall"/> в привязке к зданию) на стенах здания — перед каждой пересборкой, как стены в Revit.
+    /// Держит точки перегородок (<see cref="SplineWall"/> в этаже здания или в привязке к нему) на стенах здания — перед каждой пересборкой, как стены в Revit.
     /// Точка, что лежит на внутренней стороне стены здания, помнит, за что держится (<see cref="SplineWallBuildingAnchor"/>):
     /// - за внутренний угол — двигаешь стены здания, точка встаёт в новый угол
     /// - за стену (отрезок контура) — точка встаёт на ту же стену там, где в неё упирается сама перегородка: стена повернулась — перегородка
@@ -24,12 +24,21 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Все перегородки зданий сцены или открытого префаба. Ошибка в одной не останавливает остальные.
         public static void SyncAll()
         {
+            SyncAll(LiveBuilderRebuildScope.WholeScene);
+        }
+
+
+        // Только перегородки в области или в здании из неё: черновой проход очереди.
+        public static void SyncAll(LiveBuilderRebuildScope scope)
+        {
             foreach (var wall in StageUtility.GetCurrentStageHandle().FindComponentsOfType<SplineWall>())
             {
                 try
                 {
-                    if (wall.TryGetComponent<SplineBuildingStoreyLink>(out var link) && link.IsValid)
-                        Sync(wall, link.Building);
+                    var building = SplineBuildingStoreys.BuildingOfStoreyContent(wall.transform);
+
+                    if (building != null && (scope.Contains(wall) || scope.Contains(building)))
+                        Sync(wall, building);
                 }
                 catch (System.Exception exception)
                 {

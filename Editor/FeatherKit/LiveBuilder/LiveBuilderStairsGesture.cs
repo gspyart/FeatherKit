@@ -59,15 +59,19 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private float StairsHeight => isChoosingHeight ? chosenHeight : StoreyStairsHeight;
 
         public string Hint => isChoosingHeight && typedHeight.IsTyping
-            ? "Высота " + typedHeight.Text + " м: Enter — готово, Backspace — стереть цифру, Esc — стереть число"
+            ? "Height " + typedHeight.Text + " m " + LiveBuilderHintKeys.Enter + " done " + LiveBuilderHintKeys.Key("Backspace") + " erase " + LiveBuilderHintKeys.Esc + " clear"
             : isChoosingHeight
-            ? "Мышь вверх-вниз — высота: " + LiveBuilderSceneText.FormatMeters(chosenHeight) + " м (этаж — " + LiveBuilderSceneText.FormatMeters(StoreyStairsHeight) +
-              "); цифры + Enter — точно. Клик или Enter — готово, Tab — повернуть, Esc — отмена"
+            ? "Mouse up and down — height " + LiveBuilderSceneText.FormatMeters(chosenHeight) + " m (storey " + LiveBuilderSceneText.FormatMeters(StoreyStairsHeight) +
+              "), click — done " + LiveBuilderHintKeys.Key("digits") + " exact " + RotateKey + " turn " + LiveBuilderHintKeys.Esc + " cancel"
             : rectangle.TypedText.Length > 0
-            ? "Набрано " + rectangle.TypedText + " м: X — вторая сторона (по X и по Z); отпусти — ровно такая. Esc — стереть набор"
-            : IsSwitchback
-            ? "Вверх — " + DirectionName(CurrentDirection) + ". Тяни всю лестничную клетку — марши и площадка встанут сами; «4 X 8» — точно. Tab — повернуть. Отпусти — дальше высота. Esc — отмена"
-            : "Вверх — " + DirectionName(CurrentDirection) + ". Тяни прямоугольник — длина и ширина лестницы; «1,2 X 4» — точно. Tab — повернуть. Отпусти — дальше высота. Esc — отмена";
+            ? "Typed " + rectangle.TypedText + " m " + LiveBuilderHintKeys.Bound(LiveBuilderShortcutIds.Times) + " second side " + LiveBuilderHintKeys.Key("release") +
+              " exactly this " + LiveBuilderHintKeys.Esc + " clear typing"
+            : (IsSwitchback
+                  ? "Up — " + DirectionName(CurrentDirection) + ". Drag the whole stairwell, release — then height "
+                  : "Up — " + DirectionName(CurrentDirection) + ". Drag — length and width, release — then height ") +
+              LiveBuilderHintKeys.Key(IsSwitchback ? "4 X 8" : "1.2 X 4") + " exact " + RotateKey + " turn " + LiveBuilderHintKeys.Esc + " cancel";
+
+        private static string RotateKey => LiveBuilderHintKeys.Bound(LiveBuilderShortcutIds.Rotate);
 
         // Куда пойдёт вверх: запомненное, а пока не запомнилось — куда тянут сильнее.
         private BoxModelStairsDirection CurrentDirection => lockedDirection ?? DirectionOf(rectangle.End - rectangle.Start);
@@ -250,24 +254,20 @@ namespace FeatherKit.EditorTools.LiveBuilder
             stairs.StepDepth = stairs.StepDepthForLength(length);
         }
 
-        // Лестница — часть здания: в его интерьер (или выделенную группу) и к его этажам; «И этажи выше» — копии до предпоследнего этажа.
+        // Лестница — часть здания: в его этаж (или выделенную группу); «И этажи выше» — копии до предпоследнего этажа: с верхнего идти некуда.
         private static void AttachToBuilding(BoxModelStairs stairs, SplineBuilding building)
         {
-            Undo.SetTransformParent(stairs.transform, BoxModelFactory.InteriorTargetOf(building), true, "Create Stairs");
-
-            // В группе, привязанной к этажам, лестницу повторяет группа — своя привязка перемножила бы копии.
-            if (!BoxModelShapeCollector.IsPieceInsideStoreyCopies(stairs.transform))
-                SplineBuildingLinkSync.Attach(stairs.gameObject, building, LiveBuilderBuildingContext.IsOnAllStoreys, true);
+            SplineBuildingInteriorPlacement.PutOnStorey(stairs.transform, building, LiveBuilderBuildingContext.IsOnAllStoreys, true, "Create Stairs");
         }
 
         // Сразу, а не после паузы: объект, где лестницу создали, и тот, куда она переехала.
         private static void RebuildModelsOf(BoxModelStairs stairs, BoxModel createdIn)
         {
-            BoxModelRebuilder.Rebuild(createdIn);
+            BoxModelRebuilder.Rebuild(createdIn, LiveBuilderBuildQuality.Draft);
             var ownerModel = stairs.GetComponentInParent<BoxModel>();
 
             if (ownerModel != createdIn)
-                BoxModelRebuilder.Rebuild(ownerModel);
+                BoxModelRebuilder.Rebuild(ownerModel, LiveBuilderBuildQuality.Draft);
         }
 
 
@@ -394,6 +394,37 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // ── Отчёт для панели ─────────────────────────────────────────────
+
+        // Шаг, ширина, длина и высота для секции Drawing (<see cref="LiveBuilderDrawingReport"/>); набранное — с замком. Не рисуешь — null.
+        public LiveBuilderDrawingReport Report()
+        {
+            if (!rectangle.IsActive)
+                return null;
+
+            TryGetShape(out _, out _, out var width, out var length);
+            var areSidesTyped = rectangle.AreSidesTyped;
+            var report = new LiveBuilderDrawingReport(IsSwitchback ? "Switchback stairs" : "Stairs", isChoosingHeight ? 2 : 1, 2,
+                    isChoosingHeight ? "Height" : "Footprint")
+                .WithSize("Width", width, areSidesTyped)
+                .WithSize("Length", length, areSidesTyped);
+
+            if (!isChoosingHeight)
+                return report.WithTyped(rectangle.TypedText).WithKeys(null, rectangle.TypedText.Length > 0 ? "clear typing" : "drop the stairs");
+
+            var typedValues = new System.Collections.Generic.List<float>();
+            var isHeightTyped = typedHeight.TryPeekAll(typedValues);
+            var height = isHeightTyped ? Mathf.Max(StandardStepHeight, typedValues[0]) : StairsHeight;
+            var enterResult = typedHeight.IsTyping && !isHeightTyped
+                ? "erase typing"
+                : "stairs up " + LiveBuilderSceneText.FormatMeters(height) + " m, " + StepCountFor(height) + " steps";
+
+            return report.WithSize("Height", height, isHeightTyped)
+                .WithTyped(typedHeight.Text)
+                .WithKeys(enterResult, typedHeight.IsTyping ? "clear typing" : "drop the stairs");
+        }
+
+
         // ── Рамка ────────────────────────────────────────────────────────
 
         // Габарит будущей лестницы, профиль ступеней сбоку и надпись.
@@ -427,9 +458,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 DrawUpArrow(min, size, runAxis, direction);
 
                 var stepCount = StepCountFor(height);
-                LiveBuilderSceneText.DrawLabel(top, stepCount + " ступеней по " + LiveBuilderSceneText.FormatMeters(StepDepthFor(height, length)) + " м, " +
+                LiveBuilderSceneText.DrawLabel(top, stepCount + " steps of " + LiveBuilderSceneText.FormatMeters(StepDepthFor(height, length)) + " m, " +
                                                     LiveBuilderSceneText.FormatMeters(length) + " × " +
-                                                    LiveBuilderSceneText.FormatMeters(width) + " м, вверх на " + LiveBuilderSceneText.FormatMeters(height) + " м · Tab — повернуть");
+                                                    LiveBuilderSceneText.FormatMeters(width) + " m, up " + LiveBuilderSceneText.FormatMeters(height) + " m · Tab — turn");
             }
         }
 
@@ -472,8 +503,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 DrawUpArrow(firstMin, flightSize, runAxis, direction);
                 DrawUpArrow(secondMin, flightSize, runAxis, BoxModelStairsTurns.Opposite(direction));
 
-                LiveBuilderSceneText.DrawLabel(stairsMin + stairsSize, StepCountFor(height) + " ступеней в двух маршах, площадка " + LiveBuilderSceneText.FormatMeters(landingDepth) +
-                                                                     " м, вверх на " + LiveBuilderSceneText.FormatMeters(height) + " м · Tab — повернуть");
+                LiveBuilderSceneText.DrawLabel(stairsMin + stairsSize, StepCountFor(height) + " steps in two flights, landing " + LiveBuilderSceneText.FormatMeters(landingDepth) +
+                                                                     " m, up " + LiveBuilderSceneText.FormatMeters(height) + " m · Tab — turn");
             }
         }
 

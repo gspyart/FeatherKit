@@ -15,10 +15,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var part = (SplineBuildingPart)target;
             var building = part.GetComponentInParent<SplineBuilding>();
 
-            GUILayout.Label(KindName(part) + ". Собирается зданием — правки руками затрутся. Спрятать в окне сцены — «глазик» в иерархии.",
+            GUILayout.Label(KindName(part) + ". Built by the building — hand edits are overwritten. Hide it in the scene view with the eye in the hierarchy.",
                 EditorStyles.wordWrappedMiniLabel);
 
-            if (building != null && GUILayout.Button("Здание «" + building.name + "»"))
+            if (building != null && GUILayout.Button("Building '" + building.name + "'"))
                 Selection.activeGameObject = building.gameObject;
         }
 
@@ -27,9 +27,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
         {
             return part.Kind switch
             {
-                SplineBuildingPartKind.Walls => "Стены этажа " + (part.Storey + 1),
-                SplineBuildingPartKind.Floor => "Пол этажа " + (part.Storey + 1),
-                _ => "Крыша"
+                SplineBuildingPartKind.Walls => "Walls of storey " + (part.Storey + 1),
+                SplineBuildingPartKind.Slab => "Slab under storey " + (part.Storey + 1),
+                _ => "Roof"
             };
         }
     }

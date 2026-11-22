@@ -202,7 +202,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (!isDragging || Event.current.type != EventType.Repaint)
                 return;
 
-            var text = "точек: " + movedKnots.Count + " · " + (LiveBuilderSceneText.FormatOffset(snappedOffset) ?? "0 м");
+            var text = movedKnots.Count + " points · " + (LiveBuilderSceneText.FormatOffset(snappedOffset) ?? "0 m");
             LiveBuilderSceneText.DrawLabel(startCenter + axes * snappedOffset, text);
         }
     }

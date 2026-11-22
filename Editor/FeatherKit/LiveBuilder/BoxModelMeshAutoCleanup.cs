@@ -42,8 +42,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return 0;
 
             var removed = BoxModelMeshCleanup.MoveToTrash(unused);
-            Debug.Log("Live Builder: убрано лишних файлов мешей рядом со сценой «" + System.IO.Path.GetFileNameWithoutExtension(scenePath) + "» — " +
-                      removed + ", в корзину системы.");
+            Debug.Log("Live Builder: moved " + removed + " unused mesh files next to scene '" + System.IO.Path.GetFileNameWithoutExtension(scenePath) +
+                      "' to the system trash.");
             return removed;
         }
     }

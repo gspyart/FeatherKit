@@ -8,7 +8,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Стена по линии (<see cref="SplineWall"/>) и здание по контуру (<see cref="SplineBuilding"/>) для инструментов — одно и то же:
     /// сплайн, вдоль которого стоит стена. Всё, где их приходится различать, — здесь: кому принадлежит коллайдер, в чьей стене лежит вырез,
-    /// пути и шаг на изгибе, где стороны стены относительно линии, к этажам какого здания привязано поставленное в стену.
+    /// пути и шаг на изгибе, где стороны стены относительно линии, к этажам какого здания относится поставленное в стену.
     /// </summary>
     public static class LiveBuilderPathOwners
     {
@@ -21,11 +21,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
 
         // Стена по линии или здание, чей это коллайдер: у стены он на ней самой, у здания — на его частях.
-        // Ближе к коллайдеру объект из коробок (например, в интерьере здания) — это не стена, null.
+        // Ближе к коллайдеру объект из коробок (например, в интерьере здания) или колонна — это не стена, null.
         public static Component OwnerOf(Collider collider)
         {
             for (var current = collider.transform; current != null; current = current.parent)
             {
+                if (current.TryGetComponent<LiveBuilderColumn>(out _))
+                    return null;
+
                 if (current.TryGetComponent<SplineWall>(out var wall))
                     return wall;
 
@@ -56,8 +59,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Здание, к этажам которого привяжется поставленное в стену: само здание или то, к которому привязана перегородка. Нет — null.
-        public static SplineBuilding LinkedBuildingOf(Component pathOwner)
+        // Здание, к этажам которого относится поставленное в стену: само здание или здание перегородки — по её этажу или привязке. Нет — null.
+        public static SplineBuilding StoreysBuildingOf(Component pathOwner)
         {
             if (pathOwner == null)
                 return null;
@@ -65,7 +68,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (pathOwner.TryGetComponent<SplineBuilding>(out var building))
                 return building;
 
-            return pathOwner.TryGetComponent<SplineBuildingStoreyLink>(out var link) && link.IsValid ? link.Building : null;
+            return SplineBuildingStoreys.BuildingOfStoreyContent(pathOwner.transform);
         }
 
 

@@ -2,7 +2,6 @@ using FeatherKit.LiveBuilder;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEditor.SceneManagement;
-using UnityEditor.ShortcutManagement;
 using UnityEngine;
 
 namespace FeatherKit.EditorTools.LiveBuilder
@@ -13,9 +12,9 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// - нажатие: клик это или протягивание; клик, который инструмент не забрал, выделяет своё под мышью (<see cref="LiveBuilderClickSelection"/>)
     /// - ручки выделенного (<see cref="LiveBuilderSelectionHandles"/>) и точки контура (<see cref="LiveBuilderContourHandles"/>) — у того, что правит инструмент
     /// - подсветка грани под мышью и прицел на сетке — если инструмент их просит
-    /// - подсказка внизу окна сцены и окна Live Builder: этаж и что делать сейчас; шпаргалка клавиш в углу (<see cref="LiveBuilderSceneKeys"/>, «/»)
-    /// Клавиши: [ и ] — шаг сетки, PageUp и PageDown — этаж выше и ниже, цифры — инструмент, Tab — повернуть выделенную лестницу,
-    /// Esc — отменить начатое, а если ничего не начато — на «Выделение», в нём — снять выделение.
+    /// - подсказка внизу окна сцены: что делать сейчас (<see cref="LiveBuilderSceneText.DrawHint"/>); шпаргалка клавиш в углу (<see cref="LiveBuilderSceneKeys"/>);
+    ///   что под мышью — для строки «Into» (<see cref="LiveBuilderIntoTarget"/>)
+    /// - клавиши: ставит контексты ярлыков на время инструмента (<see cref="LiveBuilderShortcutContexts"/>); что делают — <see cref="LiveBuilderSceneKeyboard"/>
     /// </summary>
     [EditorTool("Live Builder")]
     public class LiveBuilderSceneTool : EditorTool
@@ -25,45 +24,46 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private readonly LiveBuilderContourHandles contourHandles = new();
 
+        private LiveBuilderSceneKeyboard keyboard;
+        private LiveBuilderShortcutContexts shortcutContexts;
+
         private Vector2 mouseDownPosition;
         private bool isMouseDown;
         private bool isDoubleClick;
         private BoxModelSurfaceHit? hoveredSurface;
 
-        // Здание по контуру под мышью — для подсказки: где сейчас строишь.
+        // Здание по контуру под мышью — для строки Into: где сейчас строишь.
         private LiveBuilderBuildingContext hoveredBuildingContext;
         private (BoxModelDrawPlane Plane, Vector3 Point)? hoveredSnapPoint;
 
 
-        // Подсказка поменялась — окно Live Builder показывает её у себя внизу.
-        public static event System.Action HintChanged;
-
-
-        // Подсказка внизу окна сцены — что делать сейчас.
-        public static string CurrentHintText { get; private set; } = "";
-
-        public override GUIContent toolbarIcon => new(EditorGUIUtility.IconContent("PreMatCube").image, "Live Builder: коробки, комнаты, стены, проёмы, лестницы (B)");
+        // Контур выделенного виден везде, где инструмент его показывает, кроме уже начатой новой линии; ручки — если его правит инструмент.
+        // Ручки ближе к мыши забирают клик себе, клик по пустому месту в инструменте линии начинает новую линию.
+        internal static bool CanShowContour => CurrentTool.ShowsContour && (CurrentTool.PathGesture == null || !CurrentTool.PathGesture.IsActive);
 
         private static LiveBuilderTool CurrentTool => LiveBuilderToolPalette.Current;
 
-        // Контур выделенного виден везде, где инструмент его показывает, кроме уже начатой новой линии; ручки — если его правит инструмент.
-        // Ручки ближе к мыши забирают клик себе, клик по пустому месту в инструменте линии начинает новую линию.
-        private static bool CanShowContour => CurrentTool.ShowsContour && (CurrentTool.PathGesture == null || !CurrentTool.PathGesture.IsActive);
+        public override GUIContent toolbarIcon => new(EditorGUIUtility.IconContent("PreMatCube").image,
+            "Live Builder: коробки, комнаты, стены, проёмы, лестницы (" + LiveBuilderShortcutIds.KeyLabelOf(LiveBuilderShortcutIds.ToggleLiveBuilder) + ")");
+
+        public LiveBuilderSceneKeyboard Keyboard => keyboard ??= new LiveBuilderSceneKeyboard(this);
+
+        // Мышь держит чужая ручка (тянешь грань, выдавливаешь) — клавиши её. Обновляется на каждом событии окна сцены.
+        internal bool IsOtherHandleDragged { get; private set; }
+
+        // У выбранного инструмента что-то начато или тянут точку контура. Начатое у прочих снимает смена инструмента.
+        internal bool IsAnythingStarted => CurrentTool.IsBusy || contourHandles.IsGestureActive;
+
+        private LiveBuilderShortcutContexts ShortcutContexts => shortcutContexts ??= new LiveBuilderShortcutContexts(Keyboard);
 
 
         // ── Включение ────────────────────────────────────────────────────
 
-        [Shortcut("FeatherKit/Live Builder", typeof(SceneView), KeyCode.B)]
-        private static void Activate()
-        {
-            ToolManager.SetActiveTool<LiveBuilderSceneTool>();
-        }
-
-
         public override void OnActivated()
         {
+            ShortcutContexts.Register();
+            LiveBuilderShortcutConflicts.WarnOncePerSession();
             LiveBuilderToolPalette.Changed += CancelAll;
-            LiveBuilderRoomSettings.ShapeChanged += CancelAll;
             Undo.undoRedoPerformed += CancelAfterUndo;
             EditorSceneManager.activeSceneChangedInEditMode += CancelOnSceneChange;
             AssemblyReloadEvents.beforeAssemblyReload += CancelAll;
@@ -72,16 +72,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public override void OnWillBeDeactivated()
         {
+            ShortcutContexts.Unregister();
             LiveBuilderToolPalette.Changed -= CancelAll;
-            LiveBuilderRoomSettings.ShapeChanged -= CancelAll;
             Undo.undoRedoPerformed -= CancelAfterUndo;
             EditorSceneManager.activeSceneChangedInEditMode -= CancelOnSceneChange;
             AssemblyReloadEvents.beforeAssemblyReload -= CancelAll;
             CancelAll();
         }
 
-        // Всё начатое отменяется у всех инструментов; начатая линия остаётся такой, как нарисована.
-        private void CancelAll()
+        // Всё начатое отменяется у всех инструментов; начатая линия остаётся такой, как нарисована. Зовёт и цепочка Esc.
+        internal void CancelAll()
         {
             foreach (var tool in LiveBuilderToolPalette.Tools)
                 tool.Cancel();
@@ -116,6 +116,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (window is not SceneView sceneView)
                 return;
 
+            // Контексты живут в памяти скриптов: перезагрузка их стирает, а OnActivated после неё может не прийти.
+            ShortcutContexts.Register();
             var tool = CurrentTool;
 
             // Пока рисуешь, ручки выделенного спрятаны: клик «готово» не должен достаться ручке грани под мышью.
@@ -126,13 +128,21 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             var controlId = GUIUtility.GetControlID(FocusType.Passive);
             var current = Event.current;
+            IsOtherHandleDragged = GUIUtility.hotControl != 0 && GUIUtility.hotControl != controlId && !contourHandles.IsGestureActive;
 
-            // Клавиши — напрямую, не через фильтр элемента: тот отбрасывает их, пока мышь держит другой элемент, и Tab терялся.
+            // Клавиши с ярлыками сюда не доходят — их забрал Shortcut Manager. Остаток (Enter, Esc, хвост набора числа) — напрямую,
+            // не через фильтр элемента: тот отбрасывает их, пока мышь держит другой элемент.
             if (current.type == EventType.KeyDown)
             {
-                OnKeyDown(current, controlId);
+                if (!IsOtherHandleDragged && Keyboard.HandleUnboundKey(current.keyCode))
+                    current.Use();
+
                 return;
             }
+
+            // Пипетка текстуры — Alt + клик: нажатие с Alt забрала камера, поэтому до раздачи событий и по rawType.
+            if (LiveBuilderTexturePipette.HandleEvent(current))
+                return;
 
             switch (current.GetTypeForControl(controlId))
             {
@@ -162,31 +172,19 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                     DrawHover(controlId);
                     tool.DrawPreview();
-                    PublishHint(CurrentHint());
-                    LiveBuilderSceneText.DrawHint(sceneView, CurrentHintText);
+                    LiveBuilderSceneText.DrawHint(sceneView, CurrentHint());
                     LiveBuilderSceneKeys.Draw(sceneView, tool, CanShowContour && LiveBuilderContourHandles.IsShown);
                     break;
             }
         }
 
-        private static void PublishHint(string hint)
-        {
-            if (hint == CurrentHintText)
-                return;
-
-            CurrentHintText = hint;
-            HintChanged?.Invoke();
-        }
-
-        // Этаж — здания под мышью, если инструмент строит в нём, иначе уровня; дальше — что говорит инструмент
-        // и, если он выделяет вглубь, «клик ещё раз — глубже» у мыши. Зовут только при отрисовке сцены — тут есть Event.current.
-        private string CurrentHint()
+        // Что говорит инструмент и, если он выделяет вглубь, «click again — deeper» у мыши. Где строишь — строка Into в панели.
+        // Зовут только при отрисовке сцены — тут есть Event.current.
+        private static string CurrentHint()
         {
             var tool = CurrentTool;
-            var buildingStorey = hoveredBuildingContext is { IsBuildingAlive: true } ? tool.BuildingStoreyHint(hoveredBuildingContext) : null;
-            var storey = buildingStorey ?? "Этаж " + LiveBuilderStoreys.CurrentStoreyNumber + (LiveBuilderStoreys.IsSectionEnabled ? ", разрез" : "");
             var depthClickHint = tool.ShowsDepthClickHint ? LiveBuilderDepthClick.HintAt(Event.current.mousePosition, tool) : "";
-            return storey + " · " + tool.Hint + depthClickHint;
+            return tool.Hint + depthClickHint;
         }
 
 
@@ -212,6 +210,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     hoveredSnapPoint = BoxModelDrawPlaneFinder.TryFind(ray, LiveBuilderBoxTool.IsNewModelRequested, out var plane, out var point) ? (plane, point) : null;
             }
 
+            LiveBuilderIntoTarget.RememberHover(hoveredBuildingContext, hoveredSurface?.Model);
             sceneView.Repaint();
         }
 
@@ -269,94 +268,6 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 LiveBuilderClickSelection.Select(current, CurrentTool, isDoubleClick);
 
             current.Use();
-        }
-
-
-        // ── Клавиши ──────────────────────────────────────────────────────
-
-        // Сначала клавиши инструмента, потом общие: инструмент по цифре, шаг сетки, этаж, отмена.
-        // Мышь держит чужая ручка (тянешь грань, выдавливаешь) — клавиши её: смена инструмента или выделения посреди тяги ломает её отмену.
-        // Точку контура тянут свои ручки — там Esc по-прежнему бросает перетаскивание.
-        private void OnKeyDown(Event current, int controlId)
-        {
-            if (GUIUtility.hotControl != 0 && GUIUtility.hotControl != controlId && !contourHandles.IsGestureActive)
-                return;
-
-            if (CurrentTool.OnKeyDown(current))
-            {
-                current.Use();
-                return;
-            }
-
-            // Цифра — инструмент из палитры, пока ничего не рисуешь: во время рисования линии цифры — её длина.
-            if (!IsAnythingStarted() && !current.control && !current.alt && LiveBuilderToolPalette.TryGetByHotkey(current.keyCode, out var tool))
-            {
-                LiveBuilderToolPalette.Current = tool;
-                current.Use();
-                return;
-            }
-
-            switch (current.keyCode)
-            {
-                case KeyCode.LeftBracket:
-                    LiveBuilderGrid.ChangeStep(false);
-                    break;
-
-                case KeyCode.RightBracket:
-                    LiveBuilderGrid.ChangeStep(true);
-                    break;
-
-                case KeyCode.PageUp:
-                    LiveBuilderStoreys.CurrentStorey++;
-                    break;
-
-                case KeyCode.PageDown:
-                    LiveBuilderStoreys.CurrentStorey--;
-                    break;
-
-                // S — прилипание к углам, серединам и рёбрам построек: выключить и включить. Ctrl+S — сохранение, его не трогаем.
-                case KeyCode.S when !current.control && !current.alt && !current.shift && !current.command:
-                    LiveBuilderPointSnap.IsEnabled = !LiveBuilderPointSnap.IsEnabled;
-                    SceneView.RepaintAll();
-                    break;
-
-                // «/» — шпаргалка клавиш в углу окна сцены: спрятать или показать.
-                case KeyCode.Slash:
-                    LiveBuilderSceneKeys.IsShown = !LiveBuilderSceneKeys.IsShown;
-                    SceneView.RepaintAll();
-                    break;
-
-                // Выделенная лестница — Tab поворачивает её на месте, если её правит инструмент.
-                case KeyCode.Tab when Selection.activeGameObject != null && Selection.activeGameObject.TryGetComponent<BoxModelStairs>(out var selectedStairs)
-                                      && CurrentTool.CanEdit(selectedStairs):
-                    BoxModelStairsTurns.Turn(selectedStairs, BoxModelStairsTurns.Clockwise(selectedStairs.Direction));
-                    break;
-
-                case KeyCode.Escape when IsAnythingStarted():
-                    CancelAll();
-                    break;
-
-                // Ничего не начато — Esc уводит на «Выделение»; в нём — снимает выделение: окно показывает настройки нового.
-                case KeyCode.Escape when CurrentTool is not LiveBuilderSelectTool:
-                    LiveBuilderToolPalette.Current = LiveBuilderToolPalette.Get<LiveBuilderSelectTool>();
-                    break;
-
-                case KeyCode.Escape when Selection.activeGameObject != null:
-                    BoxModelFaceSelection.Clear();
-                    Selection.activeGameObject = null;
-                    break;
-
-                default:
-                    return;
-            }
-
-            current.Use();
-        }
-
-        // У выбранного инструмента что-то начато или тянут точку контура. Начатое у прочих снимает смена инструмента.
-        private bool IsAnythingStarted()
-        {
-            return CurrentTool.IsBusy || contourHandles.IsGestureActive;
         }
 
 

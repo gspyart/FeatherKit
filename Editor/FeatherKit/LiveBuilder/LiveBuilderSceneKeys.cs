@@ -6,40 +6,21 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Шпаргалка клавиш в углу окна сцены — только то, что работает сейчас: клавиши выбранного инструмента (<see cref="LiveBuilderTool.KeyHints"/>),
-    /// того, что выделено (точки контура, грани коробки), и общие. Клавиша «/» прячет и показывает её; спрятана — в углу одна строка, как вернуть.
-    /// Полный список — значок клавиатуры в окне Live Builder.
+    /// Шпаргалка клавиш в углу окна сцены — только то, что работает сейчас: клавиши выбранного инструмента (<see cref="LiveBuilderTool.KeyHints"/>)
+    /// и того, что выделено (точки контура, грани коробки). Общие клавиши — на значках и в подсказках панели.
+    /// Клавиша ярлыка Toggle Key Hints прячет и показывает её; спрятана — в углу одна плашка, как вернуть.
     /// </summary>
     public static class LiveBuilderSceneKeys
     {
         private const string ShownPreferenceKey = "FeatherKit.LiveBuilder.SceneKeysShown";
         private const float Margin = 10f;
-        private const float BottomOffset = 46f;
-        private const float Width = 330f;
+        private const float BottomOffset = 40f;
+        private const float Width = 250f;
+        private const float Padding = 6f;
+        private const float TitleHeight = 18f;
+        private const float LineHeight = 18f;
 
-        // Рамка по пустому — только где пустой клик не начинает новую линию (не у «Стены» и «Здания»).
-        private const string ContourBoxSelectKey = "точки: рамка по пустому — выбрать, Shift — добавить";
-
-        private static readonly string[] ContourKeys =
-        {
-            "точки: клик — выбрать, ручки переноса — двигать выбранные, у стены и вверх; ←↑→↓ — на клетку",
-            "Delete — убрать точки, двойной клик — угол / плавно / Безье"
-        };
-
-        private static readonly string[] BoxKeys =
-        {
-            "квадрат на грани — размер; Alt — обе грани, Alt+Shift — все",
-            "Ctrl + тянуть квадрат — выдавить новую коробку",
-            "ручки переноса — тянуть, Shift — копия; точно — «Перенос и копии» в окне"
-        };
-
-        private static readonly string[] CommonKeys =
-        {
-            "1–8 — инструмент · [ ] — сетка · PgUp / PgDn — этаж",
-            "голубое кольцо у прицела — прилипло к углу, середине или ребру; S — выключить",
-            "Esc — бросить начатое целиком; ничего не начато — на «Выделение»",
-            "/ — спрятать подсказки"
-        };
+        private static readonly Color BackgroundColor = new(0.1f, 0.1f, 0.1f, 0.75f);
 
         private static GUIStyle lineStyle;
         private static GUIStyle titleStyle;
@@ -51,9 +32,21 @@ namespace FeatherKit.EditorTools.LiveBuilder
             set => EditorPrefs.SetBool(ShownPreferenceKey, value);
         }
 
-        private static GUIStyle LineStyle => lineStyle ??= new GUIStyle(EditorStyles.miniLabel) { normal = { textColor = new Color(1f, 1f, 1f, 0.9f) }, wordWrap = true };
+        private static GUIStyle LineStyle => lineStyle ??= new GUIStyle(EditorStyles.miniLabel)
+        {
+            alignment = TextAnchor.MiddleLeft,
+            padding = new RectOffset(0, 0, 0, 0),
+            normal = { textColor = new Color(1f, 1f, 1f, 0.9f) }
+        };
 
-        private static GUIStyle TitleStyle => titleStyle ??= new GUIStyle(EditorStyles.miniBoldLabel) { normal = { textColor = Color.white } };
+        private static GUIStyle TitleStyle => titleStyle ??= new GUIStyle(EditorStyles.miniBoldLabel)
+        {
+            alignment = TextAnchor.MiddleLeft,
+            padding = new RectOffset(0, 0, 0, 0),
+            normal = { textColor = Color.white }
+        };
+
+        private static string ToggleKey => LiveBuilderHintKeys.Bound(LiveBuilderShortcutIds.ToggleKeyHints);
 
 
         // ── Рисование ────────────────────────────────────────────────────
@@ -68,51 +61,80 @@ namespace FeatherKit.EditorTools.LiveBuilder
             Handles.BeginGUI();
 
             if (!IsShown)
-            {
-                var chipRect = new Rect(Margin, viewSize.y - BottomOffset - 18f, 120f, 18f);
-                EditorGUI.DrawRect(chipRect, new Color(0.1f, 0.1f, 0.1f, 0.6f));
-                GUI.Label(new Rect(chipRect.x + 6f, chipRect.y + 2f, chipRect.width, chipRect.height), "/ — клавиши", LineStyle);
-                Handles.EndGUI();
-                return;
-            }
-
-            var lines = LinesFor(tool, isContourShown);
-            var height = 22f;
-
-            foreach (var line in lines)
-                height += LineStyle.CalcHeight(new GUIContent(line), Width - 12f);
-
-            var rect = new Rect(Margin, viewSize.y - BottomOffset - height, Width, height);
-            EditorGUI.DrawRect(rect, new Color(0.1f, 0.1f, 0.1f, 0.75f));
-            GUI.Label(new Rect(rect.x + 6f, rect.y + 3f, rect.width - 12f, 16f), "Клавиши · " + tool.DisplayName, TitleStyle);
-
-            var y = rect.y + 20f;
-
-            foreach (var line in lines)
-            {
-                var lineHeight = LineStyle.CalcHeight(new GUIContent(line), Width - 12f);
-                GUI.Label(new Rect(rect.x + 6f, y, Width - 12f, lineHeight), line, LineStyle);
-                y += lineHeight;
-            }
+                DrawHiddenChip(viewSize);
+            else
+                DrawSheet(viewSize, tool, isContourShown);
 
             Handles.EndGUI();
         }
 
-        // Инструмент, потом выделенное, потом общее.
-        private static List<string> LinesFor(LiveBuilderTool tool, bool isContourShown)
+        private static void DrawHiddenChip(Vector2 viewSize)
+        {
+            var line = ToggleKey + " keys";
+            var width = LiveBuilderSceneText.LineWidth(line, LineStyle) + Padding * 2f;
+            var rect = new Rect(Margin, viewSize.y - BottomOffset - LineHeight - 4f, width, LineHeight + 4f);
+            EditorGUI.DrawRect(rect, BackgroundColor);
+            LiveBuilderSceneText.DrawLine(new Rect(rect.x + Padding, rect.y + 2f, width - Padding * 2f, LineHeight), line, LineStyle);
+        }
+
+        private static void DrawSheet(Vector2 viewSize, LiveBuilderTool tool, bool isContourShown)
+        {
+            var lines = LinesFor(tool, isContourShown);
+
+            if (lines.Count == 0)
+                return;
+
+            var height = Padding + TitleHeight + lines.Count * LineHeight + Padding;
+            var rect = new Rect(Margin, viewSize.y - BottomOffset - height, Width, height);
+            EditorGUI.DrawRect(rect, BackgroundColor);
+
+            var lineRect = new Rect(rect.x + Padding, rect.y + Padding, Width - Padding * 2f, TitleHeight);
+            LiveBuilderSceneText.DrawLine(lineRect, tool.DisplayName + " — keys " + ToggleKey + " hide", TitleStyle);
+
+            foreach (var line in lines)
+            {
+                lineRect.y += lineRect.height;
+                lineRect.height = LineHeight;
+                LiveBuilderSceneText.DrawLine(lineRect, line, LineStyle);
+            }
+        }
+
+
+        // ── Строки ───────────────────────────────────────────────────────
+
+        // Инструмент, потом выделенное. Каждый раз заново: подписи клавиш — из нынешних привязок.
+        public static List<string> LinesFor(LiveBuilderTool tool, bool isContourShown)
         {
             var lines = new List<string>(tool.KeyHints);
 
-            if (isContourShown && tool.PathGesture == null)
-                lines.Add(ContourBoxSelectKey);
-
             if (isContourShown)
-                lines.AddRange(ContourKeys);
+                lines.AddRange(ContourLines(tool));
             else if (IsEditableBoxSelected(tool))
-                lines.AddRange(BoxKeys);
+                lines.AddRange(BoxLines());
 
-            lines.AddRange(CommonKeys);
             return lines;
+        }
+
+        // Рамка по пустому — только где пустой клик не начинает новую линию (не у Wall и Building).
+        private static IEnumerable<string> ContourLines(LiveBuilderTool tool)
+        {
+            yield return LiveBuilderHintKeys.Bound(LiveBuilderShortcutIds.ContourNudgeLeft) + LiveBuilderHintKeys.Bound(LiveBuilderShortcutIds.ContourNudgeForward) +
+                         LiveBuilderHintKeys.Bound(LiveBuilderShortcutIds.ContourNudgeRight) + LiveBuilderHintKeys.Bound(LiveBuilderShortcutIds.ContourNudgeBack) +
+                         " — nudge points one grid step";
+            yield return LiveBuilderHintKeys.Key("Delete") + " — remove points " + LiveBuilderHintKeys.Key("double-click") + " — point kind";
+
+            if (tool.PathGesture == null)
+                yield return LiveBuilderHintKeys.Key("drag on empty") + " — select points, " + LiveBuilderHintKeys.Shift + " add";
+
+            if (LiveBuilderContourSelection.Owner is SplineWall)
+                yield return LiveBuilderHintKeys.Bound(LiveBuilderShortcutIds.ContourCloseOrOpen) + " — close or open the wall";
+        }
+
+        private static IEnumerable<string> BoxLines()
+        {
+            yield return "Face square — size " + LiveBuilderHintKeys.Alt + " both " + LiveBuilderHintKeys.Alt + LiveBuilderHintKeys.Shift + " all";
+            yield return LiveBuilderHintKeys.Ctrl + " + drag a square — extrude a new box";
+            yield return LiveBuilderHintKeys.Shift + " + move handles — copy";
         }
 
         // Выделена коробка, комната или лестница, у которой инструмент показывает квадраты граней.

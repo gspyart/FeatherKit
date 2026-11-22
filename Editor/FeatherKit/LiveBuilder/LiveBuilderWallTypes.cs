@@ -7,7 +7,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Типы стен (<see cref="SplineWallType"/>) для окна Live Builder: список всех типов проекта выпадающим полем,
-    /// «Без типа» и «Новый тип…» — файл в папке типов. Список типов запомнен: окно перерисовывается на каждое движение мыши,
+    /// «No Type» и «New Type…» — файл в папке типов. Список типов запомнен: окно перерисовывается на каждое движение мыши,
     /// а поиск по проекту небыстрый. Забывается, когда в проекте что-то поменялось.
     /// </summary>
     [InitializeOnLoad]
@@ -29,16 +29,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static LiveBuilderProjectSettings Settings => LiveBuilderProjectSettings.instance;
 
 
-        // Выпадающий список: «Без типа», все типы, «Новый тип…». Возвращает выбранный.
+        // Выпадающий список: «No Type», все типы, «New Type…». Возвращает выбранный.
         public static SplineWallType Popup(GUIContent label, SplineWallType current)
         {
             var types = AllTypes();
-            var names = new List<string> { "Без типа — свои числа" };
+            var names = new List<string> { "No Type — Own Numbers" };
 
             foreach (var type in types)
-                names.Add(type.name + " · " + LiveBuilderSceneText.FormatMeters(type.Thickness) + " м");
+                names.Add(type.name + " · " + LiveBuilderSceneText.FormatMeters(type.Thickness) + " m");
 
-            names.Add("Новый тип…");
+            names.Add("New Type…");
 
             var index = current != null ? types.IndexOf(current) + 1 : 0;
             var chosen = EditorGUILayout.Popup(label, index, names.ToArray());
@@ -132,7 +132,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (folder == "Assets" || folder.StartsWith("Assets/"))
                 return folder;
 
-            Debug.LogWarning("Live Builder: папка типов стен «" + folder + "» — не внутри Assets. Тип создан в «" + FallbackFolder + "».");
+            Debug.LogWarning("Live Builder: wall types folder '" + folder + "' is not inside Assets. The type was created in '" + FallbackFolder + "'.");
             return FallbackFolder;
         }
 

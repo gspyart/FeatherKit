@@ -5,8 +5,8 @@ using UnityEngine;
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
-    /// Ручка повтора в окне сцены: стрелка у последней копии выделенного повтора. Тянешь вдоль шага — копий больше или меньше,
-    /// рядом надпись «× 5». Всё с Undo.
+    /// Ручка повтора (<see cref="LiveBuilderArray"/>) в окне сцены: стрелка за последней копией выделенного повтора по его главной оси.
+    /// Тянешь вдоль шага — копий больше или меньше, рядом надпись «× 5». С Undo.
     /// </summary>
     public static class LiveBuilderRepeatHandle
     {
@@ -21,23 +21,21 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         public static void DrawForSelection()
         {
-            var repeat = LiveBuilderRepeatActions.SelectedRepeat();
+            var selected = Selection.activeGameObject;
+            var array = selected != null ? selected.GetComponentInParent<LiveBuilderArray>() : null;
 
             if (isDragging && GUIUtility.hotControl == 0)
                 isDragging = false;
 
-            if (repeat == null || repeat.Step.sqrMagnitude < 0.0001f)
+            if (array == null || !TryGetMainAxis(array, out var axis))
                 return;
 
-            var model = repeat.GetComponentInParent<BoxModel>();
-
-            if (model == null || !TryGetFirstCopyCenter(model, repeat, out var firstCenter))
-                return;
-
-            var localStep = repeat.Step;
-            var lastCenter = firstCenter + localStep * (repeat.Count - 1);
-            var worldPosition = model.transform.TransformPoint(lastCenter + localStep.normalized * (localStep.magnitude * 0.5f));
-            var worldDirection = model.transform.TransformDirection(localStep.normalized);
+            var axisDirection = Vector3.zero;
+            axisDirection[axis] = 1f;
+            var worldStep = array.transform.rotation * axisDirection * array.StepOf(axis);
+            var count = array.CountOf(axis);
+            var worldPosition = array.transform.position + worldStep * (count - 0.5f);
+            var worldDirection = worldStep.normalized;
 
             Handles.color = HandleColor;
             var position = isDragging ? handlePosition : worldPosition;
@@ -50,44 +48,50 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 if (!isDragging)
                 {
                     isDragging = true;
-                    countAtDragStart = repeat.Count;
+                    countAtDragStart = count;
                     positionAtDragStart = position;
                 }
 
                 handlePosition = moved;
-                var stepsMoved = Mathf.RoundToInt(Vector3.Dot(moved - positionAtDragStart, worldDirection) / model.transform.TransformVector(localStep).magnitude);
-                var newCount = Mathf.Clamp(countAtDragStart + stepsMoved, 1, BoxModelRepeat.MaxCount);
+                var stepsMoved = Mathf.RoundToInt(Vector3.Dot(moved - positionAtDragStart, worldDirection) / worldStep.magnitude);
+                var newCount = Mathf.Clamp(countAtDragStart + stepsMoved, 1, LiveBuilderArray.MaxCountPerAxis);
 
-                if (newCount != repeat.Count)
+                if (newCount != count)
                 {
-                    Undo.RecordObject(repeat, "Change Repeat Count");
-                    repeat.Count = newCount;
+                    Undo.RecordObject(array, "Change Repeat Count");
+                    SetCount(array, axis, newCount);
                 }
             }
 
-            LiveBuilderSceneText.DrawLabel(position, "× " + repeat.Count);
+            LiveBuilderSceneText.DrawLabel(position, "× " + array.CountOf(axis));
         }
 
-        // Середина первой копии: коробки группы собраны без сдвигов повторов — ровно там, где стоят в сцене.
-        private static bool TryGetFirstCopyCenter(BoxModel model, BoxModelRepeat repeat, out Vector3 center)
+        // Ось с копиями и шагом: X, потом Z, потом Y. Y «до верха здания» и шаг-этаж считает здание — ручка не нужна.
+        private static bool TryGetMainAxis(LiveBuilderArray array, out int axis)
         {
-            var firstCopyBoxes = BoxModelShapeCollector.CollectFirstCopy(model, repeat.transform);
-            var bounds = new Bounds();
-
-            for (var index = 0; index < firstCopyBoxes.Count; index++)
+            foreach (var candidate in new[] { 0, 2, 1 })
             {
-                var box = firstCopyBoxes[index].Box;
-                var boxBounds = new Bounds();
-                boxBounds.SetMinMax(box.MinInMeters, box.MaxInMeters);
+                var isDrivenByStoreys = candidate == 1 && (array.CountYToBuildingTop || array.StepYIsStoreyHeight);
 
-                if (index == 0)
-                    bounds = boxBounds;
-                else
-                    bounds.Encapsulate(boxBounds);
+                if (!isDrivenByStoreys && array.CountOf(candidate) > 1 && Mathf.Abs(array.StepOf(candidate)) > 0.001f)
+                {
+                    axis = candidate;
+                    return true;
+                }
             }
 
-            center = bounds.center;
-            return firstCopyBoxes.Count > 0;
+            axis = -1;
+            return false;
+        }
+
+        private static void SetCount(LiveBuilderArray array, int axis, int count)
+        {
+            if (axis == 0)
+                array.CountX = count;
+            else if (axis == 1)
+                array.CountY = count;
+            else
+                array.CountZ = count;
         }
     }
 }

@@ -1,0 +1,72 @@
+Live Builder rebuild measurement: reference level (9-storey section, 300-box yard)
+2026-11-20 16:55, Unity 6000.6.4f1, Apple M5, Apple M5
+
+First build: one queue pass over the whole level
+Stage                                     Calls    Self ms   Total ms
+LinkSync                                      1        0.8        0.8
+AnchorSync                                    1        5.2        5.2
+LineSync                                      1        0.2        0.2
+BoxModelPass                                  1        2.7      411.5
+BuildingPass                                  1        3.4      440.2
+WallPass                                      1        0.9       79.2
+SignatureCheck                               38       13.9       51.6
+Solver                                        3        3.7        3.7
+Surfaces                                      3       34.0       34.0
+MeshFile                                     26      660.0      660.0
+MeshFill                                     22        4.2        4.2
+Bevel                                         3      156.8      156.8
+Chamfer                                       3       22.0       22.0
+Cutters                                      26       14.4       14.4
+Collider                                     26        8.9        8.9
+BuildingGeometry                              1        5.4        5.4
+WallGeometry                                  8        0.6        0.6
+Outside stages                                        29.4           
+Whole build                                          966.5           
+Rebuilt: constructions 8, building parts 19, passes 1
+Second pass right after: 7.4 ms, rebuilt constructions 0, building parts 0
+Scene save (Ctrl+S): 1374.5 ms, LightmapUV 847.9 ms, DiskSave 525.7 ms, files written 26
+
+Budget actions, ms: edit + queue pass, a gesture step is a draft pass (median of 20 runs unless marked *)
+Action                                   Median        Max     Budget       Runs
+Move one box in the 300-box object         42.4       44.3       30.0         20
+Move a window on the building wall         16.6       20.8       16.0         20
+Building storeys 9 -> 10                   66.0       72.1      150.0         20
+
+Scene view during a gesture: frame = gesture step + scene render, budget >= 30.0 fps
+Gesture                                Frame ms     Max ms        Fps
+Move one box in the 300-box object         44.1       46.0       22.7
+  of it scene render (1920 x 1080, GPU)        1.7                      
+Move a window on the building wall         18.4       22.5       54.5
+  of it scene render (1920 x 1080, GPU)        1.8                      
+
+After release: final pass (bevel, collider, signature), the queue runs it 0.3 s after the gesture
+Gesture                                  Median        Max      Bevel   Collider
+Move one box in the 300-box object        172.5      174.2      138.9       12.2
+Move a window on the building wall         17.0       19.7        0.0        0.8
+
+Where the time goes: mean per run, self ms (gestures: the draft pass)
+Stage                                       Box     Window    Storeys
+LinkSync                                    0.1        0.1        0.1
+AnchorSync                                  0.0        0.0        0.0
+LineSync                                    0.0        0.0        0.0
+BoxModelPass                                0.4        0.1        0.3
+BuildingPass                                0.0        0.3        0.5
+WallPass                                    0.0        0.0        0.0
+SignatureCheck                              6.1        4.2        4.6
+Solver                                      3.1        0.0        1.4
+Surfaces                                   27.0        0.0        3.1
+MeshFile                                    0.0        0.3       39.0
+MeshFill                                    3.1        0.1        1.3
+Bevel                                       0.0        0.0        0.0
+Chamfer                                     2.2        0.0        0.0
+Cutters                                     0.0       11.0       12.1
+Collider                                    0.0        0.0        3.4
+BuildingGeometry                            0.0        0.5        0.4
+Outside stages                              0.0        0.0        0.0
+Whole action                               42.2       16.8       66.4
+Rebuilt constructions                       1.0        1.0        3.0
+Rebuilt building parts                      0.0       17.0       21.0
+Queue passes                                1.0        1.0        1.0
+Final pass after release, ms              172.4       17.1        0.0
+Deferred disk save, ms                     58.2      304.3      415.2
+Deferred disk save, files                   1.0       17.0       23.0

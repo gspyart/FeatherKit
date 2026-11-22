@@ -70,16 +70,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Здание, вдоль чьих стен стороны пропускаются: стена-комната в привязке к нему.
+        // Здание, вдоль чьих стен стороны пропускаются: стена-комната в его этаже или в привязке к нему.
         private static bool TryGetBuilding(SplineWall wall, out SplineBuilding building)
         {
-            building = null;
-
-            if (!wall.SkipsSidesAlongBuildingWalls || !wall.TryGetComponent<SplineBuildingStoreyLink>(out var link) || !link.IsValid)
-                return false;
-
-            building = link.Building;
-            return true;
+            building = wall.SkipsSidesAlongBuildingWalls ? SplineBuildingStoreys.BuildingOfStoreyContent(wall.transform) : null;
+            return building != null;
         }
     }
 }

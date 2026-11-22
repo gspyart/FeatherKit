@@ -10,10 +10,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Группы Live Builder: объект из коробок (<see cref="BoxModel"/>) как граница вырезов, как Model в Chisel и RealtimeCSG.
     /// Внутри группы — свои коробки, стены, здания, вырезы, вложенные группы и любые объекты (мебель). Вырезающие коробки и вырезы снаружи
-    /// в группу не заходят, её вырезы режут только внутри (правило вырезов — <see cref="GeometryCutterLookup"/>, коробок — <see cref="SplineWallRebuilder.OuterModelOf"/>).
+    /// в группу не заходят, её вырезы режут только внутри (правило вырезов — <see cref="LiveBuilderCutRules"/>).
     /// Здесь — в какой группе лежит объект и две команды с Undo: «Новая группа» внутри выделенного и «В группу» для выделенного.
-    /// В здании группа встаёт в его «Interior» и привязывается к этажу: этаж — выбранный в окне, «И этажи выше» — из окна.
-    /// Пункты меню — GameObject → FeatherKit, в окне — карточка «Группа» (<see cref="LiveBuilderGroupCard"/>).
+    /// В здании группа встаёт в его этаж — выбранный в окне, «И этажи выше» — повтор до верха.
+    /// Пункты меню — GameObject → FeatherKit, в панели — секция Group (<see cref="LiveBuilderGroupCard"/>).
     /// </summary>
     public static class LiveBuilderGroups
     {
@@ -56,8 +56,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return group;
         }
 
-        // Куда встаёт новая группа: в выделенный объект из коробок или пустой объект-папку; рядом — у коробки, стены, выреза и объекта с мешем;
-        // здание и его собранные части — в «Interior» здания.
+        // Куда встаёт новая группа: в выделенный объект из коробок или пустой объект-папку (и в этаж здания); рядом — у коробки, стены, выреза
+        // и объекта с мешем; здание и его собранные части — в этаж, выбранный в окне.
         private static Transform NewGroupParentFor(GameObject selected)
         {
             if (selected == null || !selected.scene.IsValid())
@@ -66,7 +66,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var building = selected.GetComponentInParent<SplineBuilding>(true);
 
             if (building != null && (selected == building.gameObject || IsGeneratedBuildingPart(selected.transform)))
-                return BoxModelFactory.InteriorOf(building);
+                return SplineBuildingStoreys.ContainerOf(building, WindowStoreyOf(building)).transform;
 
             return CanHoldGroup(selected) ? selected.transform : selected.transform.parent;
         }
@@ -77,24 +77,34 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (selected.GetComponent<BoxModel>() != null)
                 return true;
 
-            var isPiece = BoxModelShapeCollector.IsPiece(selected) || selected.GetComponent<BoxModelRepeat>() != null
+            var isPiece = BoxModelShapeCollector.IsPiece(selected) || selected.GetComponent<LiveBuilderArray>() != null
                 || selected.GetComponent<GeometryCutter>() != null || selected.GetComponent<SplineWall>() != null;
 
             return !isPiece && selected.GetComponent<Renderer>() == null;
         }
 
-        // Группа в здании — на пол этажа, выбранного в окне (у здания такого нет — ближайшего), и привязана к нему целиком:
+        // Группа в здании — на пол своего этажа (в этаже здания — его, иначе выбранного в окне) целиком:
         // с «И этажи выше» — её коробки на всех этажах выше, одним мешем.
         private static void AttachToWindowStorey(BoxModel group, SplineBuilding building)
         {
-            var storey = Mathf.Clamp(LiveBuilderStoreys.CurrentStorey - SplineBuildingLevelAlignment.BaseStoreyOf(building), 0, building.StoreyCount - 1);
             var parent = group.transform.parent;
+            var storey = SplineBuildingStoreys.TryGetStoreyOf(parent, out var storeyBuilding, out var parentStorey) && storeyBuilding == building
+                ? Mathf.Min(parentStorey, building.StoreyCount - 1)
+                : WindowStoreyOf(building);
             var floorPoint = parent.position;
             floorPoint.y = building.FirstFloorWorldHeight + storey * building.StoreyHeight;
 
             var localFloor = parent.InverseTransformPoint(floorPoint);
             group.transform.localPosition = RoundToMillimeters(new Vector3(0f, localFloor.y, 0f));
-            SplineBuildingLinkSync.Attach(group.gameObject, building, LiveBuilderBuildingContext.IsOnAllStoreys);
+
+            if (LiveBuilderBuildingContext.IsOnAllStoreys)
+                SplineBuildingInteriorPlacement.RepeatOnStoreysAbove(group.transform, building, false);
+        }
+
+        // Этаж здания, выбранный в окне; у здания такого нет — ближайший.
+        private static int WindowStoreyOf(SplineBuilding building)
+        {
+            return Mathf.Clamp(LiveBuilderStoreys.CurrentStorey - SplineBuildingLevelAlignment.BaseStoreyOf(building), 0, building.StoreyCount - 1);
         }
 
 
@@ -112,7 +122,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var isBuildingItself = building != null && commonParent == building.transform;
 
             var undoGroup = BeginUndo(WrapUndoName);
-            var parent = isBuildingItself ? BoxModelFactory.InteriorOf(building) : commonParent;
+            var parent = isBuildingItself ? InteriorFor(building, items) : commonParent;
             var group = BoxModelFactory.CreateGroup(parent);
 
             if (parent == null)
@@ -129,14 +139,42 @@ namespace FeatherKit.EditorTools.LiveBuilder
             foreach (var item in items)
                 Undo.SetTransformParent(item, group.transform, true, WrapUndoName);
 
-            // Свои привязки внутри (коробка «И этажи выше») привязка группы погасила бы — тогда группа без неё.
-            if (building != null && !BoxModelShapeCollector.HasStoreyLinksInside(group.transform))
-                SplineBuildingLinkSync.Attach(group.gameObject, building, LiveBuilderBuildingContext.IsOnAllStoreys);
+            AttachGroupToStoreys(group, building);
 
             Undo.CollapseUndoOperations(undoGroup);
             Selection.activeGameObject = group.gameObject;
             LiveBuilderRebuildQueue.RequestCheck();
             return group;
+        }
+
+        // Выделенное прямо в здании — в этаж на высоте самого нижнего.
+        private static Transform InteriorFor(SplineBuilding building, List<Transform> items)
+        {
+            var lowest = float.MaxValue;
+
+            foreach (var item in items)
+                lowest = Mathf.Min(lowest, item.position.y);
+
+            return SplineBuildingStoreys.ContainerAtHeight(building, lowest).transform;
+        }
+
+        // Группа в здании — к его этажам. Свои повторы внутри (коробка «И этажи выше») повтор группы перемножил бы — тогда группа без него.
+        private static void AttachGroupToStoreys(BoxModel group, SplineBuilding building)
+        {
+            if (building == null)
+                return;
+
+            if (LiveBuilderBuildingContext.IsOnAllStoreys && !HasStoreyRepeatsInside(group.transform))
+                SplineBuildingInteriorPlacement.RepeatOnStoreysAbove(group.transform, building, false);
+        }
+
+        private static bool HasStoreyRepeatsInside(Transform node)
+        {
+            foreach (var array in node.GetComponentsInChildren<LiveBuilderArray>(true))
+                if (array.transform != node && (array.CountY > 1 || array.CountYToBuildingTop))
+                    return true;
+
+            return false;
         }
 
         // Номер среди соседей общего родителя у того, в ком лежит первый объект (или у него самого). Родитель null — среди корней сцены.
@@ -176,7 +214,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             if (objects == null || objects.Count == 0)
             {
-                reason = "ничего не выделено";
+                reason = "nothing is selected";
                 return false;
             }
 
@@ -189,7 +227,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
                 if (selected.scene != objects[0].scene)
                 {
-                    reason = "объекты из разных сцен";
+                    reason = "objects are from different scenes";
                     return false;
                 }
             }
@@ -201,7 +239,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             {
                 if (IsModelPiece(item.gameObject) && !IsInsideOwnModel(item, commonParent))
                 {
-                    reason = "коробки — только внутри своего объекта из коробок: выдели их вместе с тем, что лежит в том же объекте";
+                    reason = "boxes stay inside their own box model: select them together with what lies in the same model";
                     return false;
                 }
             }
@@ -214,25 +252,27 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private static string ReasonNotMovable(GameObject selected)
         {
             if (selected == null || !selected.scene.IsValid() || EditorUtility.IsPersistent(selected))
-                return "выделены не объекты сцены";
+                return "the selection is not scene objects";
 
             if (IsGeneratedBuildingPart(selected.transform))
-                return "собранные части здания строит само здание";
+                return "generated building parts are built by the building itself";
 
             if (IsBuildingInterior(selected.transform))
-                return "группу «Interior» здания не переносят";
+                return "storeys and the roof of a building stay in it";
 
             if (PrefabUtility.IsPartOfPrefabInstance(selected) && !PrefabUtility.IsOutermostPrefabInstanceRoot(selected))
-                return "часть экземпляра префаба — переносится только весь экземпляр";
+                return "part of a prefab instance: only the whole instance can move";
 
             var prefabStage = PrefabStageUtility.GetPrefabStage(selected);
 
             if (prefabStage != null && prefabStage.prefabContentsRoot == selected)
-                return "корень префаба";
+                return "the prefab root";
 
-            if (selected.TryGetComponent<GeometryCutter>(out _) && selected.transform.parent != null
-                && (selected.transform.parent.GetComponent<SplineWall>() != null || selected.transform.parent.GetComponent<SplineBuilding>() != null))
-                return "проём стены или здания: в группе он перестал бы их резать";
+            var parent = selected.transform.parent;
+
+            if (selected.TryGetComponent<GeometryCutter>(out _) && parent != null && (parent.GetComponent<SplineWall>() != null
+                    || parent.GetComponent<SplineBuilding>() != null || parent.GetComponent<SplineBuildingStorey>() != null))
+                return "an opening of a wall or building would stop cutting them inside a group";
 
             return null;
         }
@@ -240,7 +280,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Коробка, комната, лестница или повтор — часть объекта из коробок.
         private static bool IsModelPiece(GameObject selected)
         {
-            return selected.GetComponent<BoxModel>() == null && (BoxModelShapeCollector.IsPiece(selected) || selected.GetComponent<BoxModelRepeat>() != null);
+            return selected.GetComponent<BoxModel>() == null && (BoxModelShapeCollector.IsPiece(selected) || selected.GetComponent<LiveBuilderArray>() != null);
         }
 
         // Группа встанет внутри объекта, которому принадлежит коробка: иначе коробка уедет из своего объекта и его осей.
@@ -276,11 +316,10 @@ namespace FeatherKit.EditorTools.LiveBuilder
             return node.GetComponentInParent<SplineBuildingPart>(true) != null;
         }
 
-        // Группа «Interior» самого здания.
+        // Этаж здания или его крыша.
         private static bool IsBuildingInterior(Transform node)
         {
-            return node.parent != null && node.parent.TryGetComponent<SplineBuilding>(out var building)
-                && BoxModelFactory.HasInterior(building) && BoxModelFactory.InteriorOf(building) == node;
+            return node.TryGetComponent<SplineBuildingStorey>(out _);
         }
 
 
@@ -350,7 +389,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             if (CanGroup(Selection.gameObjects, out var reason))
                 GroupObjects(Selection.gameObjects);
             else
-                Debug.LogWarning("Live Builder: в группу нельзя — " + reason + ".");
+                Debug.LogWarning("Live Builder: cannot group — " + reason + ".");
         }
 
 

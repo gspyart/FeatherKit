@@ -12,7 +12,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// поэтому от него растёт новая коробка ровно его размера: тянешь наружу — добавляет объём, толкаешь внутрь — вырезает.
     /// Исходная коробка не меняется. Новая — в конце объекта, главнее всего прежнего: выходит ровно то, что видно. Материалы — как у исходной.
     /// Не сдвинул ни на шаг сетки — коробки нет. Всё — один шаг Ctrl+Z.
-    /// Отпустил — вместо куска выделена дальняя грань новой коробки: потянешь её — коробка растёт или вырез углубляется.
+    /// Отпустил — вдавленная коробка становится вырезом (<see cref="GeometryCutter"/>), у вытянутой выделена дальняя грань: потянешь — растёт.
     /// </summary>
     public static class BoxModelFacePiecePushPull
     {
@@ -129,17 +129,26 @@ namespace FeatherKit.EditorTools.LiveBuilder
                     Undo.DestroyObjectImmediate(push.Box.gameObject);
 
             foreach (var push in kept)
-                BoxModelFaceSelection.Replace(push.Piece, new BoxModelPartFace(push.Box, FarFaceOf(push)));
+                FinishKept(push);
 
             Undo.CollapseUndoOperations(undoGroup);
             Pushes.Clear();
         }
 
-        // Дальняя грань: у вытянутой — наружная, у выреза — дно.
-        private static int FarFaceOf(PiecePush push)
+        // Вытянутая — дальше тянется за наружную грань. Вдавленная становится вырез-коробкой (<see cref="GeometryCutterBoxConversion"/>):
+        // вырез — только GeometryCutter; углубляют его ручки выреза, а кусок снимается с выделения.
+        private static void FinishKept(PiecePush push)
         {
-            var outwardFace = push.Piece.Piece.OutwardFace;
-            return push.Box.Mode == BoxModelPartMode.Add ? outwardFace : BoxFaces.Opposite(outwardFace);
+            if (push.Box.Mode == BoxModelPartMode.Add)
+            {
+                BoxModelFaceSelection.Replace(push.Piece, new BoxModelPartFace(push.Box, push.Piece.Piece.OutwardFace));
+                return;
+            }
+
+            if (BoxModelFaceSelection.Contains(push.Piece))
+                BoxModelFaceSelection.Toggle(push.Piece);
+
+            GeometryCutterBoxConversion.ToCutter(push.Box);
         }
 
 
@@ -156,8 +165,8 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 return;
 
             var label = !push.HasDepth
-                ? "тяни — коробка, толкай — вырезающая коробка"
-                : (push.Box.Mode == BoxModelPartMode.Add ? "вытянуть " : "вырезать ") + LiveBuilderSceneText.FormatMeters(push.Box.Size[push.Piece.Piece.Axis]) + " м";
+                ? "pull — box, push — cut"
+                : (push.Box.Mode == BoxModelPartMode.Add ? "pull " : "cut ") + LiveBuilderSceneText.FormatMeters(push.Box.Size[push.Piece.Piece.Axis]) + " m";
 
             LiveBuilderSceneText.DrawLabel(model.transform.TransformPoint(push.Piece.Piece.Center), label);
         }

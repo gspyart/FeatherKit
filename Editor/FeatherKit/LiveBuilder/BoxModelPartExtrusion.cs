@@ -8,16 +8,16 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Выдавливание коробки, как экструд в ProBuilder: тянешь с Ctrl — коробки стоят, а от граней растут новые коробки того же сечения.
     /// - у выделенной коробки — квадрат одной грани (<see cref="BoxModelPartHandles"/>)
-    /// - в режиме «Грани» — стрелки выделенных граней (<see cref="BoxModelFaceMoveHandle"/>): от каждой грани своя коробка
+    /// - в режиме Faces — стрелки выделенных граней (<see cref="BoxModelFaceMoveHandle"/>): от каждой грани своя коробка
     /// Новая коробка — отдельный объект сразу за исходной в иерархии: та же сторона (добавляет или вырезает), те же материалы.
     /// На месте грани — шов: новую часть можно отдельно сузить, покрасить, удалить.
-    /// Отпустил — выделены новые (в «Гранях» — их дальние грани), Ctrl ещё раз — выдавить дальше.
+    /// Отпустил — выделены новые (в Faces — их дальние грани), Ctrl ещё раз — выдавить дальше.
     /// Не вытянул ни на шаг сетки — новой коробки нет. Всё выдавливание — один шаг Ctrl+Z.
     /// </summary>
     public static class BoxModelPartExtrusion
     {
-        public const string Hint = "Тяни квадрат — размер, Ctrl — выдавить новую коробку от грани, Alt — обе грани, Alt+Shift — все стороны. " +
-                                   "Ручки переноса в середине — перенести, с Shift — копия. Shift+клик по квадратам — набрать грани. Delete — удалить коробку";
+        // Alt, Alt+Shift и копия ручками переноса — в шпаргалке (<see cref="LiveBuilderSceneKeys"/>).
+        public static string Hint => "Drag a face square — resize " + LiveBuilderHintKeys.Ctrl + " extrude " + LiveBuilderHintKeys.Shift + " + click squares — several";
 
         // Что выдавливаем сейчас: по одной записи на грань. Не выдавливаем — пусто.
         private static readonly List<FaceExtrusion> Extrusions = new();
@@ -267,7 +267,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             farFace[extrusion.Axis] = extrusion.IsPositive ? max[extrusion.Axis] : min[extrusion.Axis];
 
             LiveBuilderSceneText.DrawLabel(extrusion.Model.transform.TransformPoint(farFace),
-                extrusion.HasDepth ? "выдавить " + LiveBuilderSceneText.FormatMeters(extrusion.Extruded.Size[extrusion.Axis]) + " м" : "тяни дальше — новая коробка");
+                extrusion.HasDepth ? "extrude " + LiveBuilderSceneText.FormatMeters(extrusion.Extruded.Size[extrusion.Axis]) + " m" : "drag further — new box");
         }
 
 

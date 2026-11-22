@@ -7,23 +7,20 @@ namespace FeatherKit.LiveBuilder
     /// <summary>Где стены здания относительно контура: контур — их наружная сторона, внутренняя или середина.</summary>
     public enum SplineBuildingContourSide
     {
-        [InspectorName("Линия снаружи стен")] Outside,
-        [InspectorName("Линия изнутри стен")] Inside,
-        [InspectorName("Линия по оси стен")] Center
+        [InspectorName("Line Outside Walls")] Outside,
+        [InspectorName("Line Inside Walls")] Inside,
+        [InspectorName("Line On Wall Axis")] Center
     }
 
 
     /// <summary>
-    /// Здание по контуру: замкнутый сплайн на этом же объекте — план, у точки свой режим — угол или плавный изгиб.
-    /// По контуру — стены на все этажи, между этажами — перекрытия точно по форме, снизу пол, сверху плоская крыша.
-    /// Здание стоит на точке опоры: низ плиты пола — на контуре, верх пола первого этажа — на толщину плиты выше.
-    /// Проёмы — вырезы (<see cref="GeometryCutter"/>), обычно его дети. Вырезающие коробки объекта из коробок, в котором лежит здание,
-    /// режут стены насквозь и перекрытия там, где проходят: лестница с проёмом сверху пробивает пол этажа выше.
-    /// Геометрия — отдельные дочерние объекты (<see cref="SplineBuildingPart"/>): «Storey N» со стенами и полом этажа, «Roof» — крыша;
-    /// их можно прятать в окне сцены по одному. Меши собирает редактор и хранит файлами рядом со сценой; в игре компонент — только данные.
+    /// Здание по контуру замкнутого сплайна: стены на все этажи, перекрытия по форме, пол и плоская крыша; стоит на этаже уровня.
+    /// - высота этажа — уровня или своя (<see cref="SplineBuildingLevelPlacement"/>), этажи считаются от этажа уровня, на котором стоит
+    /// - держит этажи дочерними объектами «Storey N» и «Roof» (<see cref="SplineBuildingStorey"/>): в них части здания и интерьер этажа
+    /// - проёмы — вырезы (<see cref="GeometryCutter"/>); меши собирает редактор, в игре компонент — только данные
     /// </summary>
-    [FDescription("Здание по контуру: стены на все этажи, перекрытия и крыша по форме замкнутого сплайна. " +
-                  "Проёмы — вырезы «Geometry Cutter» и вырезающие коробки объекта, в котором лежит здание.")]
+    [FDescription("Здание по контуру: стены на все этажи, перекрытия и крыша по форме замкнутого сплайна. Стоит на этаже уровня, высота этажа — уровня или своя. " +
+                  "Этажи — дочерние «Storey N» и «Roof»: клади интерьер в этаж, он едет вместе с ним.")]
     [AddComponentMenu("FeatherKit/Live Builder/Spline Building")]
     [DisallowMultipleComponent]
     [SelectionBase]
@@ -33,7 +30,11 @@ namespace FeatherKit.LiveBuilder
         // Защита от случайной высотки в тысячу этажей.
         public const int MaxStoreys = 60;
 
-        [Header("Этажи")]
+        // Версии данных: 0 — части в группах в нуле здания, интерьер в «Interior» с привязками; 2 — этажи-контейнеры «Storey N» и «Roof».
+        public const int LegacyDataVersion = 0;
+        public const int CurrentDataVersion = 2;
+
+        [Header("Storeys")]
         [Tooltip("Сколько этажей. Перекрытия между ними ставятся сами.")]
         [Range(1, MaxStoreys)]
         [SerializeField] private int storeyCount = 1;
@@ -42,8 +43,11 @@ namespace FeatherKit.LiveBuilder
         [Min(1f)]
         [SerializeField] private float storeyHeight = 4f;
 
+        [Tooltip("Как здание стоит на этажах уровня: на каком этаже и берёт ли высоту этажа уровня.")]
+        [SerializeField] private SplineBuildingLevelPlacement levelPlacement = new();
+
         [Space]
-        [Header("Стены")]
+        [Header("Walls")]
         [Tooltip("Тип наружных стен: толщина и материал снаружи — из него, общие со всеми стенами этого типа. Пусто — свои.")]
         [SerializeField] private SplineWallType wallType;
 
@@ -56,7 +60,7 @@ namespace FeatherKit.LiveBuilder
         [SerializeField] private SplineBuildingContourSide contourSide = SplineBuildingContourSide.Outside;
 
         [Space]
-        [Header("Перекрытия")]
+        [Header("Slabs")]
         [Tooltip("Толщина пола, перекрытий и крыши, м. Перекрытие — 0,2.")]
         [Min(0.02f)]
         [SerializeField] private float slabThickness = 0.2f;
@@ -75,7 +79,7 @@ namespace FeatherKit.LiveBuilder
         [SerializeField] private float parapetHeight = 1f;
 
         [Space]
-        [Header("Изгибы")]
+        [Header("Curves")]
         [Tooltip("Длина одного прямого кусочка на плавном изгибе, м. Меньше — глаже, но тяжелее меш. 0,5 — заметно гладко.")]
         [Range(0.1f, 2f)]
         [SerializeField] private float curveStep = 0.5f;
@@ -85,7 +89,7 @@ namespace FeatherKit.LiveBuilder
         [SerializeField] private int cornerSegments = 6;
 
         [Space]
-        [Header("Материалы")]
+        [Header("Materials")]
         [Tooltip("Стены снаружи, торцы перекрытий и откосы проёмов. Пусто — серый материал набора.")]
         [SerializeField] private Material outerWallMaterial;
 
@@ -102,12 +106,24 @@ namespace FeatherKit.LiveBuilder
         [SerializeField] private Material roofMaterial;
 
         [Space]
-        [Header("Столкновения")]
+        [Header("Collisions")]
         [Tooltip("Собирать коллайдер по мешу — по зданию можно ходить.")]
         [SerializeField] private bool hasCollider = true;
 
+        [Space]
+        [Header("Texture")]
+        [Tooltip("World — текстура по миру: ряды плиток сходятся через этажи и соседние постройки, сдвинул постройку — рисунок остаётся на месте. " +
+                 "Object — текстура едет вместе с постройкой. Старые постройки — Object, новые — World.")]
+        [SerializeField] private LiveBuilderTextureAlignment textureAlignment = LiveBuilderTextureAlignment.Object;
+
+        [Tooltip("Сдвиг, масштаб и поворот текстуры: стены снаружи и изнутри, торцы, пол, потолок, крыша. Нет строки — как есть.")]
+        [SerializeField] private LiveBuilderTextureFitList<SplineBuildingTextureSurface> textureFits = new();
+
         // Чем собран текущий меш: изменилось — пересборка. Пишет редактор.
         [SerializeField, HideInInspector] private string builtSignature;
+
+        // Инициализатор — старая версия: у старого здания поля в файле нет. Новым ставят фабрика и Reset().
+        [SerializeField, HideInInspector] private int dataVersion = LegacyDataVersion;
 
 
         public int StoreyCount
@@ -211,10 +227,30 @@ namespace FeatherKit.LiveBuilder
 
         public bool HasCollider => hasCollider;
 
+        public LiveBuilderTextureAlignment TextureAlignment
+        {
+            get => textureAlignment;
+            set => textureAlignment = value;
+        }
+
+        public LiveBuilderTextureFitList<SplineBuildingTextureSurface> TextureFits => textureFits ??= new LiveBuilderTextureFitList<SplineBuildingTextureSurface>();
+
         public string BuiltSignature
         {
             get => builtSignature;
             set => builtSignature = value;
+        }
+
+        public int DataVersion
+        {
+            get => dataVersion;
+            set => dataVersion = value;
+        }
+
+        public SplineBuildingLevelPlacement LevelPlacement
+        {
+            get => levelPlacement ??= new SplineBuildingLevelPlacement();
+            set => levelPlacement = value ?? new SplineBuildingLevelPlacement();
         }
 
         // Высота верха пола первого этажа над контуром, м: есть пол — толщина плиты, нет — ноль.
@@ -242,6 +278,13 @@ namespace FeatherKit.LiveBuilder
         public int StoreyAtHeight(float worldHeight)
         {
             return Mathf.Clamp(Mathf.FloorToInt((worldHeight - FirstFloorWorldHeight) / storeyHeight + 0.01f), 0, storeyCount - 1);
+        }
+
+
+        private void Reset()
+        {
+            dataVersion = CurrentDataVersion;
+            textureAlignment = LiveBuilderTextureAlignment.World;
         }
     }
 }

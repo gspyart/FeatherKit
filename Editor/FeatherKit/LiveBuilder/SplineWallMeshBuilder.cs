@@ -30,13 +30,30 @@ namespace FeatherKit.EditorTools.LiveBuilder
     }
 
 
+    /// <summary>Одна копия стены или здания из повтора (<see cref="LiveBuilderArray"/>): сдвиг в её осях и её проёмы — у каждой копии свои.</summary>
+    public sealed class SplineWallCopy
+    {
+        public SplineWallCopy(Vector3 localOffset, List<List<SplineWallHole>> holesByPath, List<SplineBuildingSlabHole> slabHoles)
+        {
+            LocalOffset = localOffset;
+            HolesByPath = holesByPath;
+            SlabHoles = slabHoles;
+        }
+
+
+        public Vector3 LocalOffset { get; }
+        public List<List<SplineWallHole>> HolesByPath { get; }
+        public List<SplineBuildingSlabHole> SlabHoles { get; }
+    }
+
+
     /// <summary>
     /// Строит меш стены по линии. Стена развёрнута в прямоугольник: вдоль пути (u) на высоту (v).
     /// Края проёмов и точки пути режут его на клетки; клетка внутри проёма — дыра, остальные — стена.
     /// Так проёмы, которые накладываются, просто сливаются, а на кривой проём изгибается вместе со стеной.
     /// Из клеток — обе стороны, верх, торцы открытого пути и откосы проёмов: бока, подоконник, верх проёма.
-    /// Низа нет — стена всегда на чём-то стоит. Развёртка текстуры — по метрам.
-    /// У замкнутой стены — по желанию пол и потолок, плитами по её внутренней стороне (общий код с перекрытиями здания).
+    /// Низа нет — стена всегда на чём-то стоит. Развёртка текстуры — по метрам, у каждой грани её оси до мира (<see cref="SplineWallTextureAxes"/>).
+    /// У замкнутой стены — по желанию пол и потолок, плитами по её внутренней стороне (общий код с перекрытиями здания). Копии повтора — в том же меше.
     /// </summary>
     public static class SplineWallMeshBuilder
     {
@@ -49,26 +66,28 @@ namespace FeatherKit.EditorTools.LiveBuilder
         private const float BreakTolerance = 0.001f;
 
 
-        // Заполняет меш стены заново по путям и проёмам каждого пути, с копиями вверх. Один материал на всё;
+        // Заполняет меш стены заново по путям, в каждой копии повтора — с её проёмами. Один материал на всё;
         // есть замкнутые пути с полом или потолком (slabPaths) — три части: стена, пол, потолок.
-        public static void Fill(Mesh mesh, SplineWall wall, IReadOnlyList<SplineWallPath> paths, IReadOnlyList<List<SplineWallHole>> holesByPath,
-            IReadOnlyList<SplineWallPath> slabPaths, IReadOnlyList<SplineBuildingSlabHole> slabHoles)
+        public static void Fill(Mesh mesh, SplineWall wall, IReadOnlyList<SplineWallPath> paths, IReadOnlyList<SplineWallCopy> copies,
+            IReadOnlyList<SplineWallPath> slabPaths, SplineWallTexturing texturing = null)
         {
             var geometry = new SplineWallGeometry(slabPaths.Count > 0 ? SlabSubmeshCount : 1);
             GetSideOffsets(wall, out var leftOffset, out var rightOffset);
 
-            for (var index = 0; index < paths.Count; index++)
-                for (var copy = 0; copy < wall.CopiesUp; copy++)
-                {
-                    var bottom = copy * wall.CopyStep;
-                    AddWalls(geometry, paths[index], holesByPath[index], leftOffset, rightOffset, bottom, bottom + wall.Height, SplineWallFaceSubmeshes.Single);
-                }
+            foreach (var arrayCopy in copies)
+            {
+                var firstVertex = geometry.Vertices.Count;
 
-            foreach (var path in slabPaths)
-                for (var copy = 0; copy < wall.CopiesUp; copy++)
-                    AddSlabs(geometry, wall, path, leftOffset, rightOffset, copy * wall.CopyStep, slabHoles);
+                for (var index = 0; index < paths.Count; index++)
+                    AddWalls(geometry, paths[index], arrayCopy.HolesByPath[index], leftOffset, rightOffset, 0f, wall.Height, SplineWallFaceSubmeshes.Single);
 
-            geometry.WriteTo(mesh);
+                foreach (var path in slabPaths)
+                    AddSlabs(geometry, wall, path, leftOffset, rightOffset, 0f, arrayCopy.SlabHoles);
+
+                geometry.Shift(firstVertex, arrayCopy.LocalOffset);
+            }
+
+            geometry.WriteTo(mesh, texturing);
         }
 
         // Пол и потолок внутри замкнутого пути — по внутренней стороне стены, как перекрытия здания: пол — на её низу, потолок — под её верхом.
@@ -242,6 +261,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             var sign = isRightSide ? 1f : -1f;
             var normalFrom = path.SideNormalAt(alongFrom + BreakTolerance) * sign;
             var normalTo = path.SideNormalAt(alongTo - BreakTolerance) * sign;
+            geometry.SetTextureAxes(SplineWallTextureAxes.Side(path, sign));
 
             geometry.AddQuad(
                 new SplineWallVertex(PointAt(path, alongFrom, sideOffset, heightFrom), normalFrom, new Vector2(alongFrom * sign, heightFrom)),
@@ -255,6 +275,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
             float leftOffset, float rightOffset, bool facesUp, int submesh)
         {
             var normal = facesUp ? Vector3.up : Vector3.down;
+            geometry.SetTextureAxes(SplineWallTextureAxes.Plan(SplineWallFaceKind.End));
 
             geometry.AddQuad(PlanVertex(PointAt(path, alongFrom, leftOffset, height), normal), PlanVertex(PointAt(path, alongTo, leftOffset, height), normal),
                 PlanVertex(PointAt(path, alongTo, rightOffset, height), normal), PlanVertex(PointAt(path, alongFrom, rightOffset, height), normal), submesh);
@@ -299,6 +320,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 var normal = path.DirectionOf(segment) * (solidBefore ? 1f : -1f);
                 var heightFrom = heightBreaks[start];
                 var heightTo = heightBreaks[row];
+                geometry.SetTextureAxes(SplineWallTextureAxes.Across(path));
 
                 geometry.AddQuad(
                     new SplineWallVertex(PointAt(path, along, leftOffset, heightFrom), normal, new Vector2(leftOffset, heightFrom)),
@@ -367,6 +389,11 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         private readonly List<int>[] trianglesBySubmesh;
 
+        // Оси развёртки до мира: у каждой вершины — номер в этом списке, −1 — без них (как плоские метры).
+        private readonly List<SplineWallTextureAxes> textureAxes = new();
+        private readonly List<int> textureAxesByVertex = new();
+        private int currentTextureAxes = -1;
+
 
         public SplineWallGeometry(int submeshCount)
         {
@@ -399,6 +426,49 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
+        // Вершины с этой и дальше — на сдвиг: копия повтора строится на месте оригинала и переезжает.
+        public void Shift(int firstVertex, Vector3 offset)
+        {
+            if (offset == Vector3.zero)
+                return;
+
+            for (var index = firstVertex; index < Vertices.Count; index++)
+                Vertices[index] += offset;
+        }
+
+
+        // Всё накопленное другой копилкой — сюда, со сдвигом: копии повтора одной части здания — в одном меше.
+        public void Append(SplineWallGeometry other, Vector3 offset)
+        {
+            var firstVertex = Vertices.Count;
+            var firstAxes = textureAxes.Count;
+            Vertices.AddRange(other.Vertices);
+            Normals.AddRange(other.Normals);
+            TextureCoordinates.AddRange(other.TextureCoordinates);
+            textureAxes.AddRange(other.textureAxes);
+
+            foreach (var axes in other.textureAxesByVertex)
+                textureAxesByVertex.Add(axes < 0 ? -1 : firstAxes + axes);
+
+            Shift(firstVertex, offset);
+
+            for (var submesh = 0; submesh < trianglesBySubmesh.Length && submesh < other.trianglesBySubmesh.Length; submesh++)
+                foreach (var vertex in other.trianglesBySubmesh[submesh])
+                    trianglesBySubmesh[submesh].Add(firstVertex + vertex);
+        }
+
+
+        // Следующие грани — с этими осями развёртки до мира.
+        public void SetTextureAxes(SplineWallTextureAxes axes)
+        {
+            if (currentTextureAxes >= 0 && textureAxes[currentTextureAxes].Equals(axes))
+                return;
+
+            currentTextureAxes = textureAxes.Count;
+            textureAxes.Add(axes);
+        }
+
+
         public void AddQuad(SplineWallVertex first, SplineWallVertex second, SplineWallVertex third, SplineWallVertex fourth, int submesh)
         {
             AddTriangle(first, second, third, submesh);
@@ -416,6 +486,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
                 Vertices.Add(vertex.Position);
                 Normals.Add(vertex.Normal);
                 TextureCoordinates.Add(vertex.TextureCoordinate);
+                textureAxesByVertex.Add(currentTextureAxes);
             }
 
             var faceNormal = Vector3.Cross(second.Position - first.Position, third.Position - first.Position);
@@ -428,14 +499,14 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Всё накопленное — в меш, по части на материал.
-        public void WriteTo(Mesh mesh)
+        // Всё накопленное — в меш, по части на материал; развёртка — через texturing, без него — плоские метры.
+        public void WriteTo(Mesh mesh, SplineWallTexturing texturing = null)
         {
             mesh.Clear();
             mesh.indexFormat = Vertices.Count > MaxVerticesFor16BitIndex ? IndexFormat.UInt32 : IndexFormat.UInt16;
             mesh.SetVertices(Vertices);
             mesh.SetNormals(Normals);
-            mesh.SetUVs(0, TextureCoordinates);
+            mesh.SetUVs(0, texturing != null ? MappedTextureCoordinates(texturing) : TextureCoordinates);
             mesh.subMeshCount = trianglesBySubmesh.Length;
 
             for (var index = 0; index < trianglesBySubmesh.Length; index++)
@@ -443,6 +514,27 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
             mesh.RecalculateBounds();
             mesh.RecalculateTangents();
+        }
+
+        // Вершины не общие у треугольников: у каждой своя часть меша — по ней плитка и подгонка.
+        private List<Vector2> MappedTextureCoordinates(SplineWallTexturing texturing)
+        {
+            var mapped = new List<Vector2>(TextureCoordinates);
+            var shiftsByAxes = new Vector2[textureAxes.Count];
+
+            for (var index = 0; index < textureAxes.Count; index++)
+                shiftsByAxes[index] = texturing.WorldShiftOf(textureAxes[index]);
+
+            for (var submesh = 0; submesh < trianglesBySubmesh.Length; submesh++)
+                foreach (var vertex in trianglesBySubmesh[submesh])
+                {
+                    var axes = vertex < textureAxesByVertex.Count ? textureAxesByVertex[vertex] : -1;
+                    var kind = axes >= 0 ? textureAxes[axes].Kind : SplineWallFaceKind.End;
+                    var shift = axes >= 0 ? shiftsByAxes[axes] : Vector2.zero;
+                    mapped[vertex] = texturing.Map(TextureCoordinates[vertex], shift, submesh, kind);
+                }
+
+            return mapped;
         }
     }
 }

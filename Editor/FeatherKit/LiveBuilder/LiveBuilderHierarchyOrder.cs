@@ -7,7 +7,7 @@ namespace FeatherKit.EditorTools.LiveBuilder
     /// <summary>
     /// Порядок объектов в иерархии, как его читает глаз сверху вниз: родитель раньше своих детей, дети — по порядку,
     /// всё, что внутри объекта, — раньше его следующего соседа. По нему «В группу» (<see cref="LiveBuilderGroups"/>) кладёт выделенное
-    /// в новую группу в том же порядке, в каком оно стояло. Резку стен и зданий порядок не решает (<see cref="BoxModelSolverBox.CutsTarget"/>).
+    /// в новую группу в том же порядке, в каком оно стояло. Резку стен и зданий порядок не решает (<see cref="LiveBuilderCutRules"/>).
     /// </summary>
     public static class LiveBuilderHierarchyOrder
     {

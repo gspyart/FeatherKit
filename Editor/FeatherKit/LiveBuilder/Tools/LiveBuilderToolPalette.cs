@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 using UnityEditor;
-using UnityEngine;
 
 namespace FeatherKit.EditorTools.LiveBuilder
 {
     /// <summary>
     /// Палитра инструментов Live Builder: все наследники <see cref="LiveBuilderTool"/> по одному, по их месту в палитре,
-    /// и выбранный из них. Номер места — клавиша в окне сцены: «1» у первого. Выбранный свой у каждого человека, помнится в настройках редактора по Id.
+    /// и выбранный из них. Клавиша инструмента — его ярлык в Edit → Shortcuts (по умолчанию номер места: «1» у первого);
+    /// клавиша уже выбранного — следующий режим, с Shift — предыдущий. Выбранный свой у каждого человека, помнится в настройках редактора по Id.
     /// </summary>
     public static class LiveBuilderToolPalette
     {
@@ -15,11 +15,15 @@ namespace FeatherKit.EditorTools.LiveBuilder
         // Раньше инструмент помнился номером в списке — он читается один раз и переписывается в Id.
         private const string NumberPreferenceKey = "FeatherKit.LiveBuilder.Tool";
 
+        // Бывшие инструменты: «Комната» — теперь режим Room «Коробки», «Проём» — «Cut».
+        private const string OldRoomId = "Room";
+        private const string OldOpeningId = "Opening";
+
         // Номер за концом старого списка — бывший «Вырез»: его заменил «Проём», на него и переводим.
-        private const string ReplacementForRemovedToolId = "Opening";
+        private const string ReplacementForRemovedToolId = OldOpeningId;
 
         // Номер в старом списке → Id.
-        private static readonly string[] IdsByOldNumber = { "Box", "Room", "Building", "Wall", "Opening", "Stairs", "Ruler", "Select" };
+        private static readonly string[] IdsByOldNumber = { "Box", OldRoomId, "Building", "Wall", OldOpeningId, "Stairs", "Ruler", "Select" };
 
         private static List<LiveBuilderTool> tools;
         private static LiveBuilderTool current;
@@ -64,20 +68,36 @@ namespace FeatherKit.EditorTools.LiveBuilder
         }
 
 
-        // Клавиша инструмента в окне сцены: «1» у первого в палитре.
-        public static string HotkeyOf(LiveBuilderTool tool)
+        public static void Select<T>() where T : LiveBuilderTool
         {
-            return (IndexOf(tool) + 1).ToString();
+            Current = Get<T>();
         }
 
 
-        // Инструмент по клавише-цифре; такой цифры в палитре нет — false.
-        public static bool TryGetByHotkey(KeyCode key, out LiveBuilderTool tool)
+        // Клавиша инструмента: выбрать его; уже выбран — следующий режим.
+        public static void SelectToolOrNextMode<T>() where T : LiveBuilderTool
         {
-            var index = key is >= KeyCode.Alpha1 and <= KeyCode.Alpha9 ? key - KeyCode.Alpha1 : -1;
-            var isFound = index >= 0 && index < Tools.Count;
-            tool = isFound ? Tools[index] : null;
-            return isFound;
+            if (Current is T)
+                Current.Modes?.SelectNext();
+            else
+                Select<T>();
+        }
+
+
+        // Shift + клавиша инструмента: выбрать его; уже выбран — предыдущий режим.
+        public static void SelectToolOrPreviousMode<T>() where T : LiveBuilderTool
+        {
+            if (Current is T)
+                Current.Modes?.SelectPrevious();
+            else
+                Select<T>();
+        }
+
+
+        // Подпись клавиши инструмента — из его привязки в Shortcuts: переназначил — подпись следом.
+        public static string HotkeyOf(LiveBuilderTool tool)
+        {
+            return LiveBuilderShortcutIds.KeyLabelOf(LiveBuilderShortcutIds.ToolOf(tool));
         }
 
 
@@ -114,16 +134,41 @@ namespace FeatherKit.EditorTools.LiveBuilder
 
         // ── Хранение ─────────────────────────────────────────────────────
 
-        // Id из настроек редактора; помнится старый номер — переводит его в Id и запоминает уже по Id.
+        // Id из настроек редактора; помнится старый номер или Id бывшего инструмента — переводит в нынешний и запоминает его.
         private static string StoredId()
         {
-            if (EditorPrefs.HasKey(PreferenceKey) || !EditorPrefs.HasKey(NumberPreferenceKey))
-                return EditorPrefs.GetString(PreferenceKey, "");
+            var storedId = EditorPrefs.GetString(PreferenceKey, "");
 
-            var number = EditorPrefs.GetInt(NumberPreferenceKey, -1);
-            var id = number >= 0 && number < IdsByOldNumber.Length ? IdsByOldNumber[number] : ReplacementForRemovedToolId;
-            EditorPrefs.SetString(PreferenceKey, id);
+            if (!EditorPrefs.HasKey(PreferenceKey) && EditorPrefs.HasKey(NumberPreferenceKey))
+            {
+                var number = EditorPrefs.GetInt(NumberPreferenceKey, -1);
+                storedId = number >= 0 && number < IdsByOldNumber.Length ? IdsByOldNumber[number] : ReplacementForRemovedToolId;
+            }
+
+            var id = MigrateStoredId(storedId);
+
+            if (id != EditorPrefs.GetString(PreferenceKey, ""))
+                EditorPrefs.SetString(PreferenceKey, id);
+
             return id;
+        }
+
+
+        // Id бывшего инструмента → нынешний: «Комната» — «Коробка» в режиме Room (режим ставится тут же), «Проём» — «Cut». Прочие — как есть.
+        public static string MigrateStoredId(string storedId)
+        {
+            switch (storedId)
+            {
+                case OldRoomId:
+                    LiveBuilderBoxModeSettings.Mode = LiveBuilderBoxMode.Room;
+                    return Get<LiveBuilderBoxTool>().Id;
+
+                case OldOpeningId:
+                    return Get<LiveBuilderCutTool>().Id;
+
+                default:
+                    return storedId;
+            }
         }
     }
 }
