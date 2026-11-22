@@ -16,6 +16,7 @@ namespace FeatherKit.EditorTools
     public class FInlineFieldsDrawer : PropertyDrawer
     {
         private const string NotAClassHint = "[FInlineFields] — только для полей-классов";
+        private const float BoxTopGap = 4f;
 
         private static float Spacing => EditorGUIUtility.standardVerticalSpacing;
 
@@ -28,6 +29,12 @@ namespace FeatherKit.EditorTools
             if (!CanOpenInside(property))
             {
                 EditorGUI.LabelField(line, label, new GUIContent(NotAClassHint));
+                return;
+            }
+
+            if (IsBoxed)
+            {
+                DrawBoxed(position, property, label);
                 return;
             }
 
@@ -58,8 +65,52 @@ namespace FeatherKit.EditorTools
             if (!CanOpenInside(property))
                 return height;
 
+            if (IsBoxed)
+                return BoxedHeightOf(property);
+
             foreach (var child in ChildrenOf(property))
                 height += Spacing + EditorGUI.GetPropertyHeight(child, true);
+
+            return height;
+        }
+
+
+        // ── Рамка ────────────────────────────────────────────────────────
+
+        private bool IsBoxed => attribute is FInlineFieldsAttribute { Boxed: true };
+
+        // Как рамка секции инспектора: полоса заголовка, под ней поля с отступом.
+        private static void DrawBoxed(Rect position, SerializedProperty property, GUIContent label)
+        {
+            var header = new Rect(position.x, position.y, position.width, InspectorSection.HeaderHeight);
+            var padding = InspectorSection.ContentPadding;
+
+            InspectorSection.DrawFixedFrame(position, header, label.text);
+            PropertyTitleMenu.HandleRightClick(header, property);
+
+            EditorGUI.BeginProperty(position, label, property);
+
+            var x = position.x + padding;
+            var width = position.width - padding * 2f;
+            var y = header.yMax + BoxTopGap;
+
+            foreach (var child in ChildrenOf(property))
+            {
+                var height = EditorGUI.GetPropertyHeight(child, true);
+
+                EditorGUI.PropertyField(new Rect(x, y, width, height), child, true);
+                y += height + Spacing;
+            }
+
+            EditorGUI.EndProperty();
+        }
+
+        private static float BoxedHeightOf(SerializedProperty property)
+        {
+            var height = InspectorSection.HeaderHeight + BoxTopGap + InspectorSection.ContentPadding;
+
+            foreach (var child in ChildrenOf(property))
+                height += EditorGUI.GetPropertyHeight(child, true) + Spacing;
 
             return height;
         }

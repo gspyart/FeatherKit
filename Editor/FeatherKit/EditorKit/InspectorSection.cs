@@ -84,6 +84,50 @@ namespace FeatherKit.EditorTools
         }
 
 
+        /// <summary>Та же рамка с полосой заголовка, но без сворачивания — для раскрытых полей-классов в рамке.</summary>
+        public static void DrawFixed(string title, Action content, Action<Rect> onHeader = null)
+        {
+            var style = InspectorStyle.Current;
+
+            GUILayout.Space(style.SectionGap);
+
+            FeatherEditorGUIBox.BoxBegin(style.Fill, style.Outline, style.OutlineThickness, style.CornerRadius);
+
+            var header = GUILayoutUtility.GetRect(0f, style.HeaderHeight, GUILayout.ExpandWidth(true));
+
+            DrawHeaderStrip(header, title, style, 0, arrow: null);
+            onHeader?.Invoke(header);
+
+            EnsureContentStyle(style);
+            EditorGUILayout.BeginVertical(contentStyle);
+            content?.Invoke();
+            EditorGUILayout.EndVertical();
+
+            FeatherEditorGUIBox.BoxEnd();
+        }
+
+
+        // ── Рамка без раскладки: для PropertyDrawer, где места считаются вручную ─
+
+        /// <summary>Высота полосы заголовка рамки.</summary>
+        public static float HeaderHeight => InspectorStyle.Current.HeaderHeight;
+
+        /// <summary>Отступ содержимого от краёв рамки.</summary>
+        public static float ContentPadding => InspectorStyle.Current.Padding;
+
+        /// <summary>Нарисовать фон рамки и полосу заголовка в готовых прямоугольниках.</summary>
+        public static void DrawFixedFrame(Rect frame, Rect header, string title)
+        {
+            if (Event.current.type != EventType.Repaint)
+                return;
+
+            var style = InspectorStyle.Current;
+
+            FeatherEditorGUIBox.Draw(frame, style.Fill, style.Outline, style.OutlineThickness, style.CornerRadius);
+            DrawHeaderStrip(header, title, style, 0, arrow: null);
+        }
+
+
         private static bool IsExpanded(string key, bool expandedByDefault)
         {
             return EditorPrefs.GetBool(PrefsPrefix + key, expandedByDefault);
@@ -96,6 +140,12 @@ namespace FeatherKit.EditorTools
 
 
         private static void DrawHeader(Rect header, string title, InspectorStyle style, int accentIndex, bool expanded)
+        {
+            DrawHeaderStrip(header, title, style, accentIndex, expanded ? "▾" : "▸");
+        }
+
+        // Стрелки нет — рамка не сворачивается.
+        private static void DrawHeaderStrip(Rect header, string title, InspectorStyle style, int accentIndex, string arrow)
         {
             if (Event.current.type != EventType.Repaint)
                 return;
@@ -113,10 +163,9 @@ namespace FeatherKit.EditorTools
 
             EnsureTitleStyle(style);
 
-            var arrow = expanded ? "▾" : "▸";
             var labelRect = new Rect(strip.x + style.AccentWidth + 6f, strip.y, strip.width - style.AccentWidth - 10f, strip.height);
 
-            GUI.Label(labelRect, arrow + "  " + title, titleStyle);
+            GUI.Label(labelRect, arrow == null ? title : arrow + "  " + title, titleStyle);
         }
 
         private static void EnsureContentStyle(InspectorStyle style)

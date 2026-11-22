@@ -14,5 +14,7 @@ namespace FeatherKit.Attributes
     /// </summary>
     public class FInlineFieldsAttribute : PropertyAttribute
     {
+        /// <summary>Заголовок и поля — в рамке: видно, что чему принадлежит, когда раскрытых полей подряд несколько.</summary>
+        public bool Boxed { get; set; }
     }
 }

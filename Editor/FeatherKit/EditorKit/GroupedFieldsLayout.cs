@@ -281,7 +281,8 @@ namespace FeatherKit.EditorTools
 
         private static void DrawField(SerializedProperty property, FieldInfo field, string stateKey)
         {
-            var isInline = field != null && field.IsDefined(typeof(FInlineFieldsAttribute), true);
+            var inline = field?.GetCustomAttribute<FInlineFieldsAttribute>(true);
+            var isInline = inline != null;
             var blockTitle = field?.GetCustomAttribute<FBlockTitleAttribute>(true);
 
             if (!CanOpenInside(property, field, IsMarkedToOpen(field)))
@@ -299,6 +300,12 @@ namespace FeatherKit.EditorTools
             }
 
             var label = new GUIContent(property.displayName, property.tooltip);
+
+            if (inline is { Boxed: true })
+            {
+                DrawBoxedInline(property, field, label, stateKey);
+                return;
+            }
 
             if (isInline)
             {
@@ -320,6 +327,15 @@ namespace FeatherKit.EditorTools
             DrawGroupedFields(ChildrenOf(property), field.FieldType, ChildStateKey(stateKey, property));
             EditorGUI.indentLevel--;
         }
+
+        private static void DrawBoxedInline(SerializedProperty property, FieldInfo field, GUIContent label, string stateKey)
+        {
+            InspectorSection.DrawFixed(
+                label.text,
+                () => DrawGroupedFields(ChildrenOf(property), field.FieldType, ChildStateKey(stateKey, property)),
+                header => PropertyTitleMenu.HandleRightClick(header, property));
+        }
+
 
         // Поле просили показать по-своему: раскрытым или блоком.
         private static bool IsMarkedToOpen(FieldInfo field)
